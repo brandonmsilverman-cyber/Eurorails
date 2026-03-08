@@ -1136,11 +1136,11 @@ const FERRY_ROUTES = [
     { from: [33.2, 30], to: [34.5, 30], name: "Dover-Calais", cost: 4 },
     { from: [31, 30], to: [37, 27], name: "London-Amsterdam", cost: 4 },
     { from: [27, 33], to: [26, 35.5], name: "Plymouth-Brest", cost: 4 },
-    { from: [30.5, 21], to: [42, 17], name: "Newcastle-Århus", cost: 4 },
+    { from: [30.5, 21], to: [42, 17], name: "Newcastle-Århus", cost: 14 },
     { from: [45.5, 20.5], to: [47, 19], name: "Germany-Copenhagen", cost: 4 },
-    { from: [48.2, 19], to: [49, 19], name: "Copenhagen-Sweden", cost: 2 },
+    { from: [44.5, 13.5], to: [41, 12], name: "Denmark-Scandinavia", cost: 4 },
     { from: [24.5, 19], to: [23, 19], name: "Scotland-Belfast", cost: 4 },
-    { from: [20, 25], to: [25, 27], name: "Dublin-Wales", cost: 8 }
+    { from: [20, 25], to: [25, 27], name: "Dublin-Wales", cost: 6 }
 ];
 
 // ============================================================================
@@ -1430,7 +1430,8 @@ function getLandmass(x, y) {
 const CONNECTED_LANDMASSES = new Set([
     "continental|italy", "italy|continental",
     "continental|iberia", "iberia|continental",
-    "continental|denmark", "denmark|continental"
+    "continental|denmark", "denmark|continental",
+    "zealand|scandinavia", "scandinavia|zealand"
 ]);
 
 function landmassesConnected(lm1, lm2) {
