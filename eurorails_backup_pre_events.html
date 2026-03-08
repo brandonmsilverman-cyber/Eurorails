@@ -1,0 +1,3019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eurorails - European Railroad Board Game (Milepost Edition)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .setup-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .setup-screen.hidden {
+            display: none;
+        }
+
+        .setup-dialog {
+            background: #2d2d2d;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            max-width: 600px;
+        }
+
+        .setup-dialog h1 {
+            margin-bottom: 30px;
+            font-size: 28px;
+            text-align: center;
+        }
+
+        .setup-section {
+            margin-bottom: 25px;
+        }
+
+        .setup-section label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .setup-section input[type="text"],
+        .setup-section input[type="number"],
+        .setup-section select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 5px;
+        }
+
+        .player-setup {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+
+        .player-input-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .player-input-row input {
+            flex: 1;
+        }
+
+        .player-input-row select {
+            flex: 0 0 120px;
+        }
+
+        .setup-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        button {
+            padding: 12px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: #4a9eff;
+            color: #fff;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #2e7fd9;
+        }
+
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .map-area {
+            flex: 1;
+            position: relative;
+            background: #1a1a1a;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #demandCardsOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+            pointer-events: auto;
+        }
+
+        .demand-card-overlay {
+            width: 180px;
+            background: linear-gradient(145deg, #1c2a3e, #162030);
+            border: 1.5px solid #3a5a7a;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 11px;
+            color: #d0dae8;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(100,160,220,0.1);
+            transition: border-color 0.2s;
+        }
+
+        .demand-card-overlay.deliverable {
+            border-color: #4a9e4a;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 8px rgba(74,158,74,0.3);
+        }
+
+        .demand-card-overlay .card-header {
+            text-align: center;
+            font-weight: bold;
+            font-size: 10px;
+            color: #6a9ad0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #2a4a6a;
+        }
+
+        .demand-card-overlay .card-demand {
+            padding: 4px 0;
+        }
+
+        .demand-card-overlay .card-demand + .card-demand {
+            border-top: 1px solid #2a3a50;
+        }
+
+        .demand-card-overlay .good-name {
+            font-weight: bold;
+            color: #e0e8f0;
+        }
+
+        .demand-card-overlay .payout {
+            color: #ffdd44;
+            font-weight: bold;
+            float: right;
+        }
+
+        .demand-card-overlay .source-cities {
+            font-size: 10px;
+            color: #8899aa;
+            margin-top: 1px;
+        }
+
+        .demand-card-overlay .source-cities span {
+            cursor: pointer;
+            text-decoration: underline;
+            color: #7baadd;
+        }
+
+        .demand-card-overlay .source-cities span:hover {
+            color: #aaccff;
+        }
+
+        .demand-card-overlay .dest-city {
+            font-size: 10px;
+            margin-top: 1px;
+        }
+
+        .demand-card-overlay .dest-city span {
+            cursor: pointer;
+            text-decoration: underline;
+            color: #eebb44;
+            font-weight: bold;
+        }
+
+        .demand-card-overlay .dest-city span:hover {
+            color: #ffdd88;
+        }
+
+        .demand-card-overlay .deliver-btn {
+            width: 100%;
+            padding: 4px;
+            margin-top: 3px;
+            font-size: 10px;
+            font-weight: bold;
+            background: #3a8a3a;
+            color: #fff;
+            border: 1px solid #4a9e4a;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .demand-card-overlay .deliver-btn:hover {
+            background: #4aaa4a;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: #2d2d2d;
+            border-left: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            padding: 15px;
+            border-bottom: 1px solid #444;
+        }
+
+        .sidebar-section h3 {
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #4a9eff;
+        }
+
+        .player-info {
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .player-info.active {
+            background: #444;
+            padding: 8px;
+            border-radius: 3px;
+            border-left: 3px solid #4a9eff;
+        }
+
+        .demand-card {
+            background: #1a1a1a;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            border: 1px solid #444;
+        }
+
+        .log-entry {
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: #bbb;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #2d2d2d;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 500px;
+        }
+
+        .modal-content h2 {
+            margin-bottom: 15px;
+        }
+
+        .modal-content p {
+            margin-bottom: 20px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .win-condition {
+            background: #1a5c1a;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            border: 1px solid #4a9e4a;
+        }
+
+        .turn-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 998;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .turn-overlay.show {
+            display: flex;
+        }
+
+        .turn-overlay-content {
+            background: #2d2d2d;
+            padding: 40px 60px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            border: 2px solid #4a9eff;
+        }
+
+        .turn-overlay-content h2 {
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .turn-overlay-content .player-name {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .turn-overlay-content .phase-label {
+            color: #aaa;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="setup-screen" id="setupScreen">
+    <div class="setup-dialog">
+        <h1>Eurorails: Railroad Game</h1>
+
+        <div class="setup-section">
+            <label>Number of Players:</label>
+            <input type="number" id="playerCount" min="2" max="6" value="2">
+        </div>
+
+        <div id="playerInputs"></div>
+
+        <div class="setup-buttons">
+            <button onclick="startGame()">Start Game</button>
+        </div>
+    </div>
+</div>
+
+<div class="container" style="display: none;" id="gameContainer">
+    <div class="map-area">
+        <canvas id="gameCanvas"></canvas>
+        <div id="demandCardsOverlay"></div>
+    </div>
+    <div class="sidebar">
+        <div class="sidebar-section">
+            <h3>Win Condition</h3>
+            <div class="win-condition">
+                Connect 7 of 8 major cities + 250M ECU cash
+            </div>
+        </div>
+
+        <div class="sidebar-section" id="currentPlayerSection">
+            <h3>Current Player</h3>
+            <div id="currentPlayerInfo"></div>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>Players</h3>
+            <div id="playersList"></div>
+        </div>
+
+        <div class="sidebar-section" id="buildSection" style="display:none;">
+            <h3>Build</h3>
+            <div id="buildPanel"></div>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>Actions</h3>
+            <div id="actionButtons"></div>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>Log</h3>
+            <div id="gameLog" style="height: 150px; overflow-y: auto; font-size: 11px;"></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="endGameModal">
+    <div class="modal-content">
+        <h2>Game Over!</h2>
+        <p id="winnerText"></p>
+        <div class="modal-buttons">
+            <button onclick="location.reload()">Play Again</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const MAJOR_CITIES = ["Berlin", "Hamburg", "London", "Madrid", "Marseille", "Milano", "Paris", "Roma"];
+
+const CITIES = {
+    "Aberdeen": { x: 29.5, y: 13, type: "small", goods: ["Fish", "Oil"], country: "UK" },
+    "Glasgow": { x: 27, y: 17, type: "small", goods: ["Sheep"], country: "UK" },
+    "Belfast": { x: 22, y: 19, type: "small", goods: ["Potatoes"], country: "UK" },
+    "Edinburgh": { x: 29, y: 17.5, type: "small", goods: [], country: "UK" },
+    "Newcastle": { x: 30.5, y: 21, type: "small", goods: ["Oil"], country: "UK" },
+    "Dublin": { x: 19, y: 24, type: "small", goods: ["Beer"], country: "Ireland" },
+    "Manchester": { x: 30, y: 25, type: "medium", goods: ["Cars"], country: "UK" },
+    "Birmingham": { x: 30.5, y: 28, type: "medium", goods: ["China", "Iron", "Steel", "Chocolate"], country: "UK" },
+    "Cardiff": { x: 28, y: 30, type: "small", goods: ["Coal", "Hops"], country: "UK" },
+    "London": { x: 33, y: 30, type: "major", goods: ["Tourists"], country: "UK" },
+    "Cork": { x: 17, y: 29, type: "small", goods: ["Cork", "Sheep"], country: "Ireland" },
+    "Oslo": { x: 44, y: 8, type: "medium", goods: ["Fish", "Oil", "Wood"], country: "Norway" },
+    "Stockholm": { x: 53, y: 9, type: "medium", goods: ["Iron"], country: "Sweden" },
+    "Göteborg": { x: 47, y: 13, type: "medium", goods: ["Machinery"], country: "Sweden" },
+    "København": { x: 48, y: 19, type: "medium", goods: ["Cheese"], country: "Denmark" },
+    "Århus": { x: 45.5, y: 17, type: "small", goods: ["Cheese"], country: "Denmark" },
+    "Holland": { x: 38, y: 27, type: "medium", goods: ["Flowers", "Cheese"], country: "Netherlands" },
+    "Antwerpen": { x: 38.5, y: 30, type: "medium", goods: ["Imports"], country: "Belgium" },
+    "Bruxelles": { x: 38, y: 32, type: "medium", goods: ["Chocolate"], country: "Belgium" },
+    "Luxembourg": { x: 40, y: 35, type: "small", goods: ["Steel"], country: "Luxembourg" },
+    "Hamburg": { x: 44, y: 22, type: "major", goods: ["Imports"], country: "Germany" },
+    "Bremen": { x: 43, y: 24, type: "medium", goods: ["Machinery"], country: "Germany" },
+    "Ruhr": { x: 41, y: 28, type: "medium", goods: ["Steel", "Tourists"], country: "Germany" },
+    "Berlin": { x: 50.5, y: 24, type: "major", goods: [], country: "Germany" },
+    "Leipzig": { x: 49, y: 28, type: "medium", goods: ["China"], country: "Germany" },
+    "Frankfurt": { x: 43, y: 32, type: "medium", goods: ["Beer", "Wine"], country: "Germany" },
+    "Stuttgart": { x: 44, y: 36, type: "medium", goods: ["Cars"], country: "Germany" },
+    "München": { x: 47, y: 38, type: "medium", goods: ["Beer", "Cars"], country: "Germany" },
+    "Szczecin": { x: 52, y: 22, type: "small", goods: ["Potatoes"], country: "Poland" },
+    "Warszawa": { x: 58, y: 26, type: "medium", goods: ["Ham"], country: "Poland" },
+    "Lodz": { x: 57, y: 28, type: "small", goods: ["Potatoes"], country: "Poland" },
+    "Wroclaw": { x: 54, y: 30, type: "medium", goods: ["Coal", "Copper"], country: "Poland" },
+    "Krakow": { x: 57, y: 33, type: "medium", goods: ["Coal"], country: "Poland" },
+    "Kaliningrad": { x: 58, y: 19, type: "small", goods: ["Iron"], country: "Russia" },
+    "Paris": { x: 35, y: 37, type: "major", goods: [], country: "France" },
+    "Nantes": { x: 28, y: 39, type: "medium", goods: ["Cattle", "Machinery"], country: "France" },
+    "Bordeaux": { x: 30, y: 46, type: "medium", goods: ["Wine"], country: "France" },
+    "Toulouse": { x: 33, y: 50, type: "medium", goods: ["Wheat"], country: "France" },
+    "Lyon": { x: 38.5, y: 44, type: "medium", goods: ["Wheat"], country: "France" },
+    "Marseille": { x: 38, y: 51, type: "major", goods: ["Bauxite"], country: "France" },
+    "Bilbao": { x: 27, y: 50, type: "small", goods: ["Sheep"], country: "Spain" },
+    "Porto": { x: 19, y: 54, type: "medium", goods: ["Fish", "Wine", "Cork"], country: "Portugal" },
+    "Madrid": { x: 24, y: 58, type: "major", goods: [], country: "Spain" },
+    "Lisboa": { x: 17, y: 61, type: "medium", goods: ["Cork"], country: "Portugal" },
+    "Sevilla": { x: 21, y: 66, type: "medium", goods: ["Cork", "Oranges"], country: "Spain" },
+    "Valencia": { x: 28, y: 62, type: "medium", goods: ["Oranges"], country: "Spain" },
+    "Barcelona": { x: 33, y: 56, type: "medium", goods: ["Machinery"], country: "Spain" },
+    "Bern": { x: 41, y: 39, type: "medium", goods: ["Cattle", "Cheese"], country: "Switzerland" },
+    "Zürich": { x: 43, y: 38, type: "medium", goods: ["Chocolate"], country: "Switzerland" },
+    "Wien": { x: 53, y: 36, type: "medium", goods: ["Wine"], country: "Austria" },
+    "Milano": { x: 43.5, y: 43, type: "major", goods: [], country: "Italy" },
+    "Torino": { x: 41, y: 44, type: "medium", goods: ["Cars"], country: "Italy" },
+    "Venezia": { x: 48, y: 43, type: "medium", goods: [], country: "Italy" },
+    "Firenze": { x: 46, y: 48, type: "medium", goods: ["Marble"], country: "Italy" },
+    "Roma": { x: 48, y: 54, type: "major", goods: [], country: "Italy" },
+    "Napoli": { x: 51, y: 58, type: "medium", goods: ["Tobacco"], country: "Italy" },
+    "Zagreb": { x: 53, y: 42, type: "medium", goods: ["Labor"], country: "Croatia" },
+    "Budapest": { x: 57, y: 38, type: "medium", goods: ["Bauxite"], country: "Hungary" },
+    "Sarajevo": { x: 56, y: 47, type: "small", goods: ["Labor", "Wood"], country: "Bosnia" },
+    "Beograd": { x: 59, y: 44, type: "medium", goods: ["Copper", "Labor", "Oil"], country: "Serbia" },
+    "Praha": { x: 51, y: 31, type: "medium", goods: ["Beer"], country: "Czech" }
+};
+
+const GOODS = {
+    "Bauxite": { chips: 3, sources: ["Budapest", "Marseille"] },
+    "Beer": { chips: 4, sources: ["Dublin", "Frankfurt", "München", "Praha"] },
+    "Cars": { chips: 3, sources: ["Manchester", "München", "Stuttgart", "Torino"] },
+    "Cattle": { chips: 3, sources: ["Bern", "Nantes"] },
+    "Cheese": { chips: 4, sources: ["Århus", "Bern", "Holland", "København"] },
+    "China": { chips: 3, sources: ["Birmingham", "Leipzig"] },
+    "Chocolate": { chips: 3, sources: ["Bruxelles", "Zürich"] },
+    "Coal": { chips: 3, sources: ["Cardiff", "Krakow", "Wroclaw"] },
+    "Copper": { chips: 3, sources: ["Beograd", "Wroclaw"] },
+    "Cork": { chips: 3, sources: ["Cork", "Lisboa", "Sevilla"] },
+    "Fish": { chips: 3, sources: ["Aberdeen", "Oslo", "Porto"] },
+    "Flowers": { chips: 3, sources: ["Holland"] },
+    "Ham": { chips: 3, sources: ["Warszawa"] },
+    "Hops": { chips: 3, sources: ["Cardiff"] },
+    "Imports": { chips: 3, sources: ["Antwerpen", "Hamburg"] },
+    "Iron": { chips: 3, sources: ["Birmingham", "Kaliningrad", "Stockholm"] },
+    "Labor": { chips: 3, sources: ["Beograd", "Sarajevo", "Zagreb"] },
+    "Machinery": { chips: 4, sources: ["Barcelona", "Bremen", "Göteborg", "Nantes"] },
+    "Marble": { chips: 3, sources: ["Firenze"] },
+    "Oil": { chips: 4, sources: ["Aberdeen", "Beograd", "Newcastle", "Oslo"] },
+    "Oranges": { chips: 3, sources: ["Sevilla", "Valencia"] },
+    "Potatoes": { chips: 3, sources: ["Belfast", "Lodz", "Szczecin"] },
+    "Sheep": { chips: 3, sources: ["Bilbao", "Cork", "Glasgow"] },
+    "Steel": { chips: 3, sources: ["Birmingham", "Luxembourg", "Ruhr"] },
+    "Tobacco": { chips: 3, sources: ["Napoli"] },
+    "Tourists": { chips: 3, sources: ["London", "Ruhr"] },
+    "Wheat": { chips: 3, sources: ["Lyon", "Toulouse"] },
+    "Wine": { chips: 4, sources: ["Bordeaux", "Frankfurt", "Porto", "Wien"] },
+    "Wood": { chips: 3, sources: ["Oslo", "Sarajevo"] }
+};
+
+const TRAIN_TYPES = {
+    "Freight": { movement: 9, capacity: 2 },
+    "Fast Freight": { movement: 12, capacity: 2 },
+    "Heavy Freight": { movement: 9, capacity: 3 },
+    "Superfreight": { movement: 12, capacity: 3 }
+};
+
+const EVENT_TYPES = {
+    "Derailment": "Lose 1 turn and 1 load",
+    "Snow": "Move at half speed next turn",
+    "Strike": "Can't move or build this turn",
+    "Flood": "Some connections unusable",
+    "Tax": "Pay tax based on cash"
+};
+
+const COLOR_MAP = {
+    "red": "#ff0000",
+    "blue": "#0066ff",
+    "green": "#00cc00",
+    "yellow": "#ffcc00",
+    "purple": "#cc00ff",
+    "orange": "#ff8800"
+};
+
+// Landmass polygons — traced from the actual Eurorails game board image
+const LANDMASSES = {
+    // Great Britain — ISLAND with Scottish highlands narrowing, Welsh bulge, Cornish peninsula
+    britain: [
+        // N Scotland (narrow top, Cape Wrath to Moray Firth)
+        [26.5,10.5],[27.5,10],[28.5,10.5],[29.5,10.5],[30.5,11],
+        // NE Scotland coast (Aberdeen area) down to Edinburgh
+        [31,12],[31.5,13.5],[32,15],[31.5,16.5],[31,17.5],
+        // E coast - Edinburgh down through Newcastle, Yorkshire
+        [31.5,18.5],[32,20],[32.5,21.5],[32,23],
+        // E England - The Wash, East Anglia bulge
+        [33,24],[33.5,25],[33,26],[33.5,27],
+        // SE coast - Essex, Kent, Dover
+        [34,28],[34.5,29.5],[35,30.5],[34.5,31],[33.5,31.5],
+        // S coast - Sussex, Hampshire, Dorset
+        [32,32],[31,31.5],[30,31.5],[29,31],
+        // SW - Devon and Cornwall peninsula
+        [28,31],[27,30.5],[26.5,30],[27,29],
+        // Bristol Channel / Wales bulge westward
+        [27.5,28],[27,27],[26.5,26],[27,25],
+        // Welsh coast - Cardigan Bay indent
+        [26.5,24],[26,23],[26.5,22],
+        // NW England / Lancashire
+        [27,21],[27.5,20],
+        // W Scotland - Firth of Clyde, narrow highlands
+        [27,19],[26.5,18],[26,16.5],[26,15],[26,13.5],
+        [26,12],[26.5,10.5]
+    ],
+    // Ireland — egg shape with bays
+    ireland: [
+        [18,19.5],[19.5,18.5],[21,18],[22.5,18.5],[23.5,19.5],
+        // E coast
+        [24,21],[24.5,22.5],[24,24],[23.5,25.5],
+        // SE
+        [23,27],[22,28],[21,28.5],
+        // S coast
+        [19.5,29.5],[18,29],[17,28.5],
+        // SW - Kerry peninsula
+        [16,27.5],[15.5,26],[16,24.5],
+        // W coast - Galway Bay indent
+        [16.5,23],[16,22],[16.5,21],
+        [17,20],[18,19.5]
+    ],
+    // Scandinavia — long narrow peninsula (Norway/Sweden)
+    scandinavia: [
+        // Norwegian coast (NW) - deeply indented fjord coast
+        [38,3.5],[40,3],[42,3.5],[44,3.5],[46,4],
+        // N Sweden / Finland border area
+        [49,4.5],[51,5],[53,5.5],[55,6.5],[56,8],
+        // E coast Sweden - Gulf of Bothnia (would extend further but we stop at game boundary)
+        [56.5,10],[56,12],[55,14],
+        // SE Sweden coast
+        [54,16],[52,17.5],[50.5,18.5],[49,19.5],
+        // S tip of Sweden (Skåne)
+        [48,20],[47.5,21],[47,21],
+        // Kattegat side going back north
+        [46,20.5],[45.5,19.5],[45,18],
+        // W side of Sweden
+        [45.5,16],[46,14.5],[46.5,13],[47,11.5],
+        // Norwegian south coast
+        [46,10],[45,8.5],[44,7],[43,6],
+        // Norwegian west coast going back north
+        [41.5,5],[40,4.5],[38.5,4],[38,3.5]
+    ],
+    // Denmark (Jutland peninsula + Zealand implied)
+    denmark: [
+        [43,16],[44,15.5],[45,16],[46,16.5],
+        // E coast Jutland
+        [46.5,17.5],[47,18.5],[47,19.5],[46.5,20.5],
+        // S tip / border area
+        [46,21],[45,21.5],[44,22],
+        // W coast Jutland (North Sea side)
+        [43.5,21],[43,20],[43,18.5],[43,16]
+    ],
+    // Continental Europe — France, Benelux, Germany, Poland, Balkans
+    continental: [
+        // Brittany peninsula tip (NW France)
+        [23,36],[23.5,35],[24.5,34],[26,33.5],
+        // Normandy coast (D-Day beaches, Cherbourg peninsula)
+        [27,34],[28,33.5],[29,34],[30,33.5],[31,33],
+        // N France coast toward Calais
+        [32,33],[33,32.5],[34,32],[35,31.5],[36,31],
+        // Strait of Dover / Pas-de-Calais
+        [37,30],[37.5,29.5],
+        // Belgian/Dutch coast
+        [38,28.5],[38.5,27.5],[39,27],[39.5,26.5],
+        // Netherlands / Frisian Islands
+        [40,26],[41,25],[42,24],
+        // German North Sea coast (Helgoland Bight)
+        [42.5,23],[43,22.5],
+        // Schleswig-Holstein (Germany/Denmark border area)
+        [43.5,22],[44,22],
+        // German Baltic coast
+        [45.5,21.5],[47,21],[48,20.5],[49,20.5],
+        // Mecklenburg coast
+        [50,20],[51,20],[52,20],
+        // Pomeranian / Polish Baltic coast
+        [53,19.5],[54,19],[55,19],[56,19],[57,19],
+        // Gdańsk Bay area
+        [58,19.5],[59,20],[60,21],
+        // Eastern border (Poland → Balkans, game map eastern edge)
+        [61,23],[62,26],[62,30],[62,34],[62,38],[61,42],
+        [60,45],[59,48],[58,50],
+        // Balkan Adriatic coast (Montenegro/Albania)
+        [57,51],[56,50],[55,49],
+        // Croatian/Dalmatian coast
+        [54,48],[53,46.5],[52.5,45],[52,44],[51.5,43],
+        // Istria / NE Italy coast
+        [50,43],[49,43],[48,42.5],
+        // Top of Adriatic / Venezia
+        [47,42],[46,42],
+        // Po Valley → Alps → French Riviera connection
+        [44.5,42],[43,42.5],[42,43],[41,43.5],[40,44],
+        // French Riviera (Côte d'Azur)
+        [39.5,45.5],[39,47],[38.5,49],
+        // French Mediterranean coast (Languedoc)
+        [38,50],[37.5,51],[37,52],[36,53],
+        // France-Spain border (eastern Pyrenees)
+        [35,54],[34,54.5],
+        // Bay of Biscay — French side (deep concave curve)
+        [33,53],[32,52],[31,50.5],[30,49.5],
+        // Landes coast (SW France, very straight)
+        [29,48],[28.5,47],
+        // Bay of Biscay curve toward Brittany
+        [27.5,44],[26.5,42],[25.5,40],[25,39],
+        // S Brittany coast
+        [24,38],[23,37],[23,36]
+    ],
+    // Italian peninsula (boot shape — detailed)
+    italy: [
+        // NW — Ligurian coast (Genoa)
+        [40,44],[40.5,45],[41,45.5],[41.5,46],
+        // Tuscan coast — slight westward bulge
+        [42,47],[42.5,48],[43,49],
+        // Elba area, down to Roma
+        [44,50],[45,51],[46,52],[47,53],
+        // Lazio coast (Roma area)
+        [47.5,54],[48,55],
+        // Campania (Naples bay — concave indent)
+        [49,56],[50,57],[50.5,58],
+        // Calabria narrows significantly
+        [51,59],[51,60],[50.5,61],
+        // Toe of boot (Reggio Calabria)
+        [50,62],[49.5,62.5],[49,63],
+        // Sole of boot curving east
+        [49.5,63.5],[50.5,63],[51.5,62.5],
+        // Instep of boot
+        [52,62],[53,61],
+        // Taranto — heel starts (sharp indent for Gulf of Taranto)
+        [54,60],[54.5,59],
+        // Heel of boot (Puglia, Otranto)
+        [55,58],[55.5,57],[55,56],
+        // Adriatic coast going north — straighter than west coast
+        [54.5,55],[54,53.5],[53.5,52],[53,50.5],
+        [52.5,49],[52,48],[51.5,47],[51,46],
+        // Rimini/Ravenna area
+        [50.5,45],[50,44.5],[49.5,44],
+        // Venezia / top of Adriatic
+        [49,43.5],[48,42.5],[47,42],[46,42],
+        // Po Valley back to Genoa (through Alps)
+        [44.5,42],[43,42.5],[42,43],[41,43.5],[40,44]
+    ],
+    // Iberian peninsula — rectangular with prominent capes
+    iberia: [
+        // NW corner (Galicia, Cape Finisterre)
+        [16,51],[17,50],[18,49.5],
+        // N Spain coast (Bay of Biscay)
+        [20,49],[22,48.5],[24,48],[26,48],[28,48.5],
+        // Eastern Pyrenees (connects to continental France)
+        [30,49.5],[32,52],[34,54.5],
+        // NE Spain Mediterranean coast (Costa Brava)
+        [34,56],[34,57],[33.5,58],
+        // E Spain coast (Valencia, Alicante)
+        [32.5,59.5],[31,61],[30,62],
+        // SE Spain (Cabo de Gata)
+        [28,64],[26,65.5],
+        // S Spain (Costa del Sol, Strait of Gibraltar)
+        [24,67],[22,68],[20,67.5],[19,67],
+        // SW corner — Cape St. Vincent, Algarve
+        [17.5,66],[16.5,65],
+        // Portuguese Atlantic coast (fairly straight, slight concave)
+        [16,63],[15.5,61],[15.5,59],[16,57],
+        // NW Portugal (Porto area)
+        [16,55],[16,53],[16,51]
+    ],
+    // Sicily
+    sicily: [
+        [49,64.5],[50,64],[51.5,63.5],[53,63.5],[54,64],
+        [54,65],[53,66],[51.5,66.5],[50,66],[49,65.5],[49,64.5]
+    ]
+};
+
+// Terrain regions
+const TERRAIN_REGIONS = {
+    alpine: [
+        [[39,37], [45,35], [49,36], [53,36], [55,38], [53,41], [50,43], [48,44], [44,45], [41,44], [39,42], [39,37]]
+    ],
+    mountain: [
+        [[27,48], [31,47], [34,50], [36,53], [34,55], [31,53], [28,51], [27,48]],
+        [[27,11], [31,11], [32,15], [30,17], [27,15], [27,11]],
+        [[38,4], [43,4], [45,7], [43,11], [41,10], [39,7], [38,4]],
+        [[54,29], [58,27], [61,31], [61,38], [59,40], [57,38], [55,34], [54,29]],
+        [[54,43], [58,44], [60,48], [57,51], [54,49], [53,45], [54,43]],
+        [[44,47], [47,49], [49,53], [51,57], [49,59], [47,55], [45,51], [44,47]],
+        [[22,55], [28,53], [31,56], [30,60], [26,63], [22,61], [22,55]]
+    ]
+};
+
+// Rivers as sequences of coordinates
+const RIVERS = {
+    rhine: [[43,38], [42,36], [41,33], [41,30], [40,28], [39,27]],
+    danube: [[48,38], [51,37], [53,36], [55,37], [57,38], [59,42], [60,44]],
+    loire: [[35,38], [32,39], [29,39], [27,40]],
+    elbe: [[50,24], [48,26], [46,24], [44,23]],
+    vistula: [[56,20], [57,24], [58,26], [58,30]],
+    po: [[42,44], [44,43], [46,43], [48,43]],
+    rhone: [[39,43], [38,46], [38,50]],
+    seine: [[33,35], [35,37]],
+    garonne: [[28,47], [31,48], [33,50]],
+    douro: [[17,54], [20,54], [22,55]]
+};
+
+// Ferry routes (dashed lines across water)
+const FERRY_ROUTES = [
+    { from: [34, 31], to: [37, 30], name: "Dover-Calais", cost: 4 },
+    { from: [33, 30], to: [38, 28], name: "London-Holland", cost: 4 },
+    { from: [28, 31], to: [26, 34], name: "Plymouth-Brest", cost: 4 },
+    { from: [47, 21], to: [48, 19], name: "Denmark-Sweden", cost: 2 },
+    { from: [22, 19], to: [19, 24], name: "Scotland-Belfast", cost: 4 },
+    { from: [21, 28], to: [28, 31], name: "Dublin-Wales", cost: 8 }
+];
+
+// ============================================================================
+// GAME STATE
+// ============================================================================
+
+let gameState = {
+    players: [],
+    currentPlayerIndex: 0,
+    turn: 1,
+    phase: "build",
+    buildingPhaseCount: 0,
+    initialBuildingRounds: 2,
+    gameStarted: false,
+    demandCardDeck: [],
+    cityEntries: {},
+    tracks: [],
+    gameLog: [],
+    buildingThisTurn: 0,
+    majorCitiesThisTurn: 0,
+    movement: 0,
+    halfSpeedActive: {},
+    eventQueue: [],
+    hexGrid: null,
+    mileposts: [],
+    mileposts_by_id: {},
+    selectedMilepost: null,
+    pathPreview: null,
+    hoveredMilepost: null,
+    hoverValid: null,
+    highlightedCities: [],
+    cityToMilepost: {},
+    buildHistory: [],
+    canvas: null,
+    ctx: null
+};
+
+// ============================================================================
+// GEOMETRY AND HEX GRID UTILITIES
+// ============================================================================
+
+function pointInPolygon(point, polygon) {
+    const [x, y] = point;
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const [xi, yi] = polygon[i];
+        const [xj, yj] = polygon[j];
+        if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
+function isLand(x, y) {
+    for (let landmass of Object.values(LANDMASSES)) {
+        if (pointInPolygon([x, y], landmass)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Deterministic hash for terrain randomness (consistent across redraws)
+function terrainHash(x, y) {
+    // Simple hash: combine x,y into a pseudo-random 0-1 value
+    let h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+    return h - Math.floor(h);
+}
+
+// Compute how deep a point is inside a polygon (0 = edge, 1 = center)
+function polygonDepth(point, polygon) {
+    // Find centroid
+    let cx = 0, cy = 0;
+    const n = polygon.length - 1; // last point repeats first
+    for (let i = 0; i < n; i++) {
+        cx += polygon[i][0];
+        cy += polygon[i][1];
+    }
+    cx /= n;
+    cy /= n;
+
+    // Find approximate radius (avg distance from centroid to vertices)
+    let avgR = 0;
+    for (let i = 0; i < n; i++) {
+        avgR += Math.hypot(polygon[i][0] - cx, polygon[i][1] - cy);
+    }
+    avgR /= n;
+
+    // Point's distance from centroid, normalized by avgR
+    const distFromCenter = Math.hypot(point[0] - cx, point[1] - cy);
+    return Math.max(0, 1 - distFromCenter / avgR);
+}
+
+function getTerrainType(x, y) {
+    const hash = terrainHash(x, y);
+    const hash2 = terrainHash(x + 0.5, y + 0.3); // second hash for variety
+
+    // Check alpine regions first
+    for (let polygon of TERRAIN_REGIONS.alpine) {
+        if (pointInPolygon([x, y], polygon)) {
+            const depth = polygonDepth([x, y], polygon);
+            // Core (depth > 0.6): 60% alpine, 30% mountain, 10% clear
+            // Mid (0.3-0.6): 30% alpine, 40% mountain, 30% clear
+            // Edge (< 0.3): 10% alpine, 40% mountain, 50% clear
+            if (depth > 0.6) {
+                if (hash < 0.60) return "alpine";
+                if (hash < 0.90) return "mountain";
+                return "clear";
+            } else if (depth > 0.3) {
+                if (hash < 0.30) return "alpine";
+                if (hash < 0.70) return "mountain";
+                return "clear";
+            } else {
+                if (hash < 0.10) return "alpine";
+                if (hash < 0.50) return "mountain";
+                return "clear";
+            }
+        }
+    }
+
+    // Check mountain regions
+    for (let polygon of TERRAIN_REGIONS.mountain) {
+        if (pointInPolygon([x, y], polygon)) {
+            const depth = polygonDepth([x, y], polygon);
+            // Core (depth > 0.5): 70% mountain, 15% alpine, 15% clear
+            // Mid (0.25-0.5): 50% mountain, 5% alpine, 45% clear
+            // Edge (< 0.25): 30% mountain, 0% alpine, 70% clear
+            if (depth > 0.5) {
+                if (hash < 0.70) return "mountain";
+                if (hash < 0.85) return "alpine";
+                return "clear";
+            } else if (depth > 0.25) {
+                if (hash < 0.50) return "mountain";
+                if (hash < 0.55) return "alpine";
+                return "clear";
+            } else {
+                if (hash < 0.30) return "mountain";
+                return "clear";
+            }
+        }
+    }
+
+    return "clear";
+}
+
+function segmentDistance(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    let t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+    t = Math.max(0, Math.min(1, t));
+    const closestX = x1 + t * dx;
+    const closestY = y1 + t * dy;
+    const distX = px - closestX;
+    const distY = py - closestY;
+    return Math.sqrt(distX * distX + distY * distY);
+}
+
+function segmentsIntersect(ax1, ay1, ax2, ay2, bx1, by1, bx2, by2) {
+    // Returns true if line segment (ax1,ay1)-(ax2,ay2) intersects (bx1,by1)-(bx2,by2)
+    const dx1 = ax2 - ax1, dy1 = ay2 - ay1;
+    const dx2 = bx2 - bx1, dy2 = by2 - by1;
+    const denom = dx1 * dy2 - dy1 * dx2;
+    if (Math.abs(denom) < 1e-10) return false; // parallel
+    const t = ((bx1 - ax1) * dy2 - (by1 - ay1) * dx2) / denom;
+    const u = ((bx1 - ax1) * dy1 - (by1 - ay1) * dx1) / denom;
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+}
+
+function crossesRiver(x1, y1, x2, y2, river) {
+    for (let i = 0; i < river.length - 1; i++) {
+        const [rx1, ry1] = river[i];
+        const [rx2, ry2] = river[i + 1];
+        if (segmentsIntersect(x1, y1, x2, y2, rx1, ry1, rx2, ry2)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function edgeCrossesRiver(x1, y1, x2, y2) {
+    for (let river of Object.values(RIVERS)) {
+        if (crossesRiver(x1, y1, x2, y2, river)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function generateHexGrid() {
+    const mileposts = [];
+    const mileposts_by_id = {};
+    const cellSize = 1.0;
+    const rowSpacing = Math.sqrt(3) / 2;
+
+    let id = 0;
+    for (let y = 6; y < 69; y += rowSpacing) {
+        const isOddRow = Math.abs((y - 6) / rowSpacing) % 2 > 0.5;
+        const offsetX = isOddRow ? 0.5 : 0;
+
+        for (let x = 15 + offsetX; x < 63; x += cellSize) {
+            if (isLand(x, y)) {
+                const terrain = getTerrainType(x, y);
+                const milepost = {
+                    id,
+                    x: Math.round(x * 100) / 100,
+                    y: Math.round(y * 100) / 100,
+                    terrain,
+                    city: null,
+                    track: {},
+                    neighbors: []
+                };
+                mileposts.push(milepost);
+                mileposts_by_id[id] = milepost;
+                id++;
+            }
+        }
+    }
+
+    // Build adjacency using spatial hash for O(n) performance
+    const spatialHash = {};
+    const bucketSize = 1.5;
+    for (let mp of mileposts) {
+        const bx = Math.floor(mp.x / bucketSize);
+        const by = Math.floor(mp.y / bucketSize);
+        const key = `${bx},${by}`;
+        if (!spatialHash[key]) spatialHash[key] = [];
+        spatialHash[key].push(mp.id);
+    }
+
+    for (let mp of mileposts) {
+        const bx = Math.floor(mp.x / bucketSize);
+        const by = Math.floor(mp.y / bucketSize);
+        const neighbors = new Set();
+
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                const key = `${bx + dx},${by + dy}`;
+                if (spatialHash[key]) {
+                    for (let otherId of spatialHash[key]) {
+                        if (otherId !== mp.id) {
+                            const other = mileposts_by_id[otherId];
+                            const dist = Math.hypot(mp.x - other.x, mp.y - other.y);
+                            if (dist < 1.5) {
+                                neighbors.add(otherId);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        mp.neighbors = Array.from(neighbors);
+    }
+
+    // Assign cities to mileposts
+    const cityToMilepost = {};
+    for (let cityName in CITIES) {
+        let closest = null;
+        let closestDist = Infinity;
+        const city = CITIES[cityName];
+
+        for (let mp of mileposts) {
+            const dist = Math.hypot(mp.x - city.x, mp.y - city.y);
+            if (dist < closestDist) {
+                closestDist = dist;
+                closest = mp;
+            }
+        }
+
+        if (closest && closestDist < 2) {
+            closest.city = { name: cityName, ...CITIES[cityName] };
+            cityToMilepost[cityName] = closest.id;
+        }
+    }
+
+    gameState.mileposts = mileposts;
+    gameState.mileposts_by_id = mileposts_by_id;
+    gameState.cityToMilepost = cityToMilepost;
+}
+
+// ============================================================================
+// DIJKSTRA'S ALGORITHM WITH PRIORITY QUEUE
+// ============================================================================
+
+class MinHeap {
+    constructor() {
+        this.heap = [];
+    }
+
+    push(item) {
+        this.heap.push(item);
+        this._bubbleUp(this.heap.length - 1);
+    }
+
+    pop() {
+        if (this.heap.length === 0) return null;
+        if (this.heap.length === 1) return this.heap.pop();
+        const min = this.heap[0];
+        this.heap[0] = this.heap.pop();
+        this._bubbleDown(0);
+        return min;
+    }
+
+    _bubbleUp(i) {
+        while (i > 0) {
+            const parent = Math.floor((i - 1) / 2);
+            if (this.heap[parent].cost <= this.heap[i].cost) break;
+            [this.heap[parent], this.heap[i]] = [this.heap[i], this.heap[parent]];
+            i = parent;
+        }
+    }
+
+    _bubbleDown(i) {
+        while (true) {
+            let smallest = i;
+            const left = 2 * i + 1;
+            const right = 2 * i + 2;
+            if (left < this.heap.length && this.heap[left].cost < this.heap[smallest].cost) {
+                smallest = left;
+            }
+            if (right < this.heap.length && this.heap[right].cost < this.heap[smallest].cost) {
+                smallest = right;
+            }
+            if (smallest === i) break;
+            [this.heap[i], this.heap[smallest]] = [this.heap[smallest], this.heap[i]];
+            i = smallest;
+        }
+    }
+}
+
+function getMileppostCost(mp1, mp2) {
+    // Determine base cost
+    let cost = 0;
+
+    // If destination is a city, use city cost (replaces terrain cost)
+    if (mp2.city) {
+        if (MAJOR_CITIES.includes(mp2.city.name)) {
+            cost = 5;
+        } else {
+            cost = 3;
+        }
+    } else {
+        // Use terrain cost
+        if (mp2.terrain === "alpine") {
+            cost = 5;
+        } else if (mp2.terrain === "mountain") {
+            cost = 2;
+        } else {
+            cost = 1;
+        }
+    }
+
+    // Add river crossing cost if applicable
+    if (edgeCrossesRiver(mp1.x, mp1.y, mp2.x, mp2.y)) {
+        cost += 2;
+    }
+
+    return cost;
+}
+
+function findPath(startId, endId, playerColor) {
+    const dist = {};
+    const prev = {};
+    const heap = new MinHeap();
+
+    // Build sets of edges owned by this player (free) and by other players (blocked)
+    const ownedEdges = new Set();
+    const blockedEdges = new Set();
+    if (playerColor) {
+        for (let track of gameState.tracks) {
+            const fwd = track.from + "|" + track.to;
+            const rev = track.to + "|" + track.from;
+            if (track.color === playerColor) {
+                ownedEdges.add(fwd);
+                ownedEdges.add(rev);
+            } else {
+                blockedEdges.add(fwd);
+                blockedEdges.add(rev);
+            }
+        }
+    }
+
+    const start = gameState.mileposts_by_id[startId];
+    const end = gameState.mileposts_by_id[endId];
+
+    for (let mp of gameState.mileposts) {
+        dist[mp.id] = Infinity;
+        prev[mp.id] = null;
+    }
+    dist[startId] = 0;
+    heap.push({ id: startId, cost: 0 });
+
+    while (true) {
+        const item = heap.pop();
+        if (!item) break;
+        const current = gameState.mileposts_by_id[item.id];
+
+        if (item.cost > dist[current.id]) continue;
+        if (current.id === endId) break;
+
+        for (let neighborId of current.neighbors) {
+            const neighbor = gameState.mileposts_by_id[neighborId];
+            const edgeKey = current.id + "|" + neighborId;
+            // Cannot build on edges owned by other players
+            if (blockedEdges.has(edgeKey)) continue;
+            // If player already owns this edge, cost is 0
+            const edgeCost = ownedEdges.has(edgeKey) ? 0 : getMileppostCost(current, neighbor);
+            const newDist = dist[current.id] + edgeCost;
+
+            if (newDist < dist[neighbor.id]) {
+                dist[neighbor.id] = newDist;
+                prev[neighbor.id] = current.id;
+                heap.push({ id: neighbor.id, cost: newDist });
+            }
+        }
+    }
+
+    if (dist[endId] === Infinity) {
+        return null;
+    }
+
+    const path = [];
+    let current = endId;
+    while (current !== null) {
+        path.unshift(current);
+        current = prev[current];
+    }
+
+    return { path, cost: dist[endId] };
+}
+
+// ============================================================================
+// TRACK-BASED PATHFINDING (for train movement along built track)
+// ============================================================================
+
+function findPathOnTrack(startId, endId, playerColor) {
+    const visited = new Set([startId]);
+    const prev = {};
+    prev[startId] = null;
+    const queue = [startId];
+
+    while (queue.length > 0) {
+        const current = queue.shift();
+        if (current === endId) break;
+
+        for (let track of gameState.tracks) {
+            if (track.color !== playerColor) continue;
+            let neighbor = null;
+            if (track.from === current) neighbor = track.to;
+            else if (track.to === current) neighbor = track.from;
+
+            if (neighbor && !visited.has(neighbor)) {
+                visited.add(neighbor);
+                prev[neighbor] = current;
+                queue.push(neighbor);
+            }
+        }
+    }
+
+    if (!visited.has(endId)) {
+        return null;
+    }
+
+    const path = [];
+    let current = endId;
+    while (current !== null) {
+        path.unshift(current);
+        current = prev[current];
+    }
+
+    return path;
+}
+
+// ============================================================================
+// GAME LOGIC
+// ============================================================================
+
+function getPlayerOwnedMileposts(playerColor) {
+    const owned = new Set();
+    for (let track of gameState.tracks) {
+        if (track.color === playerColor) {
+            owned.add(track.from);
+            owned.add(track.to);
+        }
+    }
+    return owned;
+}
+
+function canBuildFromMilepost(milepost, playerColor) {
+    const owned = getPlayerOwnedMileposts(playerColor);
+
+    // Can build from any milepost they own
+    if (owned.has(milepost.id)) {
+        return true;
+    }
+
+    // Can build from any major city milepost
+    if (milepost.city && MAJOR_CITIES.includes(milepost.city.name)) {
+        return true;
+    }
+
+    return false;
+}
+
+function getConnectedMajorCities(playerColor) {
+    const cityMileposts = {};
+    for (let cityName in gameState.cityToMilepost) {
+        const mpId = gameState.cityToMilepost[cityName];
+        if (!cityMileposts[mpId]) {
+            cityMileposts[mpId] = [];
+        }
+        cityMileposts[mpId].push(cityName);
+    }
+
+    const owned = getPlayerOwnedMileposts(playerColor);
+    const visited = new Set();
+    const connectedCities = [];
+
+    function bfs(startId) {
+        const queue = [startId];
+        const local_visited = new Set([startId]);
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+
+            if (cityMileposts[current]) {
+                for (let cityName of cityMileposts[current]) {
+                    if (MAJOR_CITIES.includes(cityName) && !connectedCities.includes(cityName)) {
+                        connectedCities.push(cityName);
+                    }
+                }
+            }
+
+            for (let track of gameState.tracks) {
+                if (track.color === playerColor) {
+                    let neighbor = null;
+                    if (track.from === current) neighbor = track.to;
+                    else if (track.to === current) neighbor = track.from;
+
+                    if (neighbor && !local_visited.has(neighbor)) {
+                        local_visited.add(neighbor);
+                        queue.push(neighbor);
+                    }
+                }
+            }
+        }
+    }
+
+    for (let mpId of owned) {
+        if (!visited.has(mpId)) {
+            bfs(mpId);
+            visited.add(mpId);
+        }
+    }
+
+    return connectedCities;
+}
+
+function checkWinCondition(player) {
+    if (player.cash < 250) return false;
+    const connectedCities = getConnectedMajorCities(player.color);
+    return connectedCities.length >= 7;
+}
+
+function addLog(message) {
+    const now = new Date().toLocaleTimeString();
+    gameState.gameLog.push(`[${now}] ${message}`);
+    const logDiv = document.getElementById("gameLog");
+    if (logDiv) {
+        logDiv.innerHTML += `<div class="log-entry">${message}</div>`;
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+}
+
+// ============================================================================
+// CANVAS DRAWING
+// ============================================================================
+
+// Goods icon map — unique emoji/symbol per good type
+const GOODS_ICONS = {
+    "Bauxite": "🧱", "Beer": "🍺", "Cars": "🚗", "Cattle": "🐄",
+    "Cheese": "🧀", "China": "🏺", "Chocolate": "🍫", "Coal": "⛏",
+    "Copper": "🔶", "Cork": "🍾", "Fish": "🐟", "Flowers": "🌷",
+    "Ham": "🍖", "Hops": "🌿", "Imports": "📦", "Iron": "⚙",
+    "Labor": "👷", "Machinery": "🔧", "Marble": "🏛", "Oil": "🛢",
+    "Oranges": "🍊", "Potatoes": "🥔", "Sheep": "🐑", "Steel": "🗼",
+    "Tobacco": "🚬", "Tourists": "🎭", "Wheat": "🌾", "Wine": "🍷",
+    "Wood": "🪵"
+};
+
+function drawMap() {
+    const canvas = gameState.canvas;
+    const ctx = gameState.ctx;
+    if (!canvas || !ctx) return;
+
+    // HiDPI/Retina support for sharp rendering
+    const dpr = window.devicePixelRatio || 1;
+    const cssWidth = canvas.offsetWidth;
+    const cssHeight = canvas.offsetHeight;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    canvas.style.width = cssWidth + 'px';
+    canvas.style.height = cssHeight + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const width = cssWidth;
+    const height = cssHeight;
+
+    // Scale factor (maps world coords to CSS pixels)
+    const scale = Math.min(width / 50, height / 65);
+    const offsetX = (width - 50 * scale) / 2;
+    const offsetY = (height - 65 * scale) / 2;
+
+    function worldToScreen(x, y) {
+        return [x * scale + offsetX, y * scale + offsetY];
+    }
+
+    // Compute a UI scale factor for element sizes (not coordinates)
+    // scale maps world-units to pixels; uiScale is a gentler factor for dots/text
+    const uiScale = Math.max(0.5, Math.min(1.5, scale / 15));
+
+    // Draw ocean/water background with globe-like texture
+    // 1. Radial gradient for globe curvature effect
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const maxR = Math.max(width, height) * 0.75;
+    const oceanGrad = ctx.createRadialGradient(centerX * 0.9, centerY * 0.8, 0, centerX, centerY, maxR);
+    oceanGrad.addColorStop(0, "#3a7fc1");   // bright center (globe highlight)
+    oceanGrad.addColorStop(0.35, "#2c6faa");
+    oceanGrad.addColorStop(0.65, "#1f5a8f");
+    oceanGrad.addColorStop(1.0, "#0e3560");  // dark edges (atmosphere fade)
+    ctx.fillStyle = oceanGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. Subtle wave patterns
+    ctx.save();
+    ctx.globalAlpha = 0.07;
+    ctx.strokeStyle = "#a0d4ff";
+    ctx.lineWidth = Math.max(0.8, 1.2 * (scale / 15));
+    // Use a seeded pattern so waves are stable across redraws
+    for (let wy = -20; wy < height + 20; wy += Math.max(12, 18 * (scale / 15))) {
+        ctx.beginPath();
+        const waveOffset = (wy * 0.37) % 40;
+        for (let wx = -20; wx < width + 20; wx += 3) {
+            const yOff = Math.sin((wx + waveOffset) * 0.015) * 6 * (scale / 15)
+                       + Math.sin((wx + waveOffset) * 0.035) * 3 * (scale / 15);
+            if (wx === -20) ctx.moveTo(wx, wy + yOff);
+            else ctx.lineTo(wx, wy + yOff);
+        }
+        ctx.stroke();
+    }
+    ctx.restore();
+
+    // 3. Cloud/atmosphere wisps
+    ctx.save();
+    const cloudPositions = [
+        { x: 0.08, y: 0.12, rx: 0.12, ry: 0.025, alpha: 0.06 },
+        { x: 0.85, y: 0.08, rx: 0.10, ry: 0.02, alpha: 0.05 },
+        { x: 0.15, y: 0.88, rx: 0.14, ry: 0.022, alpha: 0.07 },
+        { x: 0.78, y: 0.92, rx: 0.11, ry: 0.02, alpha: 0.05 },
+        { x: 0.50, y: 0.05, rx: 0.18, ry: 0.018, alpha: 0.04 },
+        { x: 0.92, y: 0.50, rx: 0.06, ry: 0.04, alpha: 0.06 },
+        { x: 0.03, y: 0.55, rx: 0.07, ry: 0.03, alpha: 0.05 },
+        { x: 0.40, y: 0.95, rx: 0.15, ry: 0.02, alpha: 0.05 },
+        { x: 0.65, y: 0.03, rx: 0.09, ry: 0.015, alpha: 0.04 },
+        { x: 0.20, y: 0.30, rx: 0.08, ry: 0.015, alpha: 0.03 },
+        { x: 0.70, y: 0.65, rx: 0.09, ry: 0.018, alpha: 0.04 },
+        { x: 0.55, y: 0.80, rx: 0.07, ry: 0.02, alpha: 0.03 },
+    ];
+    for (const cloud of cloudPositions) {
+        const cx = cloud.x * width;
+        const cy = cloud.y * height;
+        const rx = cloud.rx * width;
+        const ry = cloud.ry * height;
+        const cloudGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
+        cloudGrad.addColorStop(0, `rgba(255, 255, 255, ${cloud.alpha})`);
+        cloudGrad.addColorStop(0.6, `rgba(220, 240, 255, ${cloud.alpha * 0.5})`);
+        cloudGrad.addColorStop(1, "rgba(200, 230, 255, 0)");
+        ctx.fillStyle = cloudGrad;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+
+    // 4. Vignette edge darkening for globe atmosphere
+    ctx.save();
+    const vignetteGrad = ctx.createRadialGradient(centerX, centerY, maxR * 0.5, centerX, centerY, maxR * 1.1);
+    vignetteGrad.addColorStop(0, "rgba(0, 0, 0, 0)");
+    vignetteGrad.addColorStop(0.7, "rgba(0, 10, 30, 0.08)");
+    vignetteGrad.addColorStop(1, "rgba(0, 5, 20, 0.25)");
+    ctx.fillStyle = vignetteGrad;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+
+    // 5. Ocean body labels
+    ctx.save();
+    const oceanLabels = [
+        { name: "Atlantic\nOcean", x: 6, y: 38, size: 1.3, angle: -0.15 },
+        { name: "North\nSea", x: 32, y: 18, size: 0.9, angle: 0 },
+        { name: "Norwegian Sea", x: 22, y: 6, size: 0.8, angle: 0 },
+        { name: "Bay of\nBiscay", x: 19, y: 48, size: 0.8, angle: 0 },
+        { name: "Mediterranean Sea", x: 34, y: 58, size: 0.9, angle: 0.05 },
+        { name: "Baltic\nSea", x: 52, y: 17, size: 0.8, angle: 0.2 },
+        { name: "English Channel", x: 27, y: 32, size: 0.6, angle: -0.1 },
+    ];
+    for (const ol of oceanLabels) {
+        const [sx, sy] = worldToScreen(ol.x, ol.y);
+        const fontSize = Math.max(7, 10 * uiScale * ol.size);
+        ctx.font = `italic ${fontSize}px Georgia, serif`;
+        ctx.fillStyle = "rgba(140, 190, 230, 0.35)";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(ol.angle || 0);
+        const lines = ol.name.split("\n");
+        const lineH = fontSize * 1.2;
+        const startY = -(lines.length - 1) * lineH / 2;
+        for (let li = 0; li < lines.length; li++) {
+            ctx.fillText(lines[li], 0, startY + li * lineH);
+        }
+        ctx.restore();
+    }
+    ctx.restore();
+
+    // Draw landmasses with coastline outlines
+    for (let landmass of Object.values(LANDMASSES)) {
+        ctx.beginPath();
+        for (let i = 0; i < landmass.length; i++) {
+            const [sx, sy] = worldToScreen(landmass[i][0], landmass[i][1]);
+            if (i === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+        }
+        ctx.closePath();
+        ctx.fillStyle = "#9cc09c";
+        ctx.fill();
+        ctx.strokeStyle = "#5a8a5a";
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+    }
+
+    // Draw terrain regions as soft radial gradients, clipped to land
+    ctx.save();
+    // Build a clipping path from all landmasses so terrain doesn't bleed into ocean
+    ctx.beginPath();
+    for (let landmass of Object.values(LANDMASSES)) {
+        for (let i = 0; i < landmass.length; i++) {
+            const [sx, sy] = worldToScreen(landmass[i][0], landmass[i][1]);
+            if (i === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+        }
+        ctx.closePath();
+    }
+    ctx.clip();
+
+    // Helper: draw a soft radial gradient for a terrain polygon
+    function drawTerrainGlow(polygon, r, g, b, maxAlpha) {
+        // Find centroid and max radius in screen space
+        let cx = 0, cy = 0;
+        const n = polygon.length - 1; // last point may repeat first
+        const pts = [];
+        for (let i = 0; i < polygon.length; i++) {
+            const [sx, sy] = worldToScreen(polygon[i][0], polygon[i][1]);
+            pts.push([sx, sy]);
+            if (i < n) { cx += sx; cy += sy; }
+        }
+        cx /= n;
+        cy /= n;
+        // Find max distance from centroid to any vertex
+        let maxR = 0;
+        for (let i = 0; i < n; i++) {
+            const d = Math.hypot(pts[i][0] - cx, pts[i][1] - cy);
+            if (d > maxR) maxR = d;
+        }
+        // Extend radius a bit for soft falloff
+        const outerR = maxR * 1.15;
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, outerR);
+        grad.addColorStop(0, `rgba(${r},${g},${b},${maxAlpha})`);
+        grad.addColorStop(0.5, `rgba(${r},${g},${b},${maxAlpha * 0.6})`);
+        grad.addColorStop(0.85, `rgba(${r},${g},${b},${maxAlpha * 0.2})`);
+        grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        ctx.fillStyle = grad;
+        // Fill a large rect covering the gradient area (clipped to land already)
+        ctx.fillRect(cx - outerR, cy - outerR, outerR * 2, outerR * 2);
+    }
+
+    for (let polygon of TERRAIN_REGIONS.alpine) {
+        drawTerrainGlow(polygon, 230, 230, 245, 0.35);
+    }
+    for (let polygon of TERRAIN_REGIONS.mountain) {
+        drawTerrainGlow(polygon, 110, 85, 45, 0.30);
+    }
+    ctx.restore();
+
+    // Draw rivers
+    ctx.strokeStyle = "#4488cc";
+    ctx.lineWidth = Math.max(1, 1.5 * uiScale);
+    for (let river of Object.values(RIVERS)) {
+        ctx.beginPath();
+        for (let i = 0; i < river.length; i++) {
+            const [sx, sy] = worldToScreen(river[i][0], river[i][1]);
+            if (i === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+        }
+        ctx.stroke();
+    }
+
+    // Draw river labels
+    const riverLabels = {
+        rhine: { x: 41, y: 31, name: "Rhine" },
+        danube: { x: 56, y: 39, name: "Danube" },
+        loire: { x: 30, y: 39, name: "Loire" },
+        elbe: { x: 47, y: 25, name: "Elbe" },
+        vistula: { x: 58, y: 24, name: "Vistula" },
+        po: { x: 45, y: 42.5, name: "Po" },
+        rhone: { x: 37, y: 47, name: "Rhône" },
+        seine: { x: 33, y: 36, name: "Seine" },
+        garonne: { x: 30, y: 49, name: "Garonne" },
+        douro: { x: 19, y: 53.5, name: "Douro" }
+    };
+    ctx.font = `italic ${Math.max(7, 8 * uiScale)}px Arial`;
+    ctx.fillStyle = "rgba(50, 100, 180, 0.8)";
+    ctx.textAlign = "center";
+    for (let key in riverLabels) {
+        const rl = riverLabels[key];
+        const [sx, sy] = worldToScreen(rl.x, rl.y);
+        ctx.fillText(rl.name, sx, sy);
+    }
+
+    // Draw ferry routes with labels
+    ctx.strokeStyle = "#88bbee";
+    ctx.lineWidth = Math.max(1.5, 2 * uiScale);
+    ctx.setLineDash([5, 3]);
+    for (let ferry of FERRY_ROUTES) {
+        const [sx1, sy1] = worldToScreen(ferry.from[0], ferry.from[1]);
+        const [sx2, sy2] = worldToScreen(ferry.to[0], ferry.to[1]);
+        ctx.beginPath();
+        ctx.moveTo(sx1, sy1);
+        ctx.lineTo(sx2, sy2);
+        ctx.stroke();
+
+        // Ferry label at midpoint
+        const midX = (sx1 + sx2) / 2;
+        const midY = (sy1 + sy2) / 2;
+        ctx.font = `${Math.max(6, 7 * uiScale)}px Arial`;
+        ctx.fillStyle = "rgba(200, 230, 255, 0.9)";
+        ctx.textAlign = "center";
+        ctx.fillText(`⛴ ${ferry.cost}M`, midX, midY - 3);
+    }
+    ctx.setLineDash([]);
+
+    // Draw country borders
+    const COUNTRY_BORDERS = [
+        // France-Spain (Pyrenees)
+        [[28,48.5], [30,50], [32,52], [34,54]],
+        // France-Germany (Rhine area)
+        [[41,27], [41,30], [41,33], [40,36]],
+        // France-Belgium
+        [[36,31], [38,32]],
+        // France-Switzerland
+        [[39,38], [41,39]],
+        // France-Italy
+        [[39,44], [40,44]],
+        // Germany-Poland
+        [[52,20], [52,24], [52,28], [53,30]],
+        // Germany-Czech
+        [[49,28], [50,30], [51,31]],
+        // Germany-Austria
+        [[46,36], [48,37], [50,36]],
+        // Germany-Switzerland
+        [[42,37], [44,37]],
+        // Italy-Switzerland
+        [[42,42], [44,42]],
+        // Italy-Austria
+        [[46,42], [48,40]],
+        // Austria-Hungary
+        [[53,36], [55,37]],
+        // Austria-Czech
+        [[51,33], [53,34]],
+        // Poland-Czech
+        [[52,30], [54,30]],
+        // Spain-Portugal
+        [[18,50], [18,54], [18,58], [18,62], [18,66]],
+        // Croatia-Hungary
+        [[55,40], [56,42]],
+        // Croatia-Bosnia
+        [[54,44], [55,46]],
+        // Serbia borders
+        [[58,42], [59,44], [58,47]],
+        // UK-Scotland/England (symbolic)
+        [[26,19], [32,19]],
+        // Belgium-Netherlands
+        [[37,28], [39,28]],
+        // Denmark-Germany (symbolic)
+        [[43,22], [47,22]]
+    ];
+    ctx.strokeStyle = "rgba(180, 180, 180, 0.7)";
+    ctx.lineWidth = Math.max(1, 1.5 * uiScale);
+    ctx.setLineDash([4, 3]);
+    for (let border of COUNTRY_BORDERS) {
+        ctx.beginPath();
+        for (let i = 0; i < border.length; i++) {
+            const [sx, sy] = worldToScreen(border[i][0], border[i][1]);
+            if (i === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+        }
+        ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Draw mileposts with terrain-specific icons
+    const mpSize = Math.max(1.5, 2 * uiScale);
+    for (let mp of gameState.mileposts) {
+        const [sx, sy] = worldToScreen(mp.x, mp.y);
+
+        if (!mp.city) {
+            if (mp.terrain === "alpine") {
+                // White/hollow triangle for alpine
+                ctx.strokeStyle = "rgba(80, 80, 110, 0.8)";
+                ctx.fillStyle = "rgba(210, 210, 235, 0.85)";
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(sx, sy - mpSize * 1.2);
+                ctx.lineTo(sx - mpSize, sy + mpSize * 0.7);
+                ctx.lineTo(sx + mpSize, sy + mpSize * 0.7);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            } else if (mp.terrain === "mountain") {
+                // Dark/filled triangle for mountain
+                ctx.fillStyle = "rgba(70, 50, 30, 0.8)";
+                ctx.beginPath();
+                ctx.moveTo(sx, sy - mpSize * 1.2);
+                ctx.lineTo(sx - mpSize, sy + mpSize * 0.7);
+                ctx.lineTo(sx + mpSize, sy + mpSize * 0.7);
+                ctx.closePath();
+                ctx.fill();
+            } else {
+                // Circle/dot for clear terrain
+                ctx.fillStyle = "rgba(60, 60, 60, 0.45)";
+                ctx.beginPath();
+                ctx.arc(sx, sy, mpSize * 0.7, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    }
+
+    // Draw tracks
+    ctx.lineWidth = Math.max(2, 3 * uiScale);
+    const tracksByColor = {};
+    for (let track of gameState.tracks) {
+        if (!tracksByColor[track.color]) tracksByColor[track.color] = [];
+        tracksByColor[track.color].push(track);
+    }
+
+    for (let color in tracksByColor) {
+        ctx.strokeStyle = COLOR_MAP[color] || "#ffffff";
+        for (let track of tracksByColor[color]) {
+            const from = gameState.mileposts_by_id[track.from];
+            const to = gameState.mileposts_by_id[track.to];
+            const [sx1, sy1] = worldToScreen(from.x, from.y);
+            const [sx2, sy2] = worldToScreen(to.x, to.y);
+            ctx.beginPath();
+            ctx.moveTo(sx1, sy1);
+            ctx.lineTo(sx2, sy2);
+            ctx.stroke();
+        }
+    }
+
+    // Draw path preview
+    if (gameState.pathPreview) {
+        ctx.strokeStyle = "rgba(255, 255, 0, 0.7)";
+        ctx.lineWidth = Math.max(2, 2.5 * uiScale);
+        ctx.setLineDash([5, 5]);
+        for (let i = 0; i < gameState.pathPreview.length - 1; i++) {
+            const from = gameState.mileposts_by_id[gameState.pathPreview[i]];
+            const to = gameState.mileposts_by_id[gameState.pathPreview[i + 1]];
+            const [sx1, sy1] = worldToScreen(from.x, from.y);
+            const [sx2, sy2] = worldToScreen(to.x, to.y);
+            ctx.beginPath();
+            ctx.moveTo(sx1, sy1);
+            ctx.lineTo(sx2, sy2);
+            ctx.stroke();
+        }
+        ctx.setLineDash([]);
+    }
+
+    // Draw city dots (on top of tracks)
+    for (let mp of gameState.mileposts) {
+        if (!mp.city) continue;
+        const [sx, sy] = worldToScreen(mp.x, mp.y);
+
+        if (MAJOR_CITIES.includes(mp.city.name)) {
+            // Major city - large red dot with white border
+            ctx.fillStyle = "#dd2222";
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = Math.max(1, 1.5 * uiScale);
+            ctx.beginPath();
+            ctx.arc(sx, sy, Math.max(4, 6 * uiScale), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        } else if (mp.city.type === "medium") {
+            // Medium city - blue dot
+            ctx.fillStyle = "#3355cc";
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = Math.max(0.5, 1 * uiScale);
+            ctx.beginPath();
+            ctx.arc(sx, sy, Math.max(3, 4 * uiScale), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        } else {
+            // Small city - green dot
+            ctx.fillStyle = "#339933";
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = Math.max(0.5, 0.8 * uiScale);
+            ctx.beginPath();
+            ctx.arc(sx, sy, Math.max(2, 3 * uiScale), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        }
+    }
+
+    // Draw city labels
+    const majorFontSize = Math.max(9, Math.round(10 * uiScale));
+    const otherFontSize = Math.max(7, Math.round(8 * uiScale));
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+
+    for (let cityName in gameState.cityToMilepost) {
+        const mpId = gameState.cityToMilepost[cityName];
+        const mp = gameState.mileposts_by_id[mpId];
+        const [sx, sy] = worldToScreen(mp.x, mp.y);
+        const isMajor = MAJOR_CITIES.includes(cityName);
+        const fontSize = isMajor ? majorFontSize : otherFontSize;
+        const dotRadius = isMajor ? Math.max(4, 6 * uiScale) : Math.max(2, 4 * uiScale);
+
+        ctx.font = `${isMajor ? 'bold ' : ''}${fontSize}px Arial, sans-serif`;
+
+        // Draw text shadow/outline for readability
+        ctx.fillStyle = "#000000";
+        ctx.fillText(cityName, sx + 1, sy + dotRadius + 2);
+        ctx.fillText(cityName, sx - 1, sy + dotRadius + 2);
+        ctx.fillText(cityName, sx, sy + dotRadius + 3);
+        ctx.fillText(cityName, sx, sy + dotRadius + 1);
+
+        // Draw city name
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(cityName, sx, sy + dotRadius + 2);
+
+        // Draw goods icons below city name
+        const cityData = CITIES[cityName];
+        if (cityData && cityData.goods && cityData.goods.length > 0) {
+            const iconFontSize = Math.max(11, 14 * uiScale);
+            ctx.font = `${iconFontSize}px Arial, sans-serif`;
+            const icons = cityData.goods.map(g => GOODS_ICONS[g] || "?").join(" ");
+            ctx.fillText(icons, sx, sy + dotRadius + 2 + fontSize + 4);
+        }
+    }
+
+    // Draw highlighted cities (from demand card hover)
+    if (gameState.highlightedCities.length > 0) {
+        for (let cityName of gameState.highlightedCities) {
+            const mpId = gameState.cityToMilepost[cityName];
+            if (mpId !== undefined) {
+                const mp = gameState.mileposts_by_id[mpId];
+                const [sx, sy] = worldToScreen(mp.x, mp.y);
+                // Pulsing golden ring
+                ctx.strokeStyle = "#ffdd44";
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(sx, sy, Math.max(10, 16 * uiScale), 0, Math.PI * 2);
+                ctx.stroke();
+                // Outer glow
+                ctx.strokeStyle = "rgba(255, 221, 68, 0.4)";
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.arc(sx, sy, Math.max(14, 20 * uiScale), 0, Math.PI * 2);
+                ctx.stroke();
+                // Label above
+                ctx.fillStyle = "#ffdd44";
+                ctx.font = `bold ${Math.max(10, 12 * uiScale)}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "bottom";
+                ctx.fillText(cityName, sx, sy - Math.max(14, 20 * uiScale) - 2);
+            }
+        }
+    }
+
+    // Draw trains (player pawns)
+    for (let player of gameState.players) {
+        if (player.trainLocation !== null) {
+            const mp = gameState.mileposts_by_id[player.trainLocation];
+            if (mp) {
+                const [sx, sy] = worldToScreen(mp.x, mp.y);
+                const trainRadius = Math.max(5, 7 * uiScale);
+
+                ctx.fillStyle = COLOR_MAP[player.color] || "#ffffff";
+                ctx.strokeStyle = "#000000";
+                ctx.lineWidth = Math.max(1, 1.5 * uiScale);
+                ctx.beginPath();
+                ctx.arc(sx, sy, trainRadius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Draw player initial inside
+                ctx.fillStyle = "#ffffff";
+                ctx.font = `bold ${Math.max(8, 9 * uiScale)}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(player.name[0], sx, sy);
+            }
+        }
+    }
+
+    // Highlight selected milepost
+    if (gameState.selectedMilepost) {
+        const [sx, sy] = worldToScreen(gameState.selectedMilepost.x, gameState.selectedMilepost.y);
+        ctx.strokeStyle = "#ffff00";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, Math.max(6, 10 * uiScale), 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // Highlight hovered milepost with validity-based outline
+    if (gameState.hoveredMilepost) {
+        const [sx, sy] = worldToScreen(gameState.hoveredMilepost.x, gameState.hoveredMilepost.y);
+        const isValid = gameState.hoverValid !== false; // null or true = valid
+        const hoverColor = isValid ? "rgba(255, 255, 255, 0.85)" : "rgba(255, 80, 80, 0.85)";
+        const glowColor = isValid ? "rgba(255, 255, 255, 0.3)" : "rgba(255, 80, 80, 0.3)";
+
+        ctx.strokeStyle = hoverColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, Math.max(7, 11 * uiScale), 0, Math.PI * 2);
+        ctx.stroke();
+        // Also add a soft glow
+        ctx.strokeStyle = glowColor;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(sx, sy, Math.max(9, 14 * uiScale), 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // ---- LEGENDS RENDERED ON CANVAS (in ocean areas) ----
+    ctx.save();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+
+    const legendFontSize = Math.max(8, 9 * uiScale);
+    const legendTitleFontSize = Math.max(10, 12 * uiScale);
+    const legendEmojiFontSize = Math.max(11, 13 * uiScale);
+    const legendLineH = legendFontSize * 1.6;
+    const legendPad = Math.max(6, 8 * uiScale);
+    const legendX = legendPad;
+
+    // Compute shared width for both legends
+    const goodsKeys = Object.keys(GOODS_ICONS).sort();
+    const glColItems = Math.ceil(goodsKeys.length / 2);
+    const glColW = Math.max(95, 115 * uiScale);
+    const legendBoxW = glColW * 2 + legendPad * 2;
+
+    // ---- Map Legend (top) ----
+    let curY = legendPad;
+    const mlItems = [
+        { symbol: "●", color: "#aaa", text: "Clear (1M)" },
+        { symbol: "▲", color: "#8a7040", text: "Mountain (2M)" },
+        { symbol: "△", color: "#888", text: "Alpine (5M)" },
+        { symbol: "⬤", color: "#dd2222", text: "Major city (5M)" },
+        { symbol: "⬤", color: "#3355cc", text: "Medium city (3M)" },
+        { symbol: "⬤", color: "#339933", text: "Small city (3M)" },
+        { symbol: "〰", color: "#4488cc", text: "River (+2M)" },
+        { symbol: "---", color: "#88bbee", text: "Ferry route" },
+    ];
+    const mlBoxH = legendPad + legendTitleFontSize + legendLineH * 0.5 + legendLineH * mlItems.length + legendPad;
+    ctx.fillStyle = "rgba(10, 25, 50, 0.75)";
+    ctx.fillRect(legendX, curY, legendBoxW, mlBoxH);
+    ctx.strokeStyle = "rgba(100, 150, 200, 0.3)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(legendX, curY, legendBoxW, mlBoxH);
+
+    let textY = curY + legendPad + legendTitleFontSize;
+    ctx.font = `bold ${legendTitleFontSize}px Arial`;
+    ctx.fillStyle = "rgba(180, 210, 240, 0.8)";
+    ctx.fillText("Map Legend", legendX + legendPad, textY);
+    textY += legendLineH * 0.3;
+
+    ctx.font = `${legendFontSize}px Arial`;
+    for (const item of mlItems) {
+        textY += legendLineH;
+        ctx.fillStyle = item.color;
+        ctx.fillText(item.symbol, legendX + legendPad, textY);
+        ctx.fillStyle = "rgba(200, 220, 240, 0.7)";
+        ctx.fillText(item.text, legendX + legendPad + legendFontSize * 2.2, textY);
+    }
+
+    // ---- Goods Legend (directly below Map Legend) ----
+    curY += mlBoxH + Math.max(3, 4 * uiScale);
+    const glBoxH = legendPad + legendTitleFontSize + legendLineH * 0.5 + legendLineH * glColItems + legendPad;
+
+    ctx.fillStyle = "rgba(10, 25, 50, 0.75)";
+    ctx.fillRect(legendX, curY, legendBoxW, glBoxH);
+    ctx.strokeStyle = "rgba(100, 150, 200, 0.3)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(legendX, curY, legendBoxW, glBoxH);
+
+    let glTextY = curY + legendPad + legendTitleFontSize;
+    ctx.font = `bold ${legendTitleFontSize}px Arial`;
+    ctx.fillStyle = "rgba(180, 210, 240, 0.8)";
+    ctx.fillText("Goods Legend", legendX + legendPad, glTextY);
+    glTextY += legendLineH * 0.3;
+
+    for (let gi = 0; gi < goodsKeys.length; gi++) {
+        const col = gi < glColItems ? 0 : 1;
+        const row = gi < glColItems ? gi : gi - glColItems;
+        const ix = legendX + legendPad + col * glColW;
+        const iy = glTextY + (row + 1) * legendLineH;
+        ctx.font = `${legendEmojiFontSize}px Arial, sans-serif`;
+        ctx.fillStyle = "rgba(200, 220, 240, 0.9)";
+        ctx.fillText(GOODS_ICONS[goodsKeys[gi]], ix, iy);
+        ctx.font = `${legendFontSize}px Arial`;
+        ctx.fillText(goodsKeys[gi], ix + legendEmojiFontSize * 1.4, iy);
+    }
+
+    // Store the bottom Y of legends so we can position demand cards
+    const legendsBottomY = curY + glBoxH;
+    ctx.restore();
+
+    // Position demand cards overlay just below legends
+    const overlayEl = document.getElementById("demandCardsOverlay");
+    if (overlayEl) {
+        overlayEl.style.top = (legendsBottomY + 8) + "px";
+        overlayEl.style.left = legendX + "px";
+    }
+}
+
+// ============================================================================
+// UI AND SETUP
+// ============================================================================
+
+function setupPlayerInputs() {
+    const count = parseInt(document.getElementById("playerCount").value);
+    const container = document.getElementById("playerInputs");
+    container.innerHTML = "";
+
+    const colors = ["red", "blue", "green", "yellow", "purple", "orange"];
+
+    for (let i = 0; i < count; i++) {
+        const div = document.createElement("div");
+        div.className = "player-setup";
+        div.innerHTML = `
+            <div class="player-input-row">
+                <input type="text" placeholder="Player ${i + 1} Name" id="player${i}Name" value="Player ${i + 1}">
+                <select id="player${i}Color">
+                    ${colors.map((c, idx) => `<option value="${c}" ${idx === i ? "selected" : ""}>${c.charAt(0).toUpperCase() + c.slice(1)}</option>`).join("")}
+                </select>
+            </div>
+        `;
+        container.appendChild(div);
+    }
+}
+
+function generateDemandDeck() {
+    const deck = [];
+    const goodsKeys = Object.keys(GOODS);
+    const cities = Object.keys(CITIES);
+
+    // Generate 40 demand cards, each with 3 demands (like real game: 120 demands / 3 per card)
+    for (let i = 0; i < 40; i++) {
+        const demands = [];
+        for (let d = 0; d < 3; d++) {
+            const good = goodsKeys[Math.floor(Math.random() * goodsKeys.length)];
+            const sources = GOODS[good].sources;
+            const from = sources[Math.floor(Math.random() * sources.length)];
+            let to;
+            do {
+                to = cities[Math.floor(Math.random() * cities.length)];
+            } while (to === from || sources.includes(to));
+
+            const fromCoords = CITIES[from];
+            const toCoords = CITIES[to];
+            const distance = Math.hypot(fromCoords.x - toCoords.x, fromCoords.y - toCoords.y);
+            const payout = Math.round(distance * 1.5);
+
+            demands.push({ good, from, to, payout });
+        }
+        deck.push({ demands, fulfilled: [false, false, false] });
+    }
+
+    // Shuffle deck
+    for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+
+    return deck;
+}
+
+// ============================================================================
+// LEGEND PANEL TOGGLES
+// ============================================================================
+
+function toggleLegend() {
+    const panel = document.getElementById("goodsLegend");
+    const arrow = document.getElementById("legendArrow");
+    if (panel.style.display === "none") {
+        panel.style.display = "block";
+        arrow.textContent = "▼";
+    } else {
+        panel.style.display = "none";
+        arrow.textContent = "▶";
+    }
+}
+
+function toggleMapLegend() {
+    const panel = document.getElementById("mapLegend");
+    const arrow = document.getElementById("mapLegendArrow");
+    if (panel.style.display === "none") {
+        panel.style.display = "block";
+        arrow.textContent = "▼";
+    } else {
+        panel.style.display = "none";
+        arrow.textContent = "▶";
+    }
+}
+
+function highlightCities(cityNames) {
+    gameState.highlightedCities = cityNames;
+    drawMap();
+}
+
+function clearHighlight() {
+    if (gameState.highlightedCities.length > 0) {
+        gameState.highlightedCities = [];
+        drawMap();
+    }
+}
+
+function populateGoodsLegend() {
+    const container = document.getElementById("goodsLegend");
+    if (!container) return;
+    const sorted = Object.keys(GOODS_ICONS).sort();
+    container.innerHTML = sorted.map(name =>
+        `<div style="display:flex; align-items:center; gap:6px;">
+            <span style="font-size:14px; min-width:20px; text-align:center;">${GOODS_ICONS[name]}</span>
+            <span style="color:#ccc;">${name}</span>
+        </div>`
+    ).join("");
+}
+
+function startGame() {
+    const count = parseInt(document.getElementById("playerCount").value);
+    gameState.players = [];
+    gameState.demandCardDeck = generateDemandDeck();
+
+    for (let i = 0; i < count; i++) {
+        const name = document.getElementById(`player${i}Name`).value || `Player ${i + 1}`;
+        const color = document.getElementById(`player${i}Color`).value;
+
+        // Deal 3 demand cards to each player
+        const demandCards = [];
+        for (let j = 0; j < 3; j++) {
+            if (gameState.demandCardDeck.length > 0) {
+                demandCards.push(gameState.demandCardDeck.pop());
+            }
+        }
+
+        gameState.players.push({
+            name,
+            color,
+            cash: 50,
+            trainType: "Freight",
+            trainLocation: null,
+            demandCards: demandCards,
+            loads: [],
+            movement: 0
+        });
+    }
+
+    gameState.gameStarted = true;
+    gameState.phase = "initialBuilding";
+    gameState.buildingPhaseCount = 0;
+
+    document.getElementById("setupScreen").classList.add("hidden");
+    document.getElementById("gameContainer").style.display = "flex";
+
+    // Initialize game
+    generateHexGrid();
+    gameState.canvas = document.getElementById("gameCanvas");
+    gameState.ctx = gameState.canvas.getContext("2d");
+
+    drawMap();
+    updateUI();
+
+    addLog("Game started! Initial building phase (2 rounds)");
+}
+
+function deployTrain(milepostId) {
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    if (currentPlayer.trainLocation === null) {
+        currentPlayer.trainLocation = milepostId;
+        const mp = gameState.mileposts_by_id[milepostId];
+        const cityName = mp.city ? mp.city.name : "milepost";
+        addLog(`${currentPlayer.name} deployed train at ${cityName}`);
+    }
+}
+
+function getPlayerLocationName(player) {
+    if (player.trainLocation === null) return "Not deployed";
+    const mp = gameState.mileposts_by_id[player.trainLocation];
+    return mp?.city?.name || "En route";
+}
+
+function getPlayerCity(player) {
+    if (player.trainLocation === null) return null;
+    const mp = gameState.mileposts_by_id[player.trainLocation];
+    return mp?.city?.name || null;
+}
+
+function pickupGood(good) {
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    const trainMaxCapacity = TRAIN_TYPES[currentPlayer.trainType].capacity;
+
+    if (currentPlayer.loads.length < trainMaxCapacity) {
+        currentPlayer.loads.push(good);
+        addLog(`${currentPlayer.name} picked up ${good}`);
+        updateUI();
+        drawMap();
+    } else {
+        addLog("Train is at full capacity!");
+    }
+}
+
+function deliverGood(cardIndex, demandIndex) {
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    const card = currentPlayer.demandCards[cardIndex];
+
+    if (!card || !card.demands[demandIndex]) {
+        addLog("Invalid demand card!");
+        return;
+    }
+
+    const demand = card.demands[demandIndex];
+    const matchingLoadIndex = currentPlayer.loads.findIndex(good => good === demand.good);
+    if (matchingLoadIndex === -1) {
+        addLog(`No ${demand.good} to deliver!`);
+        return;
+    }
+
+    const mp = gameState.mileposts_by_id[currentPlayer.trainLocation];
+    const currentCity = mp?.city?.name;
+    if (currentCity !== demand.to) {
+        addLog(`Must deliver to ${demand.to}!`);
+        return;
+    }
+
+    // Deliver good — fulfilling one demand replaces the entire card
+    currentPlayer.loads.splice(matchingLoadIndex, 1);
+    currentPlayer.cash += demand.payout;
+    addLog(`${currentPlayer.name} delivered ${demand.good} to ${demand.to} for ECU ${demand.payout}M`);
+
+    // Replace fulfilled card with a new one from deck
+    if (gameState.demandCardDeck.length > 0) {
+        currentPlayer.demandCards[cardIndex] = gameState.demandCardDeck.pop();
+    } else {
+        currentPlayer.demandCards.splice(cardIndex, 1);
+    }
+
+    updateUI();
+    drawMap();
+}
+
+function dropGood(loadIndex) {
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    if (loadIndex >= 0 && loadIndex < currentPlayer.loads.length) {
+        const good = currentPlayer.loads.splice(loadIndex, 1)[0];
+        addLog(`${currentPlayer.name} dropped ${good}`);
+        updateUI();
+        drawMap();
+    }
+}
+
+function upgradeTo(trainType) {
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    const upgradeCost = 20;
+
+    if (currentPlayer.cash < upgradeCost) {
+        addLog("Not enough cash to upgrade train!");
+        return;
+    }
+
+    currentPlayer.cash -= upgradeCost;
+    currentPlayer.trainType = trainType;
+    addLog(`${currentPlayer.name} upgraded train to ${trainType} (ECU 20M)`);
+    updateUI();
+    drawMap();
+}
+
+function getUpgradeOptions(player) {
+    if (player.trainType === "Freight") {
+        return [
+            { type: "Fast Freight", desc: "12mp speed, 2 loads" },
+            { type: "Heavy Freight", desc: "9mp speed, 3 loads" }
+        ];
+    } else if (player.trainType === "Fast Freight" || player.trainType === "Heavy Freight") {
+        return [
+            { type: "Superfreight", desc: "12mp speed, 3 loads" }
+        ];
+    }
+    return []; // Already max
+}
+
+function discardHand() {
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    const newCards = [];
+    for (let i = 0; i < 3; i++) {
+        if (gameState.demandCardDeck.length > 0) {
+            newCards.push(gameState.demandCardDeck.pop());
+        }
+    }
+    currentPlayer.demandCards = newCards;
+    addLog(`${currentPlayer.name} discarded hand and drew 3 new cards`);
+    endTurn();
+}
+
+function showTurnOverlay(playerName, playerColor, phaseLabel) {
+    document.getElementById("turnOverlayPlayer").textContent = playerName;
+    document.getElementById("turnOverlayPlayer").style.color = COLOR_MAP[playerColor] || playerColor;
+    document.getElementById("turnOverlayPhase").textContent = phaseLabel;
+    document.getElementById("turnOverlay").classList.add("show");
+}
+
+function dismissTurnOverlay() {
+    document.getElementById("turnOverlay").classList.remove("show");
+}
+
+function undoLastBuild() {
+    if (gameState.buildHistory.length === 0) {
+        addLog("Nothing to undo!");
+        return;
+    }
+    const last = gameState.buildHistory.pop();
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+
+    // Remove the last N track segments
+    for (let i = 0; i < last.segments; i++) {
+        gameState.tracks.pop();
+    }
+
+    // Refund cost
+    currentPlayer.cash += last.cost;
+    gameState.buildingThisTurn -= last.cost;
+    gameState.majorCitiesThisTurn -= last.majorCities;
+
+    addLog(`Undid last build (refunded ECU ${last.cost}M)`);
+    updateUI();
+    drawMap();
+}
+
+function endOperatePhase() {
+    gameState.phase = "build";
+    gameState.buildingThisTurn = 0;
+    gameState.majorCitiesThisTurn = 0;
+    gameState.buildHistory = [];
+    addLog("Moved to Build Phase");
+    updateUI();
+    drawMap();
+}
+
+function endTurn() {
+    // Check win condition first
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    if (checkWinCondition(currentPlayer)) {
+        endGame(currentPlayer);
+        return;
+    }
+
+    // Reset building limits for new player
+    gameState.buildingThisTurn = 0;
+    gameState.majorCitiesThisTurn = 0;
+    gameState.buildHistory = [];
+
+    // Move to next player
+    gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
+
+    // Determine next phase
+    if (gameState.phase === "initialBuilding") {
+        // In initial building, stay in initialBuilding phase, just move to next player
+        if (gameState.currentPlayerIndex === 0) {
+            gameState.buildingPhaseCount++;
+            if (gameState.buildingPhaseCount >= gameState.initialBuildingRounds) {
+                gameState.phase = "operate";
+                // Set movement for first time
+                for (let player of gameState.players) {
+                    player.movement = TRAIN_TYPES[player.trainType].movement;
+                }
+            }
+        }
+        if (gameState.phase === "initialBuilding") {
+            addLog(`Initial building round ${gameState.buildingPhaseCount + 1}: ${gameState.players[gameState.currentPlayerIndex].name}`);
+        }
+    } else if (gameState.phase === "build") {
+        // After build phase, go back to operate phase for next player
+        gameState.phase = "operate";
+        const player = gameState.players[gameState.currentPlayerIndex];
+        player.movement = TRAIN_TYPES[player.trainType].movement;
+        addLog(`${player.name} starts Operate Phase (${player.movement}mp)`);
+    }
+
+    gameState.turn++;
+
+    // Show turn change overlay
+    const nextPlayer = gameState.players[gameState.currentPlayerIndex];
+    let phaseLabel = "";
+    if (gameState.phase === "initialBuilding") phaseLabel = "Initial Building Phase";
+    else if (gameState.phase === "operate") phaseLabel = "Operate Phase";
+    else phaseLabel = "Build Phase";
+    showTurnOverlay(nextPlayer.name, nextPlayer.color, phaseLabel);
+
+    updateUI();
+    drawMap();
+}
+
+function updateUI() {
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+
+    // Update current player info section
+    const locationName = getPlayerLocationName(currentPlayer);
+    const connectedCount = getConnectedMajorCities(currentPlayer.color).length;
+
+    const phaseColorMap = {
+        "initialBuilding": "#ff8800",
+        "operate": "#4a9e4a",
+        "build": "#4a7aff"
+    };
+    const phaseText = gameState.phase === "initialBuilding" ? "Initial Building" :
+                       gameState.phase === "operate" ? "Operate" : "Build";
+    const phaseColor = phaseColorMap[gameState.phase] || "#fff";
+
+    const currentPlayerHtml = `
+        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+            <span>Player:</span><span style="color:${COLOR_MAP[currentPlayer.color]}; font-weight:bold;">${currentPlayer.name}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+            <span>Phase:</span><span style="color:${phaseColor}; font-weight:bold;">${phaseText}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+            <span>Cash:</span><span style="color:#4a9eff; font-weight:bold;">ECU ${currentPlayer.cash}M</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+            <span>Location:</span><span style="color:#fff; font-weight:bold;">${locationName}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+            <span>Train:</span><span>${currentPlayer.trainType}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+            <span>Speed/Cap:</span><span>${TRAIN_TYPES[currentPlayer.trainType].movement}mp / ${TRAIN_TYPES[currentPlayer.trainType].capacity} loads</span>
+        </div>
+        ${gameState.phase === "operate" ? `
+        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+            <span>Movement:</span><span style="color:#ffff00; font-weight:bold;">${currentPlayer.movement}mp</span>
+        </div>
+        ` : ""}
+        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+            <span>Major Cities:</span><span style="color:${connectedCount >= 7 ? '#4a9e4a' : '#ff8800'}; font-weight:bold;">${connectedCount}/7</span>
+        </div>
+    `;
+    document.getElementById("currentPlayerInfo").innerHTML = currentPlayerHtml;
+
+    // Update players list
+    const playersList = document.getElementById("playersList");
+    playersList.innerHTML = gameState.players.map((p, i) => `
+        <div class="player-info ${i === gameState.currentPlayerIndex ? "active" : ""}">
+            <strong>${p.name}</strong> (${p.color})<br>
+            Cash: ECU ${p.cash}M<br>
+            Train: ${p.trainType}<br>
+            Loads: ${p.loads.length}/${TRAIN_TYPES[p.trainType].capacity}
+        </div>
+    `).join("");
+
+    // Update demand cards display (rendered as overlay cards on the map)
+    const demandOverlay = document.getElementById("demandCardsOverlay");
+    const currentCity = getPlayerCity(currentPlayer);
+    if (currentPlayer.demandCards.length > 0) {
+        const cardsHtml = currentPlayer.demandCards.map((card, cardIdx) => {
+            const hasDeliverable = card.demands.some(d =>
+                gameState.phase === "operate" && currentCity === d.to && currentPlayer.loads.includes(d.good));
+
+            const demandsHtml = card.demands.map((demand, dIdx) => {
+                const allSources = GOODS[demand.good] ? GOODS[demand.good].sources : [demand.from];
+                const sourcesHtml = allSources.map(c =>
+                    `<span onmouseenter="highlightCities(['${c}'])"
+                           onmouseleave="clearHighlight()">${c}</span>`
+                ).join(", ");
+
+                const canDeliver = gameState.phase === "operate" &&
+                                   currentCity === demand.to &&
+                                   currentPlayer.loads.includes(demand.good);
+                const deliverBtn = canDeliver
+                    ? `<button class="deliver-btn" onclick="deliverGood(${cardIdx}, ${dIdx})">💰 Deliver ECU ${demand.payout}M</button>`
+                    : "";
+
+                return `
+                <div class="card-demand">
+                    <div>
+                        <span style="font-size:14px;">${GOODS_ICONS[demand.good] || "?"}</span>
+                        <span class="good-name">${demand.good}</span>
+                        <span class="payout">${demand.payout}M</span>
+                    </div>
+                    <div class="source-cities">From: ${sourcesHtml}</div>
+                    <div class="dest-city">To: <span
+                        onmouseenter="highlightCities(['${demand.to}'])"
+                        onmouseleave="clearHighlight()">${demand.to}</span>
+                    </div>
+                    ${deliverBtn}
+                </div>`;
+            }).join("");
+
+            const pColor = COLOR_MAP[currentPlayer.color] || "#6a9ad0";
+            return `
+            <div class="demand-card-overlay${hasDeliverable ? ' deliverable' : ''}">
+                <div class="card-header" style="color:${pColor}; border-bottom-color:${pColor}40;">${currentPlayer.name} — Card ${cardIdx + 1}</div>
+                ${demandsHtml}
+            </div>`;
+        }).join("");
+        demandOverlay.innerHTML = cardsHtml;
+    } else {
+        demandOverlay.innerHTML = "";
+    }
+
+    // Update Build panel (separate dedicated section)
+    const buildSection = document.getElementById("buildSection");
+    const buildPanel = document.getElementById("buildPanel");
+    const isBuildPhase = gameState.phase === "initialBuilding" || gameState.phase === "build";
+
+    if (isBuildPhase) {
+        buildSection.style.display = "block";
+        const remainingBudget = 20 - gameState.buildingThisTurn;
+        const budgetPct = Math.round((remainingBudget / 20) * 100);
+        const budgetColor = remainingBudget > 10 ? "#4a9e4a" : remainingBudget > 5 ? "#ffcc00" : "#ff4444";
+
+        let bHtml = `
+            <div style="font-size:11px; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span>Turn Budget:</span>
+                    <strong style="color:${budgetColor};">${remainingBudget}M / 20M</strong>
+                </div>
+                <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
+                    <div style="background:${budgetColor}; height:100%; width:${budgetPct}%; transition:width 0.3s;"></div>
+                </div>
+            </div>
+            <div style="font-size:11px; margin-bottom:8px; display:flex; justify-content:space-between;">
+                <span>Total Cash:</span>
+                <strong style="color:#4a9eff;">ECU ${currentPlayer.cash}M</strong>
+            </div>
+        `;
+
+        // Cost breakdown for all builds this turn
+        if (gameState.buildHistory.length > 0) {
+            const totals = { clear: 0, mountain: 0, alpine: 0, river: 0, smallCity: 0, majorCity: 0 };
+            let totalSegments = 0;
+            for (const entry of gameState.buildHistory) {
+                if (entry.breakdown) {
+                    for (const k in totals) totals[k] += (entry.breakdown[k] || 0);
+                }
+                totalSegments += entry.segments;
+            }
+            const items = [];
+            if (totals.clear > 0) items.push(`${totals.clear} clear (${totals.clear}M)`);
+            if (totals.mountain > 0) items.push(`${totals.mountain} mountain (${totals.mountain * 2}M)`);
+            if (totals.alpine > 0) items.push(`${totals.alpine} alpine (${totals.alpine * 5}M)`);
+            if (totals.smallCity > 0) items.push(`${totals.smallCity} small city (${totals.smallCity * 3}M)`);
+            if (totals.majorCity > 0) items.push(`${totals.majorCity} major city (${totals.majorCity * 5}M)`);
+            if (totals.river > 0) items.push(`${totals.river} river crossing (+${totals.river * 2}M)`);
+
+            bHtml += `<div style="font-size:10px; margin-bottom:8px; background:#1a2a1a; border:1px solid #3a5a3a; border-radius:4px; padding:6px;">
+                <div style="color:#88bb88; margin-bottom:4px; font-weight:bold;">Turn Summary — ${totalSegments} segment${totalSegments !== 1 ? 's' : ''}</div>
+                <div style="color:#aaa; line-height:1.5;">${items.join('<br>')}</div>
+            </div>`;
+
+            // Undo section
+            const lastBuild = gameState.buildHistory[gameState.buildHistory.length - 1];
+            bHtml += `<div style="background:#3d2200; border:2px solid #cc6600; border-radius:4px; padding:8px; margin-bottom:8px;">
+                <div style="font-size:10px; color:#ffaa44; margin-bottom:6px;">
+                    Last build: <strong>ECU ${lastBuild.cost}M</strong> (${lastBuild.segments} segment${lastBuild.segments !== 1 ? 's' : ''})
+                </div>
+                <button onclick="undoLastBuild()" style="width:100%; padding:10px; font-size:14px; background:#cc6600; font-weight:bold; border-radius:4px;">↩ Undo Last Track</button>
+            </div>`;
+        }
+
+        // Train info + upgrade (only in regular build phase, not initial)
+        if (gameState.phase === "build") {
+            const tt = TRAIN_TYPES[currentPlayer.trainType];
+            const upgrades = getUpgradeOptions(currentPlayer);
+            const canAffordUpgrade = currentPlayer.cash >= 20;
+
+            bHtml += `<div style="font-size:11px; margin-bottom:8px; background:#333; padding:6px; border-radius:3px; border:1px solid #555;">
+                <div style="color:#4a9eff; margin-bottom:4px;"><strong>🚂 ${currentPlayer.trainType}</strong></div>
+                <div style="display:flex; justify-content:space-between;">
+                    <span>Speed: ${tt.movement}mp</span><span>Capacity: ${tt.capacity} loads</span>
+                </div>
+            </div>`;
+
+            if (upgrades.length > 0) {
+                bHtml += `<div style="font-size:11px; margin-bottom:8px;">
+                    <div style="color:#ff8800; margin-bottom:4px;"><strong>Upgrade (ECU 20M):</strong></div>
+                    ${upgrades.map(u => `
+                        <button onclick="upgradeTo('${u.type}')" style="width:100%; margin-bottom:4px; padding:4px 8px; font-size:11px; ${canAffordUpgrade ? '' : 'opacity:0.5;'}" ${canAffordUpgrade ? '' : 'disabled'}>
+                            ⬆ ${u.type} (${u.desc})
+                        </button>
+                    `).join("")}
+                </div>`;
+            }
+        }
+
+        buildPanel.innerHTML = bHtml;
+    } else {
+        buildSection.style.display = "none";
+    }
+
+    // Update action buttons based on phase
+    const actionButtons = document.getElementById("actionButtons");
+    if (gameState.phase === "initialBuilding") {
+        actionButtons.innerHTML = `
+            <div style="font-size: 12px; margin-bottom: 10px;">Click two mileposts to build track</div>
+            <button onclick="endTurn()" style="width: 100%; margin-bottom: 5px;">End Building Turn</button>
+        `;
+    } else if (gameState.phase === "operate") {
+        let operateHtml = "";
+        const opCity = getPlayerCity(currentPlayer);
+
+        // Carried goods section
+        if (currentPlayer.loads.length > 0) {
+            operateHtml += `<div style="font-size:11px; margin-bottom:8px; background:#333; padding:6px; border-radius:3px;">
+                <div style="color:#4a9eff; margin-bottom:4px;"><strong>Carried Goods:</strong></div>
+                ${currentPlayer.loads.map((g, i) => `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+                        <span>${GOODS_ICONS[g] || "?"} ${g}</span>
+                        <button onclick="dropGood(${i})" style="padding:2px 6px; font-size:10px;">Drop</button>
+                    </div>
+                `).join("")}
+            </div>`;
+        }
+
+        // Goods available at current city
+        if (opCity && CITIES[opCity] && CITIES[opCity].goods.length > 0) {
+            const canPickUp = currentPlayer.loads.length < TRAIN_TYPES[currentPlayer.trainType].capacity;
+            operateHtml += `<div style="font-size:11px; margin-bottom:8px; background:#333; padding:6px; border-radius:3px;">
+                <div style="color:#4a9e4a; margin-bottom:4px;"><strong>Available at ${opCity}:</strong></div>
+                ${CITIES[opCity].goods.map(g => `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+                        <span>${GOODS_ICONS[g] || "?"} ${g}</span>
+                        <button onclick="pickupGood('${g}')" style="padding:2px 6px; font-size:10px;" ${canPickUp ? "" : "disabled"}>Pick Up</button>
+                    </div>
+                `).join("")}
+            </div>`;
+        }
+
+        // Delivery opportunities
+        if (opCity) {
+            const deliverable = [];
+            currentPlayer.demandCards.forEach((card, cardIdx) => {
+                card.demands.forEach((demand, dIdx) => {
+                    if (demand.to === opCity && currentPlayer.loads.includes(demand.good)) {
+                        deliverable.push({ demand, cardIdx, dIdx });
+                    }
+                });
+            });
+
+            if (deliverable.length > 0) {
+                operateHtml += `<div style="font-size:11px; margin-bottom:8px; background:#1a4a1a; padding:6px; border-radius:3px; border:1px solid #4a9e4a;">
+                    <div style="color:#4a9e4a; margin-bottom:4px;"><strong>Deliveries Available!</strong></div>
+                    ${deliverable.map(d => `
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+                            <span>${GOODS_ICONS[d.demand.good] || "?"} ${d.demand.good} → ECU ${d.demand.payout}M</span>
+                            <button onclick="deliverGood(${d.cardIdx}, ${d.dIdx})" style="padding:2px 8px; font-size:10px; background:#4a9e4a;">Deliver</button>
+                        </div>
+                    `).join("")}
+                </div>`;
+            }
+        }
+
+        operateHtml += `
+            <button onclick="endOperatePhase()" style="width: 100%; margin-bottom: 5px;">End Operate → Build Phase</button>
+            <button onclick="discardHand()" style="width: 100%; margin-bottom: 5px;">Discard Hand & End Turn</button>
+        `;
+        actionButtons.innerHTML = operateHtml;
+    } else { // build phase
+        actionButtons.innerHTML = `
+            <button onclick="endTurn()" style="width: 100%; margin-bottom: 5px;">End Turn</button>
+        `;
+    }
+}
+
+
+function endGame(player) {
+    document.getElementById("winnerText").innerHTML = `
+        <strong>${player.name}</strong> wins!<br>
+        Connected cities: ${getConnectedMajorCities(player.color).length}/8<br>
+        Cash: ECU ${player.cash}M
+    `;
+    document.getElementById("endGameModal").classList.add("show");
+}
+
+// ============================================================================
+// CANVAS INTERACTION
+// ============================================================================
+
+document.addEventListener("DOMContentLoaded", function() {
+    document.getElementById("playerCount").addEventListener("input", setupPlayerInputs);
+    setupPlayerInputs();
+
+    document.getElementById("gameCanvas")?.addEventListener("click", function(e) {
+        if (!gameState.gameStarted) return;
+
+        const canvas = gameState.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // Use CSS dimensions (not canvas.width which includes dpr scaling)
+        const cssWidth = rect.width;
+        const cssHeight = rect.height;
+        const scale = Math.min(cssWidth / 50, cssHeight / 65);
+        const offsetX = (cssWidth - 50 * scale) / 2;
+        const offsetY = (cssHeight - 65 * scale) / 2;
+
+        const worldX = (mouseX - offsetX) / scale;
+        const worldY = (mouseY - offsetY) / scale;
+
+        // Find nearest milepost
+        let nearest = null;
+        let nearestDist = Infinity;
+        for (let mp of gameState.mileposts) {
+            const dist = Math.hypot(mp.x - worldX, mp.y - worldY);
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                nearest = mp;
+            }
+        }
+
+        if (!nearest || nearestDist >= 1) return;
+
+        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+
+        // OPERATE PHASE: Click on mileposts to move train
+        if (gameState.phase === "operate") {
+            // Deploy train if not deployed yet
+            if (currentPlayer.trainLocation === null) {
+                // Must click a city milepost where player has track
+                if (!nearest.city) {
+                    addLog("Deploy your train at a city on your track!");
+                    return;
+                }
+                const owned = getPlayerOwnedMileposts(currentPlayer.color);
+                if (!owned.has(nearest.id)) {
+                    addLog("You need track at this city to deploy your train here!");
+                    return;
+                }
+                deployTrain(nearest.id);
+                updateUI();
+                drawMap();
+                return;
+            }
+
+            // Move train to clicked milepost (milepost-to-milepost)
+            if (nearest.id === currentPlayer.trainLocation) {
+                addLog("Already here!");
+                return;
+            }
+
+            const pathOnTrack = findPathOnTrack(currentPlayer.trainLocation, nearest.id, currentPlayer.color);
+            if (!pathOnTrack) {
+                addLog("No track connection!");
+                return;
+            }
+
+            const movementCost = pathOnTrack.length - 1; // each segment = 1 mp
+            if (movementCost > currentPlayer.movement) {
+                addLog(`Not enough movement! (need ${movementCost}, have ${currentPlayer.movement})`);
+                return;
+            }
+
+            currentPlayer.trainLocation = nearest.id;
+            currentPlayer.movement -= movementCost;
+            const locationName = nearest.city ? nearest.city.name : "milepost";
+            addLog(`Moved to ${locationName} (${movementCost}mp used, ${currentPlayer.movement}mp left)`);
+            updateUI();
+            drawMap();
+        }
+
+        // BUILD PHASE (initialBuilding or build): Click on mileposts to build
+        if (gameState.phase === "initialBuilding" || gameState.phase === "build") {
+            if (!gameState.selectedMilepost) {
+                if (canBuildFromMilepost(nearest, currentPlayer.color)) {
+                    gameState.selectedMilepost = nearest;
+                    addLog(`Selected ${nearest.city?.name || "milepost"}`);
+                } else {
+                    addLog("Cannot build from here!");
+                }
+            } else {
+                // Try to build
+                const start = gameState.selectedMilepost;
+                const end = nearest;
+
+                const pathResult = findPath(start.id, end.id, currentPlayer.color);
+                if (pathResult) {
+                    // Check 20M per turn limit (applies in ALL phases including initial building)
+                    const remainingBudget = 20 - gameState.buildingThisTurn;
+                    if (pathResult.cost > remainingBudget) {
+                        addLog(`Exceeds build limit! Cost: ${pathResult.cost}M, remaining budget: ${remainingBudget}M of 20M`);
+                    } else if (pathResult.cost > currentPlayer.cash) {
+                        addLog(`Not enough cash! Cost: ${pathResult.cost}M, you have: ${currentPlayer.cash}M`);
+                    } else {
+                        // Check major city limit (2 per turn max)
+                        let majorCityCount = 0;
+                        for (let mpId of pathResult.path) {
+                            const mp = gameState.mileposts_by_id[mpId];
+                            if (mp.city && MAJOR_CITIES.includes(mp.city.name)) {
+                                majorCityCount++;
+                            }
+                        }
+
+                        if (gameState.majorCitiesThisTurn + majorCityCount > 2) {
+                            addLog("Cannot build more than 2 sections from major cities this turn!");
+                        } else {
+                            // Build track — skip own existing segments, block other players' segments
+                            const ownedEdges = new Set();
+                            const otherEdges = new Set();
+                            for (let t of gameState.tracks) {
+                                const fwd = t.from + "|" + t.to;
+                                const rev = t.to + "|" + t.from;
+                                if (t.color === currentPlayer.color) {
+                                    ownedEdges.add(fwd);
+                                    ownedEdges.add(rev);
+                                } else {
+                                    otherEdges.add(fwd);
+                                    otherEdges.add(rev);
+                                }
+                            }
+
+                            let newSegments = 0;
+                            // Track cost breakdown for this build
+                            const breakdown = { clear: 0, mountain: 0, alpine: 0, river: 0, smallCity: 0, majorCity: 0 };
+                            for (let i = 0; i < pathResult.path.length - 1; i++) {
+                                const edgeKey = pathResult.path[i] + "|" + pathResult.path[i + 1];
+                                if (otherEdges.has(edgeKey)) continue; // never build on other players' track
+                                if (!ownedEdges.has(edgeKey)) {
+                                    gameState.tracks.push({
+                                        from: pathResult.path[i],
+                                        to: pathResult.path[i + 1],
+                                        color: currentPlayer.color
+                                    });
+                                    newSegments++;
+                                    // Categorize this segment
+                                    const destMp = gameState.mileposts_by_id[pathResult.path[i + 1]];
+                                    const srcMp = gameState.mileposts_by_id[pathResult.path[i]];
+                                    if (destMp.city) {
+                                        if (MAJOR_CITIES.includes(destMp.city.name)) breakdown.majorCity++;
+                                        else breakdown.smallCity++;
+                                    } else if (destMp.terrain === "alpine") {
+                                        breakdown.alpine++;
+                                    } else if (destMp.terrain === "mountain") {
+                                        breakdown.mountain++;
+                                    } else {
+                                        breakdown.clear++;
+                                    }
+                                    if (edgeCrossesRiver(srcMp.x, srcMp.y, destMp.x, destMp.y)) {
+                                        breakdown.river++;
+                                    }
+                                }
+                            }
+
+                            currentPlayer.cash -= pathResult.cost;
+                            gameState.buildingThisTurn += pathResult.cost;
+                            gameState.majorCitiesThisTurn += majorCityCount;
+
+                            gameState.buildHistory.push({
+                                segments: newSegments,
+                                cost: pathResult.cost,
+                                majorCities: majorCityCount,
+                                breakdown
+                            });
+
+                            addLog(`${currentPlayer.name} built track for ECU ${pathResult.cost}M (${20 - gameState.buildingThisTurn}M remaining this turn)`);
+                        }
+                    }
+                } else {
+                    addLog("No path found!");
+                }
+
+                gameState.selectedMilepost = null;
+                gameState.pathPreview = null;
+                updateUI();
+                drawMap();
+            }
+        }
+    });
+
+    // Mousemove for hover highlight on interactive mileposts
+    document.getElementById("gameCanvas")?.addEventListener("mousemove", function(e) {
+        if (!gameState.gameStarted) return;
+
+        const canvas = gameState.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const cssWidth = rect.width;
+        const cssHeight = rect.height;
+        const scale = Math.min(cssWidth / 50, cssHeight / 65);
+        const offsetX = (cssWidth - 50 * scale) / 2;
+        const offsetY = (cssHeight - 65 * scale) / 2;
+
+        const worldX = (mouseX - offsetX) / scale;
+        const worldY = (mouseY - offsetY) / scale;
+
+        // Find nearest milepost
+        let nearest = null;
+        let nearestDist = Infinity;
+        for (let mp of gameState.mileposts) {
+            const dist = Math.hypot(mp.x - worldX, mp.y - worldY);
+            if (dist < nearestDist) {
+                nearestDist = dist;
+                nearest = mp;
+            }
+        }
+
+        const prev = gameState.hoveredMilepost;
+        const prevValid = gameState.hoverValid;
+        if (nearest && nearestDist < 1) {
+            gameState.hoveredMilepost = nearest;
+            canvas.style.cursor = "pointer";
+
+            // Compute hover validity
+            const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+            if (gameState.phase === "initialBuilding" || gameState.phase === "build") {
+                if (gameState.selectedMilepost) {
+                    // Building second click: check if path is affordable
+                    const pathResult = findPath(gameState.selectedMilepost.id, nearest.id, currentPlayer.color);
+                    if (!pathResult) {
+                        gameState.hoverValid = false;
+                    } else {
+                        const remainingBudget = 20 - gameState.buildingThisTurn;
+                        gameState.hoverValid = pathResult.cost <= remainingBudget && pathResult.cost <= currentPlayer.cash;
+                    }
+                } else {
+                    // Building first click: check if can build from here
+                    gameState.hoverValid = canBuildFromMilepost(nearest, currentPlayer.color);
+                }
+            } else if (gameState.phase === "operate") {
+                if (currentPlayer.trainLocation === null) {
+                    // Deploying: must be a city with player track
+                    const owned = getPlayerOwnedMileposts(currentPlayer.color);
+                    gameState.hoverValid = nearest.city && owned.has(nearest.id);
+                } else if (nearest.id !== currentPlayer.trainLocation) {
+                    // Moving: check path and movement
+                    const pathOnTrack = findPathOnTrack(currentPlayer.trainLocation, nearest.id, currentPlayer.color);
+                    gameState.hoverValid = pathOnTrack && (pathOnTrack.length - 1) <= currentPlayer.movement;
+                } else {
+                    gameState.hoverValid = true; // already here
+                }
+            } else {
+                gameState.hoverValid = true;
+            }
+        } else {
+            gameState.hoveredMilepost = null;
+            gameState.hoverValid = null;
+            canvas.style.cursor = "default";
+        }
+
+        // Only redraw if hovered milepost or validity changed
+        if (prev !== gameState.hoveredMilepost || prevValid !== gameState.hoverValid) {
+            drawMap();
+        }
+    });
+
+    document.getElementById("gameCanvas")?.addEventListener("mouseleave", function() {
+        if (gameState.hoveredMilepost) {
+            gameState.hoveredMilepost = null;
+            gameState.canvas.style.cursor = "default";
+            drawMap();
+        }
+    });
+});
+
+window.addEventListener("resize", function() {
+    if (gameState.gameStarted) {
+        drawMap();
+    }
+});
+</script>
+
+<div class="turn-overlay" id="turnOverlay">
+    <div class="turn-overlay-content">
+        <h2>Next Turn</h2>
+        <div class="player-name" id="turnOverlayPlayer"></div>
+        <div class="phase-label" id="turnOverlayPhase"></div>
+        <button onclick="dismissTurnOverlay()" style="padding: 10px 40px; font-size: 16px;">Ready</button>
+    </div>
+</div>
+
+</body>
+</html>
