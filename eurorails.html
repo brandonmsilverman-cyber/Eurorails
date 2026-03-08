@@ -4134,6 +4134,19 @@ function getUpgradeOptions(player) {
     return []; // Already max
 }
 
+function confirmDiscardHand() {
+    document.getElementById("confirmDiscardOverlay").classList.add("show");
+}
+
+function cancelDiscardHand() {
+    document.getElementById("confirmDiscardOverlay").classList.remove("show");
+}
+
+function confirmDiscardYes() {
+    document.getElementById("confirmDiscardOverlay").classList.remove("show");
+    discardHand();
+}
+
 function discardHand() {
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     currentPlayer.demandCards = [];
@@ -4803,7 +4816,9 @@ function updateUI() {
         }
         operateHtml += `
             <button onclick="endOperatePhase()" style="width: 100%; margin-bottom: 5px;">End Operate → Build Phase</button>
-            <button onclick="discardHand()" style="width: 100%; margin-bottom: 5px;">Discard Hand & End Turn</button>
+            <div style="border-top: 1px solid #555; margin-top: 8px; padding-top: 8px;">
+                <button onclick="confirmDiscardHand()" style="width: 100%; padding: 4px 8px; font-size: 11px; background: rgba(180, 60, 60, 0.15); color: #cc7777; border: 1px solid #994444; border-radius: 3px; cursor: pointer;">Discard Hand & End Turn</button>
+            </div>
         `;
         actionButtons.innerHTML = operateHtml;
     } else { // build phase
@@ -5570,6 +5585,17 @@ document.querySelector(".map-area")?.addEventListener("wheel", function(e) {
         <h3>🚂 Trackage Rights</h3>
         <div id="trackageTransfers"></div>
         <div style="color:#888; font-size:11px; margin-top:12px;">Click anywhere to dismiss</div>
+    </div>
+</div>
+
+<div class="turn-overlay" id="confirmDiscardOverlay">
+    <div class="turn-overlay-content" style="border-color: #cc6600;">
+        <h2>Discard Hand</h2>
+        <div style="color: #ccc; font-size: 15px; margin-bottom: 24px; max-width: 300px;">Are you sure you want to discard your entire hand and end your turn?</div>
+        <div style="display: flex; gap: 12px; justify-content: center;">
+            <button onclick="cancelDiscardHand()" style="padding: 10px 32px; font-size: 16px; background: #555; color: #fff; border: none; border-radius: 4px; cursor: pointer;">No</button>
+            <button onclick="confirmDiscardYes()" style="padding: 10px 32px; font-size: 16px; background: #cc6600; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Yes, Discard</button>
+        </div>
     </div>
 </div>
 
