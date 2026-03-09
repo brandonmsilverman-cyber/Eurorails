@@ -1360,6 +1360,7 @@ let gameState = {
     cityEntries: {},
     tracks: [],
     ferryOwnership: {},  // { "fromId|toId": [color1, color2] } — up to 2 owners per ferry
+    ferryConnections: [], // [{fromId, toId, cost}] — populated by generateHexGrid()
     gameLog: [],
     buildingThisTurn: 0,
     majorCitiesThisTurn: 0,
@@ -1891,7 +1892,16 @@ function findPath(startId, endId, playerColor, mode) {
             }
             for (const centerId of centers) {
                 for (const id of getMilepostsInHexRange(centerId, evt.radius)) {
-                    buildBlockedMileposts.add(id);
+                    // Snow only blocks building in mountain/alpine mileposts;
+                    // Fog and Gale block all mileposts in the zone
+                    if (evt.type === "snow") {
+                        const mp = gameState.mileposts_by_id[id];
+                        if (mp.terrain === "mountain" || mp.terrain === "alpine") {
+                            buildBlockedMileposts.add(id);
+                        }
+                    } else {
+                        buildBlockedMileposts.add(id);
+                    }
                 }
             }
         }
@@ -1996,6 +2006,18 @@ function findPath(startId, endId, playerColor, mode) {
     return { path, cost: realCost };
 }
 
+// Check if an active gale 138 event blocks ferry movement between two ports
+function isGaleBlockingFerry(portId1, portId2) {
+    for (const ae of gameState.activeEvents) {
+        if (ae.card.id === 138) {
+            if (isMilepostInEventZone(ae.card, portId1) || isMilepostInEventZone(ae.card, portId2)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 // ============================================================================
 // TRACK-BASED PATHFINDING (for train movement along built track)
 // ============================================================================
@@ -2069,6 +2091,8 @@ function findPathOnTrack(startId, endId, playerColor, allowForeignTrack) {
             if (neighbor && !visited.has(neighbor)) {
                 const ferryKey = getFerryKey(ferry.fromId, ferry.toId);
                 if (playerOwnsFerry(ferryKey, playerColor)) {
+                    // Gale 138: no ferry movement if either port is in the gale zone
+                    if (isGaleBlockingFerry(ferry.fromId, ferry.toId)) continue;
                     visited.add(neighbor);
                     prev[neighbor] = current;
                     ferryEdgeSet.add(current + "|" + neighbor);
@@ -2244,9 +2268,9 @@ function drawCardForPlayer(player) {
             gameState.activeEvents.push({
                 card: eventCard,
                 drawingPlayerIndex: gameState.currentPlayerIndex,
-                expiresOnTurn: gameState.turn + 1  // Expires at end of next turn
+                expiresOnTurn: gameState.turn + gameState.players.length  // Expires when it reaches drawing player's next turn
             });
-            addLog(`Event active until end of turn ${gameState.turn + 1}`);
+            addLog(`Event active for one full round`);
         }
 
         // Continue drawing until player has 3 demand cards
@@ -4873,15 +4897,22 @@ function endTurn() {
 
         // Check if player is crossing a ferry from last turn
         if (player.ferryState) {
-            // Teleport to destination port
             const destPortId = player.ferryState.destPortId;
-            player.trainLocation = destPortId;
-            player.ferryState = null;
-            // Half speed (rounded down) after ferry crossing
-            player.movement = Math.floor(baseMovement / 2);
-            const destMp = gameState.mileposts_by_id[destPortId];
-            const portName = destMp.city ? destMp.city.name : "ferry port";
-            addLog(`${player.name} crosses ferry to ${portName}. Half speed: ${player.movement}mp`);
+            // Gale 138: if ferry is blocked, cancel crossing and strand at port
+            if (isGaleBlockingFerry(player.trainLocation, destPortId)) {
+                player.ferryState = null;
+                player.movement = baseMovement;
+                addLog(`${player.name} ferry crossing cancelled due to gale! Stranded at port.`);
+            } else {
+                // Teleport to destination port
+                player.trainLocation = destPortId;
+                player.ferryState = null;
+                // Half speed (rounded down) after ferry crossing
+                player.movement = Math.floor(baseMovement / 2);
+                const destMp = gameState.mileposts_by_id[destPortId];
+                const portName = destMp.city ? destMp.city.name : "ferry port";
+                addLog(`${player.name} crosses ferry to ${portName}. Half speed: ${player.movement}mp`);
+            }
         } else {
             player.movement = baseMovement;
             addLog(`${player.name} starts Operate Phase (${player.movement}mp)`);
