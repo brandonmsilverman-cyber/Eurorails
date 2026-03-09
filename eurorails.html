@@ -4467,8 +4467,8 @@ function generateDeck() {
         return { good, from, to, payout, minDist };
     }
 
-    // Generate 40 demand cards, each with 3 demands that have sufficient distance spread
-    for (let i = 0; i < 40; i++) {
+    // Generate 120 demand cards, each with 3 demands that have sufficient distance spread
+    for (let i = 0; i < 120; i++) {
         let demands, cardAttempts = 0;
         do {
             demands = [generateDemand(), generateDemand(), generateDemand()];
