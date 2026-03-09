@@ -1862,11 +1862,12 @@ function findPath(startId, endId, playerColor, mode) {
             const edgeKey = current.id + "|" + neighborId;
             // Cannot build on edges owned by other players
             if (blockedEdges.has(edgeKey)) continue;
-            // If player already owns this edge, weight is 0
+            // If player already owns this edge, weight is 0 in cheapest mode
             const isOwned = ownedEdges.has(edgeKey);
-            // In "shortest" mode, minimize segment count (1 per new edge)
-            // In "cheapest" mode, minimize build cost
-            const edgeWeight = isOwned ? 0 : (mode === "shortest" ? 1 : getMileppostCost(current, neighbor));
+            // In "shortest" mode, every edge costs 1 (even owned ones) to find the
+            // path with fewest total segments rather than detouring through existing track.
+            // In "cheapest" mode, owned edges are free.
+            const edgeWeight = mode === "shortest" ? 1 : (isOwned ? 0 : getMileppostCost(current, neighbor));
             const newDist = dist[current.id] + edgeWeight;
 
             if (newDist < dist[neighbor.id]) {
@@ -1886,7 +1887,7 @@ function findPath(startId, endId, playerColor, mode) {
             if (!canPlayerBuildFerry(ferryKey, playerColor)) continue;
 
             const alreadyOwned = playerOwnsFerry(ferryKey, playerColor);
-            const edgeWeight = alreadyOwned ? 0 : (mode === "shortest" ? 1 : fc.cost);
+            const edgeWeight = mode === "shortest" ? 1 : (alreadyOwned ? 0 : fc.cost);
             const newDist = dist[current.id] + edgeWeight;
 
             if (newDist < dist[neighborId]) {
@@ -5063,7 +5064,28 @@ document.addEventListener("DOMContentLoaded", function() {
                 const start = gameState.selectedMilepost;
                 const end = nearest;
 
-                const pathResult = findPath(start.id, end.id, currentPlayer.color, gameState.buildPathMode);
+                let pathResult = findPath(start.id, end.id, currentPlayer.color, gameState.buildPathMode);
+
+                // If start and end are direct neighbors and the player doesn't already
+                // own the direct edge, force the direct path. This prevents the pathfinder
+                // from routing through existing circuitous track (cost 0) instead of
+                // building the obvious direct connection.
+                if (pathResult && start.neighbors.includes(end.id)) {
+                    const directEdge = start.id + "|" + end.id;
+                    const directOwned = gameState.tracks.some(t =>
+                        t.color === currentPlayer.color &&
+                        ((t.from === start.id && t.to === end.id) || (t.to === start.id && t.from === end.id))
+                    );
+                    const directBlocked = gameState.tracks.some(t =>
+                        t.color !== currentPlayer.color &&
+                        ((t.from === start.id && t.to === end.id) || (t.to === start.id && t.from === end.id))
+                    );
+                    if (!directOwned && !directBlocked) {
+                        const directCost = getMileppostCost(start, end);
+                        pathResult = { path: [start.id, end.id], cost: directCost };
+                    }
+                }
+
                 if (pathResult) {
                     // Check budget and truncate path if needed for partial build
                     const remainingBudget = 20 - gameState.buildingThisTurn;
@@ -5278,7 +5300,25 @@ document.addEventListener("DOMContentLoaded", function() {
             if (gameState.phase === "initialBuilding" || gameState.phase === "build") {
                 if (gameState.selectedMilepost) {
                     // Building second click: check if path is affordable (fully or partially)
-                    const pathResult = findPath(gameState.selectedMilepost.id, nearest.id, currentPlayer.color, gameState.buildPathMode);
+                    let pathResult = findPath(gameState.selectedMilepost.id, nearest.id, currentPlayer.color, gameState.buildPathMode);
+
+                    // Force direct path for neighboring mileposts when direct edge isn't owned/blocked
+                    if (pathResult && gameState.selectedMilepost.neighbors.includes(nearest.id)) {
+                        const selMp = gameState.selectedMilepost;
+                        const directOwned = gameState.tracks.some(t =>
+                            t.color === currentPlayer.color &&
+                            ((t.from === selMp.id && t.to === nearest.id) || (t.to === selMp.id && t.from === nearest.id))
+                        );
+                        const directBlocked = gameState.tracks.some(t =>
+                            t.color !== currentPlayer.color &&
+                            ((t.from === selMp.id && t.to === nearest.id) || (t.to === selMp.id && t.from === nearest.id))
+                        );
+                        if (!directOwned && !directBlocked) {
+                            const directCost = getMileppostCost(selMp, nearest);
+                            pathResult = { path: [selMp.id, nearest.id], cost: directCost };
+                        }
+                    }
+
                     if (!pathResult) {
                         gameState.hoverValid = false;
                         gameState.pathPreview = null;
