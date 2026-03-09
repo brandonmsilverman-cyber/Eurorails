@@ -853,7 +853,7 @@
 
         <div class="setup-section">
             <label>Number of Players:</label>
-            <input type="number" id="playerCount" min="2" max="6" value="2">
+            <input type="number" id="playerCount" min="1" max="6" value="2">
         </div>
 
         <div id="playerInputs"></div>
@@ -4408,7 +4408,8 @@ function drawMap() {
 // ============================================================================
 
 function setupPlayerInputs() {
-    const count = parseInt(document.getElementById("playerCount").value);
+    const raw = parseInt(document.getElementById("playerCount").value);
+    const count = Math.max(1, Math.min(6, isNaN(raw) ? 2 : raw));
     const container = document.getElementById("playerInputs");
     container.innerHTML = "";
 
