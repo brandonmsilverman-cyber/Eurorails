@@ -2930,36 +2930,7 @@ function drawMap() {
     ctx.fillRect(0, 0, width, height);
     ctx.restore();
 
-    // 5. Ocean body labels
-    ctx.save();
-    const oceanLabels = [
-        { name: "Atlantic\nOcean", x: 6, y: 38, size: 1.3, angle: -0.15 },
-        { name: "North\nSea", x: 32, y: 18, size: 0.9, angle: 0 },
-        { name: "Norwegian Sea", x: 22, y: 6, size: 0.8, angle: 0 },
-        { name: "Bay of\nBiscay", x: 19, y: 48, size: 0.8, angle: 0 },
-        { name: "Mediterranean Sea", x: 34, y: 58, size: 0.9, angle: 0.05 },
-        { name: "Baltic\nSea", x: 52, y: 17, size: 0.8, angle: 0.2 },
-        { name: "English Channel", x: 27, y: 32, size: 0.6, angle: -0.1 },
-    ];
-    for (const ol of oceanLabels) {
-        const [sx, sy] = worldToScreen(ol.x, ol.y);
-        const fontSize = Math.max(7, 10 * uiScale * ol.size);
-        ctx.font = `italic ${fontSize}px Georgia, serif`;
-        ctx.fillStyle = "rgba(140, 190, 230, 0.35)";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.save();
-        ctx.translate(sx, sy);
-        ctx.rotate(ol.angle || 0);
-        const lines = ol.name.split("\n");
-        const lineH = fontSize * 1.2;
-        const startY = -(lines.length - 1) * lineH / 2;
-        for (let li = 0; li < lines.length; li++) {
-            ctx.fillText(lines[li], 0, startY + li * lineH);
-        }
-        ctx.restore();
-    }
-    ctx.restore();
+    // 5. Ocean body labels — moved to after landmass drawing (see below)
 
     // Draw landmasses: fill, stroke coastlines, then fill again
     // The second fill covers internal border strokes where polygons overlap
@@ -3040,6 +3011,37 @@ function drawMap() {
     }
     ctx.restore();
 
+    // Draw ocean body labels (after landmasses so they aren't covered)
+    ctx.save();
+    const oceanLabels = [
+        { name: "Atlantic\nOcean", x: 6, y: 38, size: 1.3, angle: -0.15 },
+        { name: "North\nSea", x: 32, y: 18, size: 0.9, angle: 0 },
+        { name: "Norwegian Sea", x: 22, y: 6, size: 0.8, angle: 0 },
+        { name: "Bay of\nBiscay", x: 19, y: 48, size: 0.8, angle: 0 },
+        { name: "Mediterranean Sea", x: 34, y: 58, size: 0.9, angle: 0.05 },
+        { name: "Baltic\nSea", x: 53, y: 17, size: 0.8, angle: 0.2 },
+        { name: "English Channel", x: 27, y: 32, size: 0.6, angle: -0.1 },
+    ];
+    for (const ol of oceanLabels) {
+        const [sx, sy] = worldToScreen(ol.x, ol.y);
+        const fontSize = Math.max(7, 10 * uiScale * ol.size);
+        ctx.font = `italic ${fontSize}px Georgia, serif`;
+        ctx.fillStyle = "rgba(140, 190, 230, 0.35)";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(ol.angle || 0);
+        const lines = ol.name.split("\n");
+        const lineH = fontSize * 1.2;
+        const startY = -(lines.length - 1) * lineH / 2;
+        for (let li = 0; li < lines.length; li++) {
+            ctx.fillText(lines[li], 0, startY + li * lineH);
+        }
+        ctx.restore();
+    }
+    ctx.restore();
+
     // Draw rivers
     ctx.strokeStyle = "#4488cc";
     ctx.lineWidth = Math.max(1, 1.5 * uiScale);
@@ -3055,16 +3057,16 @@ function drawMap() {
 
     // Draw river labels
     const riverLabels = {
-        rhine: { x: 41, y: 31, name: "Rhine" },
-        danube: { x: 56, y: 39, name: "Danube" },
-        loire: { x: 30, y: 39, name: "Loire" },
-        elbe: { x: 47, y: 25, name: "Elbe" },
-        vistula: { x: 58, y: 24, name: "Vistula" },
-        po: { x: 45, y: 42.5, name: "Po" },
-        rhone: { x: 37, y: 47, name: "Rhône" },
-        seine: { x: 33, y: 36, name: "Seine" },
-        garonne: { x: 30, y: 49, name: "Garonne" },
-        douro: { x: 19, y: 53.5, name: "Douro" }
+        rhine: { x: 41.8, y: 31, name: "Rhine" },
+        danube: { x: 56, y: 39.8, name: "Danube" },
+        loire: { x: 30, y: 38.2, name: "Loire" },
+        elbe: { x: 47.8, y: 24, name: "Elbe" },
+        vistula: { x: 58.8, y: 23.2, name: "Vistula" },
+        po: { x: 45, y: 43.8, name: "Po" },
+        rhone: { x: 36.5, y: 47, name: "Rhône" },
+        seine: { x: 32.5, y: 35.2, name: "Seine" },
+        garonne: { x: 30.5, y: 49.5, name: "Garonne" },
+        douro: { x: 19, y: 52.8, name: "Douro" }
     };
     ctx.font = `italic ${Math.max(7, 8 * uiScale)}px Arial`;
     ctx.fillStyle = "rgba(50, 100, 180, 0.8)";
@@ -3148,9 +3150,15 @@ function drawMap() {
                 ctx.stroke();
             }
 
-            // Ferry label at midpoint
-            const midX = (sx1 + sx2) / 2;
-            const midY = (sy1 + sy2) / 2;
+            // Ferry label at midpoint with per-route offsets to avoid overlaps
+            const ferryLabelOffsets = {
+                "London-Amsterdam": { dx: 0, dy: -12 },
+                "Dover-Calais": { dx: 0, dy: 6 },
+                "Newcastle-Århus": { dx: 0, dy: -8 },
+            };
+            const flOff = ferryLabelOffsets[fc.name] || { dx: 0, dy: 0 };
+            const midX = (sx1 + sx2) / 2 + flOff.dx * uiScale;
+            const midY = (sy1 + sy2) / 2 + flOff.dy * uiScale;
             ctx.font = `${Math.max(7, 8 * uiScale)}px Arial`;
             ctx.fillStyle = "rgba(200, 230, 255, 0.85)";
             ctx.textAlign = "center";
