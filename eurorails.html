@@ -2737,20 +2737,37 @@ function isEventBlocking(action, context) {
     return false;
 }
 
-function getEffectiveMovement(player) {
-    // Check if any active snow/fog/gale event halves the player's movement
+// Check if a milepost is in any active half-speed event zone (snow/fog/gale)
+function isInHalfSpeedZone(milepostId) {
     for (let activeEvent of gameState.activeEvents) {
         const evt = activeEvent.card;
         if (evt.type === "snow" || evt.type === "fog" || evt.type === "gale") {
-            if (player.trainLocation !== null) {
-                if (isMilepostInEventZone(evt, player.trainLocation)) {
-                    const baseMovement = TRAIN_TYPES[player.trainType].movement;
-                    return Math.floor(baseMovement / 2);
-                }
+            if (isMilepostInEventZone(evt, milepostId)) {
+                return true;
             }
         }
     }
-    return null; // No modifier, use normal movement
+    return false;
+}
+
+// Calculate effective movement cost of a path, where steps into half-speed zones cost 2
+function getPathMovementCost(path) {
+    let cost = 0;
+    for (let i = 1; i < path.length; i++) {
+        cost += isInHalfSpeedZone(path[i]) ? 2 : 1;
+    }
+    return cost;
+}
+
+// Given a path and available movement points, return how many steps can be taken
+function getMaxStepsForMovement(path, availableMovement) {
+    let spent = 0;
+    for (let i = 1; i < path.length; i++) {
+        const stepCost = isInHalfSpeedZone(path[i]) ? 2 : 1;
+        if (spent + stepCost > availableMovement) return i - 1;
+        spent += stepCost;
+    }
+    return path.length - 1; // can afford the whole path
 }
 
 // ============================================================================
@@ -3255,12 +3272,20 @@ function drawMap() {
                 }
             }
             let costText;
+            const isOperate = gameState.phase === "operate";
+            const costHasHalfSpeed = isOperate && gameState.pathPreviewCost > segments;
             if (hasPartial) {
-                costText = `${gameState.pathPreviewCost}M total · ${cutoff}/${segments} seg`;
+                if (isOperate) {
+                    costText = `${gameState.pathPreviewCost}mp · ${cutoff}/${segments} steps`;
+                } else {
+                    costText = `${gameState.pathPreviewCost}M total · ${cutoff}/${segments} seg`;
+                }
                 if (trackageFee > 0) costText += ` · 🚂${trackageFee}M rent`;
                 else if (hasForeign) costText += ` · 🚂paid`;
             } else if (hasForeign) {
                 costText = trackageFee > 0 ? `${segments} seg · 🚂${trackageFee}M rent` : `${segments} seg · 🚂paid`;
+            } else if (isOperate) {
+                costText = costHasHalfSpeed ? `${gameState.pathPreviewCost}mp (${segments} steps, half-speed)` : `${segments} steps`;
             } else {
                 costText = `${gameState.pathPreviewCost}M (${segments} seg)`;
             }
@@ -4762,6 +4787,11 @@ function endOperatePhase() {
     // Show trackage rights transfer modal if any payments were made
     showTrackageModal();
     gameState.phase = "build";
+    gameState.selectedMilepost = null;
+    gameState.pathPreview = null;
+    gameState.pathPreviewCost = null;
+    gameState.pathPreviewCutoff = null;
+    gameState.pathPreviewForeignSegments = [];
     gameState.buildingThisTurn = 0;
     gameState.majorCitiesThisTurn = 0;
     gameState.buildHistory = [];
@@ -4785,6 +4815,13 @@ function endTurn() {
 
     // Expire events that have reached their end turn
     gameState.activeEvents = gameState.activeEvents.filter(ae => ae.expiresOnTurn > gameState.turn);
+
+    // Clear any in-progress build selection
+    gameState.selectedMilepost = null;
+    gameState.pathPreview = null;
+    gameState.pathPreviewCost = null;
+    gameState.pathPreviewCutoff = null;
+    gameState.pathPreviewForeignSegments = [];
 
     // Reset building limits for new player
     gameState.buildingThisTurn = 0;
@@ -4821,8 +4858,7 @@ function endTurn() {
                 gameState.phase = "operate";
                 // Set movement for first time
                 for (let player of gameState.players) {
-                    const effectiveMovement = getEffectiveMovement(player);
-                    player.movement = effectiveMovement || TRAIN_TYPES[player.trainType].movement;
+                    player.movement = TRAIN_TYPES[player.trainType].movement;
                 }
             }
         }
@@ -4833,8 +4869,7 @@ function endTurn() {
         // After build phase, go back to operate phase for next player
         gameState.phase = "operate";
         const player = gameState.players[gameState.currentPlayerIndex];
-        const effectiveMovement = getEffectiveMovement(player);
-        const baseMovement = effectiveMovement || TRAIN_TYPES[player.trainType].movement;
+        const baseMovement = TRAIN_TYPES[player.trainType].movement;
 
         // Check if player is crossing a ferry from last turn
         if (player.ferryState) {
@@ -4903,7 +4938,7 @@ function updateUI() {
         </div>
         ${gameState.phase === "operate" ? `
         <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
-            <span>Movement:</span><span style="color:#ffff00; font-weight:bold;">${currentPlayer.movement}mp</span>
+            <span>Movement:</span><span style="color:#ffff00; font-weight:bold;">${currentPlayer.movement}mp${currentPlayer.trainLocation && isInHalfSpeedZone(currentPlayer.trainLocation) ? ' (half-speed zone)' : ''}</span>
         </div>
         ` : ""}
         <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
@@ -5304,33 +5339,36 @@ document.addEventListener("DOMContentLoaded", function() {
                 // Move to the port first (if not already there)
                 if (portMilepostId !== currentPlayer.trainLocation) {
                     const stepsToPort = ferryIdx; // steps from start of path to port
-                    if (stepsToPort > currentPlayer.movement) {
+                    const costToPort = getPathMovementCost(trackResult.path.slice(0, stepsToPort + 1));
+                    if (costToPort > currentPlayer.movement) {
                         // Partial move toward ferry port
                         if (currentPlayer.movement <= 0) {
                             addLog("No movement remaining!");
                             return;
                         }
-                        // Check trackage rights fees for partial move
-                        const partialDestId = trackResult.path[currentPlayer.movement];
+                        // Calculate how far we can actually move
+                        const maxSteps = getMaxStepsForMovement(trackResult.path, currentPlayer.movement);
+                        const partialDestId = trackResult.path[maxSteps];
                         if (trackResult.foreignSegments && trackResult.foreignSegments.length > 0) {
-                            const owners = getForeignTrackOwners(trackResult.path, currentPlayer.movement, currentPlayer.color, trackResult.foreignSegments);
+                            const owners = getForeignTrackOwners(trackResult.path, maxSteps, currentPlayer.color, trackResult.foreignSegments);
                             let pendingFee = 0;
                             for (const oc of owners) {
                                 if (!gameState.trackageRightsPaidThisTurn[oc]) pendingFee += 4;
                             }
-                            const partialPath = trackResult.path.slice(0, currentPlayer.movement + 1);
+                            const partialPath = trackResult.path.slice(0, maxSteps + 1);
                             if (!checkTrackageStrandRisk(partialPath, currentPlayer.color, currentPlayer.cash - pendingFee)) {
                                 addLog("Cannot move here — you'd be stranded on foreign track without enough cash (need 4M reserve) and no viable delivery en route!");
                                 return;
                             }
-                            const trResult = chargeTrackageRightsIfNeeded(currentPlayer, trackResult.path, trackResult.foreignSegments, currentPlayer.movement);
+                            const trResult = chargeTrackageRightsIfNeeded(currentPlayer, trackResult.path, trackResult.foreignSegments, maxSteps);
                             if (!trResult.ok) return;
                             newlyPaidOwners = trResult.newlyPaidOwners;
                         }
                         const partialMp = gameState.mileposts_by_id[partialDestId];
                         const partialName = partialMp.city ? partialMp.city.name : "milepost";
                         currentPlayer.trainLocation = partialDestId;
-                        addLog(`Partial move toward ferry: moved ${currentPlayer.movement} of ${stepsToPort} steps to ${partialName}`);
+                        const partialCost = getPathMovementCost(trackResult.path.slice(0, maxSteps + 1));
+                        addLog(`Partial move toward ferry: moved ${maxSteps} steps (${partialCost}mp) of ${stepsToPort} steps to ${partialName}`);
                         currentPlayer.movement = 0;
 
                         gameState.operateHistory.push({
@@ -5347,7 +5385,7 @@ document.addEventListener("DOMContentLoaded", function() {
                         newlyPaidOwners = trResult.newlyPaidOwners;
                     }
                     currentPlayer.trainLocation = portMilepostId;
-                    currentPlayer.movement -= stepsToPort;
+                    currentPlayer.movement -= costToPort;
                 }
 
                 // Set ferry state — turn ends, will teleport next turn
@@ -5359,7 +5397,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 addLog(`Arrived at ${portName}. Waiting for ${ferryName || "ferry"}. Turn ends.`);
             } else {
                 // Normal movement (no ferry crossing) — allow partial moves
-                const movementCost = trackResult.path.length - 1;
+                // Per-step half-speed: steps into half-speed zones cost 2 movement
+                const movementCost = getPathMovementCost(trackResult.path);
                 let movePath = trackResult.path;
                 let actualCost = movementCost;
 
@@ -5368,17 +5407,20 @@ document.addEventListener("DOMContentLoaded", function() {
                         addLog("No movement remaining!");
                         return;
                     }
-                    // Truncate to what we can move
-                    movePath = trackResult.path.slice(0, currentPlayer.movement + 1);
-                    actualCost = currentPlayer.movement;
-                    addLog(`Partial move: ${actualCost} of ${movementCost} steps`);
+                    // Truncate to what we can move, accounting for half-speed zones
+                    const maxSteps = getMaxStepsForMovement(trackResult.path, currentPlayer.movement);
+                    movePath = trackResult.path.slice(0, maxSteps + 1);
+                    actualCost = getPathMovementCost(movePath);
+                    const stepsStr = maxSteps !== actualCost ? `${maxSteps} steps, ${actualCost}mp` : `${actualCost}mp`;
+                    addLog(`Partial move: ${stepsStr} of ${trackResult.path.length - 1} steps`);
                 }
 
                 // Charge trackage rights if using foreign track
                 const destId = movePath[movePath.length - 1];
+                const actualSteps = movePath.length - 1;
                 if (trackResult.foreignSegments && trackResult.foreignSegments.length > 0) {
                     // Pre-compute fee to check for stranding risk
-                    const owners = getForeignTrackOwners(trackResult.path, actualCost, currentPlayer.color, trackResult.foreignSegments);
+                    const owners = getForeignTrackOwners(trackResult.path, actualSteps, currentPlayer.color, trackResult.foreignSegments);
                     let pendingFee = 0;
                     for (const oc of owners) {
                         if (!gameState.trackageRightsPaidThisTurn[oc]) pendingFee += 4;
@@ -5388,7 +5430,7 @@ document.addEventListener("DOMContentLoaded", function() {
                         addLog("Cannot move here — you'd be stranded on foreign track without enough cash (need 4M reserve) and no viable delivery en route!");
                         return;
                     }
-                    const trResult = chargeTrackageRightsIfNeeded(currentPlayer, trackResult.path, trackResult.foreignSegments, actualCost);
+                    const trResult = chargeTrackageRightsIfNeeded(currentPlayer, trackResult.path, trackResult.foreignSegments, actualSteps);
                     if (!trResult.ok) return;
                     newlyPaidOwners = newlyPaidOwners.concat(trResult.newlyPaidOwners);
                 }
@@ -5776,7 +5818,8 @@ document.addEventListener("DOMContentLoaded", function() {
                             gameState.pathPreviewCutoff = null;
                             gameState.pathPreviewForeignSegments = [];
                         } else {
-                            const movementCost = hoverTrackResult.path.length - 1;
+                            // Per-step half-speed: calculate effective cost considering zones
+                            const movementCost = getPathMovementCost(hoverTrackResult.path);
                             gameState.pathPreview = hoverTrackResult.path;
                             gameState.pathPreviewCost = movementCost;
                             gameState.pathPreviewForeignSegments = hoverTrackResult.foreignSegments || [];
@@ -5785,7 +5828,7 @@ document.addEventListener("DOMContentLoaded", function() {
                             const hasForeignSegs = hoverTrackResult.foreignSegments && hoverTrackResult.foreignSegments.length > 0;
                             let trackageFee = 0;
                             if (hasForeignSegs) {
-                                const owners = getForeignTrackOwners(hoverTrackResult.path, movementCost, currentPlayer.color, hoverTrackResult.foreignSegments);
+                                const owners = getForeignTrackOwners(hoverTrackResult.path, hoverTrackResult.path.length - 1, currentPlayer.color, hoverTrackResult.foreignSegments);
                                 for (const oc of owners) {
                                     if (!gameState.trackageRightsPaidThisTurn[oc]) trackageFee += 4;
                                 }
@@ -5794,12 +5837,13 @@ document.addEventListener("DOMContentLoaded", function() {
                             if (hoverTrackResult.ferryCrossings.length > 0) {
                                 // Ferry in path: valid if we can reach the port
                                 const stepsToPort = hoverTrackResult.ferryCrossings[0];
-                                const isFullyValid = stepsToPort <= currentPlayer.movement;
+                                const costToPort = getPathMovementCost(hoverTrackResult.path.slice(0, stepsToPort + 1));
+                                const isFullyValid = costToPort <= currentPlayer.movement;
                                 gameState.hoverValid = isFullyValid;
                                 gameState.pathPreviewValid = isFullyValid;
                                 // For ferry paths, cutoff is at the port or at movement limit
                                 if (!isFullyValid && currentPlayer.movement > 0) {
-                                    gameState.pathPreviewCutoff = currentPlayer.movement;
+                                    gameState.pathPreviewCutoff = getMaxStepsForMovement(hoverTrackResult.path, currentPlayer.movement);
                                     gameState.hoverValid = true;
                                     gameState.pathPreviewValid = true;
                                 } else {
@@ -5817,8 +5861,8 @@ document.addEventListener("DOMContentLoaded", function() {
                                     gameState.pathPreviewValid = true;
                                     gameState.pathPreviewCutoff = null;
                                 } else if (currentPlayer.movement > 0) {
-                                    // Partial move: can move partway
-                                    gameState.pathPreviewCutoff = currentPlayer.movement;
+                                    // Partial move: cutoff at max reachable step
+                                    gameState.pathPreviewCutoff = getMaxStepsForMovement(hoverTrackResult.path, currentPlayer.movement);
                                     gameState.hoverValid = true;
                                     gameState.pathPreviewValid = true;
                                 } else {
