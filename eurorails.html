@@ -2446,8 +2446,8 @@ function buildDemandCardDemandsHtml(card) {
                     <span class="good-name">${demand.good}</span>${exhaustedBadge}
                     <span class="payout">${demand.payout}M</span>
                 </div>
-                <div class="dest-city">To: <span>${demand.to}</span></div>
                 <div class="source-cities">From: ${sourcesHtml}</div>
+                <div class="dest-city">To: <span>${demand.to}</span></div>
             </div>`;
     }).join("");
 }
@@ -5062,11 +5062,11 @@ function updateUI() {
                         <span class="good-name">${demand.good}</span>
                         <span class="payout">${demand.payout}M</span>
                     </div>
+                    <div class="source-cities">From: ${sourcesHtml}</div>
                     <div class="dest-city">To: <span
                         onmouseenter="highlightCities(['${demand.to}'])"
                         onmouseleave="clearHighlight()">${demand.to}</span>
                     </div>
-                    <div class="source-cities">From: ${sourcesHtml}</div>
                     ${deliverBtn}
                 </div>`;
             }).join("");
