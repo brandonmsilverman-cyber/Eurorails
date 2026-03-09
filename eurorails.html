@@ -1243,13 +1243,28 @@ const FERRY_ROUTES = [
 // SEA AREAS — reference points (world coords) used by gale events
 // ============================================================================
 const SEA_AREAS = {
-    "North Sea":       { x: 32, y: 18 },
-    "English Channel": { x: 27, y: 32 },
-    "Bay of Biscay":   { x: 19, y: 48 },
-    "Baltic Sea":      { x: 52, y: 17 },
-    "Mediterranean":   { x: 34, y: 58 },
-    "Norwegian Sea":   { x: 22, y: 6 },
-    "Atlantic":        { x: 6,  y: 38 }
+    "North Sea":       [{ x: 32, y: 18 }],
+    "English Channel": [{ x: 27, y: 32 }],
+    "Irish Sea":       [{ x: 23, y: 22 }],
+    "Bay of Biscay":   [{ x: 19, y: 48 }],
+    "Baltic Sea":      [{ x: 52, y: 17 }],
+    "Mediterranean":   [{ x: 34, y: 58 }, { x: 28, y: 72 }, { x: 45, y: 68 }],
+    "Norwegian Sea":   [{ x: 22, y: 6 }],
+    "Atlantic":        [
+        { x: 13, y: 17 },  // NW of Ireland
+        { x: 13, y: 21 },  // W of Ireland (north)
+        { x: 13, y: 25 },  // W of Ireland (middle)
+        { x: 13, y: 29 },  // SW of Ireland
+        { x: 22, y: 34 },  // Off southwest Britain
+        { x: 23, y: 37 },  // Off Brittany/Brest
+        { x: 25, y: 41 },  // Off western France
+        { x: 26, y: 45 },  // Off southwestern France
+        { x: 16, y: 50 },  // Off NW Iberia/Galicia
+        { x: 16, y: 54 },  // Off northern Portugal
+        { x: 15, y: 57 },  // Off central Portugal
+        { x: 14, y: 61 },  // Off Lisbon/southern Portugal
+        { x: 15, y: 65 },  // Off SW Spain/Algarve
+    ]
 };
 
 // ============================================================================
@@ -1983,26 +1998,22 @@ function findPath(startId, endId, playerColor, mode) {
                 if (cId !== undefined) centers.push(cId);
             }
             if (evt.seaAreas) {
-                for (const areaName of evt.seaAreas) {
-                    const area = SEA_AREAS[areaName];
-                    if (area) {
-                        const nId = findNearestMilepost(area.x, area.y);
-                        if (nId !== null) centers.push(nId);
-                    }
-                }
+                const coastalStarts = getCoastalMilepostsForSeaAreas(evt.seaAreas);
+                for (const cId of coastalStarts) centers.push(cId);
             }
-            for (const centerId of centers) {
-                for (const id of getMilepostsInHexRange(centerId, evt.radius)) {
-                    // Snow only blocks building in mountain/alpine mileposts;
-                    // Fog and Gale block all mileposts in the zone
-                    if (evt.type === "snow") {
-                        const mp = gameState.mileposts_by_id[id];
-                        if (evt.blockedTerrain && evt.blockedTerrain.includes(mp.terrain)) {
-                            buildBlockedMileposts.add(id);
-                        }
-                    } else {
+            // Multi-source BFS from all centers; coastal mileposts count as #1
+            const seaRadius = evt.seaAreas ? evt.radius - 1 : evt.radius;
+            const zoneIds = centers.length > 0 ? getMilepostsInHexRangeMultiSource(centers, seaRadius) : new Set();
+            for (const id of zoneIds) {
+                // Snow only blocks building in mountain/alpine mileposts;
+                // Fog and Gale block all mileposts in the zone
+                if (evt.type === "snow") {
+                    const mp = gameState.mileposts_by_id[id];
+                    if (evt.blockedTerrain && evt.blockedTerrain.includes(mp.terrain)) {
                         buildBlockedMileposts.add(id);
                     }
+                } else {
+                    buildBlockedMileposts.add(id);
                 }
             }
         }
@@ -2766,9 +2777,60 @@ function getMilepostsInHexRange(startId, radius) {
     return result;
 }
 
+// Get all coastal mileposts that border the given sea areas.
+// A coastal milepost (< 6 neighbors) is assigned to whichever sea area
+// has the closest reference point.  Returns array of milepost IDs.
+function getCoastalMilepostsForSeaAreas(areaNames) {
+    const targetSet = new Set(areaNames);
+    const result = [];
+    for (const mp of gameState.mileposts) {
+        if (mp.neighbors.length >= 6) continue; // not coastal
+        let nearestArea = null;
+        let nearestDist = Infinity;
+        for (const [name, points] of Object.entries(SEA_AREAS)) {
+            for (const pt of points) {
+                const d = Math.hypot(mp.x - pt.x, mp.y - pt.y);
+                if (d < nearestDist) {
+                    nearestDist = d;
+                    nearestArea = name;
+                }
+            }
+        }
+        if (nearestArea && targetSet.has(nearestArea)) {
+            result.push(mp.id);
+        }
+    }
+    return result;
+}
+
+// Multi-source BFS from multiple starting mileposts simultaneously.
+// Returns Set of all milepost IDs within radius hex hops of ANY start.
+function getMilepostsInHexRangeMultiSource(startIds, radius) {
+    const result = new Set(startIds);
+    const queue = [...startIds];
+    const dist = {};
+    for (const id of startIds) dist[id] = 0;
+
+    let head = 0;
+    while (head < queue.length) {
+        const id = queue[head++];
+        if (dist[id] >= radius) continue;
+        const mp = gameState.mileposts_by_id[id];
+        for (const nId of mp.neighbors) {
+            if (dist[nId] === undefined) {
+                dist[nId] = dist[id] + 1;
+                result.add(nId);
+                queue.push(nId);
+            }
+        }
+    }
+    return result;
+}
+
 // Check if a milepost is within an event's affected zone using hex distance.
 // For city-based events (snow/fog): BFS from the event city milepost.
-// For sea-area-based events (gale): BFS from the nearest milepost to each sea area point.
+// For sea-area-based events (gale): multi-source BFS from all coastal mileposts
+// bordering the relevant sea areas, giving uniform depth from the coastline.
 function isMilepostInEventZone(evt, milepostId) {
     const radius = evt.radius || 0;
     if (evt.city) {
@@ -2779,16 +2841,10 @@ function isMilepostInEventZone(evt, milepostId) {
         }
     }
     if (evt.seaAreas) {
-        for (const areaName of evt.seaAreas) {
-            const area = SEA_AREAS[areaName];
-            if (!area) continue;
-            // Find the closest milepost to this sea area reference point
-            const nearestId = findNearestMilepost(area.x, area.y);
-            if (nearestId !== null) {
-                const inRange = getMilepostsInHexRange(nearestId, radius);
-                if (inRange.has(milepostId)) return true;
-            }
-        }
+        const coastalStarts = getCoastalMilepostsForSeaAreas(evt.seaAreas);
+        // Coastal milepost counts as #1, so go radius-1 more hops inland
+        const inRange = getMilepostsInHexRangeMultiSource(coastalStarts, radius - 1);
+        if (inRange.has(milepostId)) return true;
     }
     return false;
 }
@@ -3637,14 +3693,15 @@ function drawMap() {
         }
         if (evt.seaAreas) {
             for (const areaName of evt.seaAreas) {
-                const area = SEA_AREAS[areaName];
-                if (!area) continue;
-                const nearId = findNearestMilepost(area.x, area.y);
-                if (nearId === null) continue;
-                centerMpIds.push(nearId);
-                zoneCenterScreens.push({ label: areaName, sx: worldToScreen(area.x, area.y) });
-                for (const id of getMilepostsInHexRange(nearId, evt.radius)) allZoneMpIds.add(id);
+                const points = SEA_AREAS[areaName];
+                if (!points) continue;
+                zoneCenterScreens.push({ label: areaName, sx: worldToScreen(points[0].x, points[0].y) });
             }
+            // Multi-source BFS from all coastal mileposts bordering these sea areas
+            const coastalStarts = getCoastalMilepostsForSeaAreas(evt.seaAreas);
+            centerMpIds.push(...coastalStarts);
+            const seaZone = getMilepostsInHexRangeMultiSource(coastalStarts, evt.radius - 1);
+            for (const id of seaZone) allZoneMpIds.add(id);
         }
 
         if (allZoneMpIds.size === 0) continue;
@@ -3657,47 +3714,50 @@ function drawMap() {
             zoneScreenPoints.push([sx, sy]);
         }
 
-        const hull = convexHull(zoneScreenPoints);
-        if (hull.length < 3) continue;
-        const expandedHull = expandHull(hull, Math.max(6, 8 * uiScale));
+        // Per-milepost buffer with offscreen canvas outline
+        const hexScreenR = scale * 0.75;
+        const borderWidth = Math.max(2, 2.5 * uiScale);
 
-        // Compute center of hull for gradient
-        let hcx = 0, hcy = 0;
-        for (const p of expandedHull) { hcx += p[0]; hcy += p[1]; }
-        hcx /= expandedHull.length;
-        hcy /= expandedHull.length;
-        const maxDist = Math.max(...zoneScreenPoints.map(p => Math.hypot(p[0] - hcx, p[1] - hcy))) + 20;
+        const offscreen = document.createElement("canvas");
+        offscreen.width = canvas.width;
+        offscreen.height = canvas.height;
+        const offCtx = offscreen.getContext("2d");
+        offCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        // Fill: radial gradient clipped to hull shape
+        // Draw solid zone shape on offscreen canvas
+        offCtx.fillStyle = "#fff";
+        for (const [sx, sy] of zoneScreenPoints) {
+            offCtx.beginPath();
+            offCtx.arc(sx, sy, hexScreenR, 0, Math.PI * 2);
+            offCtx.fill();
+        }
+
+        // Cut out interior, leaving only the border ring
+        offCtx.globalCompositeOperation = "destination-out";
+        for (const [sx, sy] of zoneScreenPoints) {
+            offCtx.beginPath();
+            offCtx.arc(sx, sy, hexScreenR - borderWidth, 0, Math.PI * 2);
+            offCtx.fill();
+        }
+
+        // Draw translucent fill on main canvas
         ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(expandedHull[0][0], expandedHull[0][1]);
-        for (let i = 1; i < expandedHull.length; i++) ctx.lineTo(expandedHull[i][0], expandedHull[i][1]);
-        ctx.closePath();
-        ctx.clip();
-
-        const zoneGrad = ctx.createRadialGradient(hcx, hcy, 0, hcx, hcy, maxDist);
-        zoneGrad.addColorStop(0, `rgba(${cr}, ${cg}, ${cb}, 0.40)`);
-        zoneGrad.addColorStop(0.7, `rgba(${cr}, ${cg}, ${cb}, 0.28)`);
-        zoneGrad.addColorStop(1, `rgba(${cr}, ${cg}, ${cb}, 0)`);
-        ctx.fillStyle = zoneGrad;
-        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = `rgba(${cr}, ${cg}, ${cb}, 0.18)`;
+        for (const [sx, sy] of zoneScreenPoints) {
+            ctx.beginPath();
+            ctx.arc(sx, sy, hexScreenR, 0, Math.PI * 2);
+            ctx.fill();
+        }
         ctx.restore();
 
-        // Border: dashed hull outline with glow
+        // Composite border ring onto main canvas
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 0.7;
         ctx.shadowColor = shadowColor;
         ctx.shadowBlur = 6;
-        ctx.setLineDash([8 * uiScale, 4 * uiScale]);
-        ctx.strokeStyle = borderColor;
-        ctx.lineWidth = Math.max(2, 2.5 * uiScale);
-        ctx.beginPath();
-        ctx.moveTo(expandedHull[0][0], expandedHull[0][1]);
-        for (let i = 1; i < expandedHull.length; i++) ctx.lineTo(expandedHull[i][0], expandedHull[i][1]);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.shadowColor = "transparent";
-        ctx.shadowBlur = 0;
+        ctx.drawImage(offscreen, 0, 0);
+        ctx.restore();
 
         // Labels
         for (const zc of zoneCenterScreens) {
@@ -3707,7 +3767,7 @@ function drawMap() {
             ctx.textAlign = "center";
             const labelW = ctx.measureText(labelText).width + 12;
             // Place label above the top of the hull near this center
-            const topY = Math.min(...expandedHull.map(p => p[1]));
+            const topY = Math.min(...zoneScreenPoints.map(p => p[1]));
             const labelY = topY - Math.max(8, 10 * uiScale);
             ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
             ctx.beginPath();
