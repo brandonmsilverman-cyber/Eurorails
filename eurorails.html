@@ -3227,15 +3227,62 @@ function drawMap() {
     }
     ctx.restore();
 
-    // Draw rivers
+    // Draw rivers (smooth Catmull-Rom splines with snaky meandering)
     ctx.strokeStyle = "#4488cc";
     ctx.lineWidth = Math.max(1, 1.5 * uiScale);
-    for (let river of Object.values(RIVERS)) {
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (let rIdx = 0; rIdx < Object.values(RIVERS).length; rIdx++) {
+        const river = Object.values(RIVERS)[rIdx];
+        // Subdivide: insert meandering midpoints with deterministic pseudo-random variation
+        // Simple seeded hash for deterministic but varied results
+        function riverHash(a, b, c) {
+            let h = (a * 2654435761 ^ b * 2246822519 ^ c * 3266489917) >>> 0;
+            h = ((h >> 16) ^ h) * 0x45d9f3b >>> 0;
+            return (h & 0xffff) / 0xffff; // 0..1
+        }
+        const subdivided = [river[0]];
+        for (let i = 0; i < river.length - 1; i++) {
+            const [x1, y1] = river[i];
+            const [x2, y2] = river[i + 1];
+            const dx = x2 - x1, dy = y2 - y1;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            const nx = -dy / len, ny = dx / len;
+            // 2 intermediate points with varied placement and amplitude
+            for (let j = 1; j <= 2; j++) {
+                const h1 = riverHash(rIdx, i, j);
+                const h2 = riverHash(rIdx, i, j + 100);
+                // Vary the t position slightly (jitter ±0.08 around evenly spaced)
+                const t = j / 3 + (h1 - 0.5) * 0.16;
+                const mx = x1 + dx * t;
+                const my = y1 + dy * t;
+                // Vary amplitude between 0.02 and 0.07 of segment length
+                const amplitude = len * (0.02 + h2 * 0.05);
+                // Alternating direction with hash-based sign
+                const sign = (Math.round(h1 * 1000) % 2 === 0) ? 1 : -1;
+                subdivided.push([mx + nx * sign * amplitude, my + ny * sign * amplitude]);
+            }
+            subdivided.push(river[i + 1]);
+        }
+        const pts = subdivided.map(p => worldToScreen(p[0], p[1]));
         ctx.beginPath();
-        for (let i = 0; i < river.length; i++) {
-            const [sx, sy] = worldToScreen(river[i][0], river[i][1]);
-            if (i === 0) ctx.moveTo(sx, sy);
-            else ctx.lineTo(sx, sy);
+        ctx.moveTo(pts[0][0], pts[0][1]);
+        if (pts.length === 2) {
+            ctx.lineTo(pts[1][0], pts[1][1]);
+        } else {
+            // Catmull-Rom to cubic Bézier conversion
+            const tension = 0.6;
+            for (let i = 0; i < pts.length - 1; i++) {
+                const p0 = pts[Math.max(0, i - 1)];
+                const p1 = pts[i];
+                const p2 = pts[i + 1];
+                const p3 = pts[Math.min(pts.length - 1, i + 2)];
+                const cp1x = p1[0] + (p2[0] - p0[0]) / (6 / tension);
+                const cp1y = p1[1] + (p2[1] - p0[1]) / (6 / tension);
+                const cp2x = p2[0] - (p3[0] - p1[0]) / (6 / tension);
+                const cp2y = p2[1] - (p3[1] - p1[1]) / (6 / tension);
+                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2[0], p2[1]);
+            }
         }
         ctx.stroke();
     }
