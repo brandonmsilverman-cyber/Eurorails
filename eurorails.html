@@ -1833,6 +1833,7 @@ function findPath(startId, endId, playerColor, mode) {
     mode = mode || "cheapest";
     const dist = {};
     const prev = {};
+    const costTie = {}; // secondary cost tiebreaker for "shortest" mode
     const heap = new MinHeap();
 
     // Build sets of edges owned by this player (free) and by other players (blocked)
@@ -1904,9 +1905,11 @@ function findPath(startId, endId, playerColor, mode) {
 
     for (let mp of gameState.mileposts) {
         dist[mp.id] = Infinity;
+        costTie[mp.id] = Infinity;
         prev[mp.id] = null;
     }
     dist[startId] = 0;
+    costTie[startId] = 0;
     heap.push({ id: startId, cost: 0 });
 
     while (true) {
@@ -1927,14 +1930,17 @@ function findPath(startId, endId, playerColor, mode) {
             if (buildBlockedMileposts.has(neighborId)) continue;
             // If player already owns this edge, weight is 0 in cheapest mode
             const isOwned = ownedEdges.has(edgeKey);
+            const realEdgeCost = isOwned ? 0 : getMileppostCost(current, neighbor);
             // In "shortest" mode, every edge costs 1 (even owned ones) to find the
             // path with fewest total segments rather than detouring through existing track.
             // In "cheapest" mode, owned edges are free.
-            const edgeWeight = mode === "shortest" ? 1 : (isOwned ? 0 : getMileppostCost(current, neighbor));
+            const edgeWeight = mode === "shortest" ? 1 : realEdgeCost;
             const newDist = dist[current.id] + edgeWeight;
+            const newCostTie = costTie[current.id] + realEdgeCost;
 
-            if (newDist < dist[neighbor.id]) {
+            if (newDist < dist[neighbor.id] || (newDist === dist[neighbor.id] && newCostTie < costTie[neighbor.id])) {
                 dist[neighbor.id] = newDist;
+                costTie[neighbor.id] = newCostTie;
                 prev[neighbor.id] = current.id;
                 heap.push({ id: neighbor.id, cost: newDist });
             }
@@ -1953,11 +1959,14 @@ function findPath(startId, endId, playerColor, mode) {
             if (!canPlayerBuildFerry(ferryKey, playerColor)) continue;
 
             const alreadyOwned = playerOwnsFerry(ferryKey, playerColor);
-            const edgeWeight = mode === "shortest" ? 1 : (alreadyOwned ? 0 : fc.cost);
+            const realFerryCost = alreadyOwned ? 0 : fc.cost;
+            const edgeWeight = mode === "shortest" ? 1 : realFerryCost;
             const newDist = dist[current.id] + edgeWeight;
+            const newCostTie = costTie[current.id] + realFerryCost;
 
-            if (newDist < dist[neighborId]) {
+            if (newDist < dist[neighborId] || (newDist === dist[neighborId] && newCostTie < costTie[neighborId])) {
                 dist[neighborId] = newDist;
+                costTie[neighborId] = newCostTie;
                 prev[neighborId] = current.id;
                 heap.push({ id: neighborId, cost: newDist });
             }
