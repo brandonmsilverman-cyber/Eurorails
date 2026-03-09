@@ -1250,6 +1250,7 @@ const EVENT_CARDS = [
         description: "All trains within 6 mileposts of Torino move at half rate. No movement or railbuilding allowed in alpine mileposts of area.",
         city: "Torino",
         radius: 6,
+        blockedTerrain: ["alpine"],
         persistent: true
     },
     {
@@ -1259,6 +1260,7 @@ const EVENT_CARDS = [
         description: "All trains within 5 mileposts of München move at half rate. No movement or railbuilding allowed in mountain mileposts of area.",
         city: "München",
         radius: 5,
+        blockedTerrain: ["mountain"],
         persistent: true
     },
     {
@@ -1268,6 +1270,7 @@ const EVENT_CARDS = [
         description: "All trains within 4 mileposts of Praha move at half rate. No movement or railbuilding allowed in mountain mileposts of area.",
         city: "Praha",
         radius: 4,
+        blockedTerrain: ["mountain"],
         persistent: true
     },
     {
@@ -1277,6 +1280,7 @@ const EVENT_CARDS = [
         description: "All trains within 6 mileposts of Krakow move at half rate. No movement or railbuilding allowed in mountain mileposts of area.",
         city: "Krakow",
         radius: 6,
+        blockedTerrain: ["mountain"],
         persistent: true
     },
     // Fog (134)
@@ -1388,7 +1392,7 @@ let gameState = {
     operateHistory: [],                  // [{type, ...data}] for undo during operate phase
     canvas: null,
     ctx: null,
-    activeEvents: [],                    // [{card, drawingPlayerIndex, expiresOnTurn}]
+    activeEvents: [],                    // [{card, drawingPlayerIndex, drawingPlayerTurnEnded}]
     derailedPlayers: {},                 // {playerIndex: turnsRemaining}
     destroyedRiverTracks: [],            // track objects that were destroyed by floods
     zoom: 1.0                             // map zoom level (1 = fit to viewport)
@@ -1896,7 +1900,7 @@ function findPath(startId, endId, playerColor, mode) {
                     // Fog and Gale block all mileposts in the zone
                     if (evt.type === "snow") {
                         const mp = gameState.mileposts_by_id[id];
-                        if (mp.terrain === "mountain" || mp.terrain === "alpine") {
+                        if (evt.blockedTerrain && evt.blockedTerrain.includes(mp.terrain)) {
                             buildBlockedMileposts.add(id);
                         }
                     } else {
@@ -1950,6 +1954,9 @@ function findPath(startId, endId, playerColor, mode) {
         for (let fc of ferries) {
             const neighborId = fc.fromId === current.id ? fc.toId : fc.fromId;
             const ferryKey = getFerryKey(fc.fromId, fc.toId);
+
+            // Block ferry building if either port is in a gale/snow/fog build-blocked zone
+            if (buildBlockedMileposts.has(current.id) || buildBlockedMileposts.has(neighborId)) continue;
 
             // Check if ferry is available to this player
             if (!canPlayerBuildFerry(ferryKey, playerColor)) continue;
@@ -2042,7 +2049,7 @@ function findPathOnTrack(startId, endId, playerColor, allowForeignTrack) {
         }
     }
 
-    // Snow: collect set of blocked milepost IDs (mountain/alpine in snow zones)
+    // Snow: collect set of blocked milepost IDs (terrain type per card)
     const snowBlockedMileposts = new Set();
     for (const ae of gameState.activeEvents) {
         if (ae.card.type === "snow") {
@@ -2051,7 +2058,7 @@ function findPathOnTrack(startId, endId, playerColor, allowForeignTrack) {
             const inRange = getMilepostsInHexRange(cityMpId, ae.card.radius);
             for (const id of inRange) {
                 const mp = gameState.mileposts_by_id[id];
-                if (mp.terrain === "mountain" || mp.terrain === "alpine") {
+                if (ae.card.blockedTerrain && ae.card.blockedTerrain.includes(mp.terrain)) {
                     snowBlockedMileposts.add(id);
                 }
             }
@@ -2268,7 +2275,7 @@ function drawCardForPlayer(player) {
             gameState.activeEvents.push({
                 card: eventCard,
                 drawingPlayerIndex: gameState.currentPlayerIndex,
-                expiresOnTurn: gameState.turn + gameState.players.length  // Expires when it reaches drawing player's next turn
+                drawingPlayerTurnEnded: false  // Set true after drawing player's next turn ends
             });
             addLog(`Event active for one full round`);
         }
@@ -2289,10 +2296,10 @@ function applyEventEffect(eventCard) {
         // All players pay tax
         for (let player of gameState.players) {
             let tax = 0;
-            if (player.cash > 201) tax = 25;
-            else if (player.cash > 151) tax = 20;
-            else if (player.cash > 101) tax = 15;
-            else if (player.cash > 51) tax = 10;
+            if (player.cash > 200) tax = 25;
+            else if (player.cash > 150) tax = 20;
+            else if (player.cash > 100) tax = 15;
+            else if (player.cash > 50) tax = 10;
 
             if (tax > 0) {
                 const paid = Math.min(tax, player.cash);
@@ -4837,8 +4844,14 @@ function endTurn() {
         return;
     }
 
-    // Expire events that have reached their end turn
-    gameState.activeEvents = gameState.activeEvents.filter(ae => ae.expiresOnTurn > gameState.turn);
+    // Expire persistent events: remove those where the drawing player's next turn has ended
+    gameState.activeEvents = gameState.activeEvents.filter(ae => {
+        if (gameState.currentPlayerIndex === ae.drawingPlayerIndex) {
+            if (ae.drawingPlayerTurnEnded) return false; // Already played next turn, expire now
+            ae.drawingPlayerTurnEnded = true; // Mark: next endTurn for this player will expire it
+        }
+        return true;
+    });
 
     // Clear any in-progress build selection
     gameState.selectedMilepost = null;
