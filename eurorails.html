@@ -3721,7 +3721,7 @@ function drawMap() {
         if (evt.type === "snow") {
             for (const id of allZoneMpIds) {
                 const mp = gameState.mileposts_by_id[id];
-                if (mp.terrain !== "mountain" && mp.terrain !== "alpine") continue;
+                if (!evt.blockedTerrain || !evt.blockedTerrain.includes(mp.terrain)) continue;
                 const [sx, sy] = worldToScreen(mp.x, mp.y);
                 const xSize = Math.max(3, 4 * uiScale);
                 ctx.strokeStyle = "rgba(255, 80, 80, 0.7)";
