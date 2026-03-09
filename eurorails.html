@@ -1684,6 +1684,33 @@ function generateHexGrid() {
     }
 }
 
+function computeCoastDistances() {
+    // Multi-source BFS from all coastal mileposts (those with <6 neighbors)
+    const dist = {};
+    const queue = [];
+
+    for (const mp of gameState.mileposts) {
+        if (mp.neighbors.length < 6) {
+            dist[mp.id] = 0;
+            queue.push(mp.id);
+        }
+    }
+
+    let head = 0;
+    while (head < queue.length) {
+        const id = queue[head++];
+        const mp = gameState.mileposts_by_id[id];
+        for (const nId of mp.neighbors) {
+            if (dist[nId] === undefined) {
+                dist[nId] = dist[id] + 1;
+                queue.push(nId);
+            }
+        }
+    }
+
+    gameState.coastDistance = dist;
+}
+
 // ============================================================================
 // DIJKSTRA'S ALGORITHM WITH PRIORITY QUEUE
 // ============================================================================
@@ -1841,6 +1868,35 @@ function findPath(startId, endId, playerColor, mode) {
     const start = gameState.mileposts_by_id[startId];
     const end = gameState.mileposts_by_id[endId];
 
+    // Build set of mileposts blocked by active events for building
+    const buildBlockedMileposts = new Set();
+    for (const ae of gameState.activeEvents) {
+        const evt = ae.card;
+        // Strike 123: drawing player cannot build at all (handled by caller check)
+        if (evt.type === "snow" || evt.type === "fog" || evt.type === "gale") {
+            // Collect all zone center mileposts and BFS from each
+            const centers = [];
+            if (evt.city) {
+                const cId = gameState.cityToMilepost[evt.city];
+                if (cId !== undefined) centers.push(cId);
+            }
+            if (evt.seaAreas) {
+                for (const areaName of evt.seaAreas) {
+                    const area = SEA_AREAS[areaName];
+                    if (area) {
+                        const nId = findNearestMilepost(area.x, area.y);
+                        if (nId !== null) centers.push(nId);
+                    }
+                }
+            }
+            for (const centerId of centers) {
+                for (const id of getMilepostsInHexRange(centerId, evt.radius)) {
+                    buildBlockedMileposts.add(id);
+                }
+            }
+        }
+    }
+
     for (let mp of gameState.mileposts) {
         dist[mp.id] = Infinity;
         prev[mp.id] = null;
@@ -1862,6 +1918,8 @@ function findPath(startId, endId, playerColor, mode) {
             const edgeKey = current.id + "|" + neighborId;
             // Cannot build on edges owned by other players
             if (blockedEdges.has(edgeKey)) continue;
+            // Cannot build into event-blocked mileposts (snow/fog/gale zones)
+            if (buildBlockedMileposts.has(neighborId)) continue;
             // If player already owns this edge, weight is 0 in cheapest mode
             const isOwned = ownedEdges.has(edgeKey);
             // In "shortest" mode, every edge costs 1 (even owned ones) to find the
@@ -1954,12 +2012,37 @@ function findPathOnTrack(startId, endId, playerColor, allowForeignTrack) {
     // Build set of mileposts the player has track at
     const playerMileposts = getPlayerOwnedMileposts(playerColor);
 
+    // Strike 123: collect colors of players whose rail lines are shut down
+    const struckColors = new Set();
+    for (const ae of gameState.activeEvents) {
+        if (ae.card.id === 123) {
+            struckColors.add(gameState.players[ae.drawingPlayerIndex].color);
+        }
+    }
+
+    // Snow: collect set of blocked milepost IDs (mountain/alpine in snow zones)
+    const snowBlockedMileposts = new Set();
+    for (const ae of gameState.activeEvents) {
+        if (ae.card.type === "snow") {
+            const cityMpId = gameState.cityToMilepost[ae.card.city];
+            if (cityMpId === undefined) continue;
+            const inRange = getMilepostsInHexRange(cityMpId, ae.card.radius);
+            for (const id of inRange) {
+                const mp = gameState.mileposts_by_id[id];
+                if (mp.terrain === "mountain" || mp.terrain === "alpine") {
+                    snowBlockedMileposts.add(id);
+                }
+            }
+        }
+    }
+
     while (queue.length > 0) {
         const current = queue.shift();
         if (current === endId) break;
 
         // Traverse built track (own track always, foreign track if allowed)
         for (let track of gameState.tracks) {
+            if (struckColors.has(track.color)) continue; // Strike 123: no movement on struck player's rails
             const isOwn = track.color === playerColor;
             if (!isOwn && !allowForeignTrack) continue;
             let neighbor = null;
@@ -1967,6 +2050,7 @@ function findPathOnTrack(startId, endId, playerColor, allowForeignTrack) {
             else if (track.to === current) neighbor = track.from;
 
             if (neighbor && !visited.has(neighbor)) {
+                if (snowBlockedMileposts.has(neighbor)) continue; // Snow: blocked mountain/alpine
                 visited.add(neighbor);
                 prev[neighbor] = current;
                 if (!isOwn) {
@@ -2187,31 +2271,27 @@ function applyEventEffect(eventCard) {
             else if (player.cash > 51) tax = 10;
 
             if (tax > 0) {
-                player.cash -= Math.min(tax, player.cash);
-                addLog(`${player.name} pays ECU ${Math.min(tax, player.cash)}M in taxes`);
+                const paid = Math.min(tax, player.cash);
+                player.cash -= paid;
+                addLog(`${player.name} pays ECU ${paid}M in taxes`);
             }
         }
     } else if (eventCard.type === "derailment") {
-        // Check all players' trains against derailment zones
-        const cities = eventCard.cities;
+        // Check all players' trains against derailment zones (hex distance)
+        const derailZone = new Set();
+        for (const cityName of eventCard.cities) {
+            const cityMpId = gameState.cityToMilepost[cityName];
+            if (cityMpId === undefined) continue;
+            for (const id of getMilepostsInHexRange(cityMpId, eventCard.radius)) {
+                derailZone.add(id);
+            }
+        }
+
         for (let pIdx = 0; pIdx < gameState.players.length; pIdx++) {
             const player = gameState.players[pIdx];
             if (player.trainLocation === null) continue;
 
-            const trainMp = gameState.mileposts_by_id[player.trainLocation];
-            let isInZone = false;
-
-            // Check distance to any of the derailment cities
-            for (let cityName of cities) {
-                const cityMpId = gameState.cityToMilepost[cityName];
-                if (!cityMpId) continue;
-                const cityMp = gameState.mileposts_by_id[cityMpId];
-                const dist = Math.hypot(trainMp.x - cityMp.x, trainMp.y - cityMp.y);
-                if (dist <= eventCard.radius) {
-                    isInZone = true;
-                    break;
-                }
-            }
+            const isInZone = derailZone.has(player.trainLocation);
 
             if (isInZone) {
                 // Mark player as derailed (lose next turn)
@@ -2259,7 +2339,7 @@ function applyEventEffect(eventCard) {
                     break;
                 }
             }
-            if (atFerryPort && isPointInEventZone(eventCard, trainMp.x, trainMp.y)) {
+            if (atFerryPort && isMilepostInEventZone(eventCard, player.trainLocation)) {
                 gameState.derailedPlayers[pIdx] = 1;
                 if (player.loads.length > 0) player.loads.pop();
                 addLog(`${player.name} caught in gale at ferry port! Loses next turn and 1 load.`);
@@ -2516,27 +2596,112 @@ function dismissEventOverlay() {
     // No-op — animation system handles its own dismissal
 }
 
-// Check if a point (x,y) is within an event's affected zone.
-// Works for city-based events (snow/fog) and sea-area-based events (gale).
-function isPointInEventZone(evt, px, py) {
-    const radius = evt.radius || 0;
-    // City-based events (snow, fog)
-    if (evt.city) {
-        const cityMpId = gameState.cityToMilepost[evt.city];
-        if (cityMpId) {
-            const cityMp = gameState.mileposts_by_id[cityMpId];
-            if (Math.hypot(px - cityMp.x, py - cityMp.y) <= radius) return true;
+// BFS from a milepost, returning Set of all milepost IDs within N hex hops
+function getMilepostsInHexRange(startId, radius) {
+    const result = new Set([startId]);
+    const queue = [startId];
+    const dist = { [startId]: 0 };
+
+    let head = 0;
+    while (head < queue.length) {
+        const id = queue[head++];
+        if (dist[id] >= radius) continue;
+        const mp = gameState.mileposts_by_id[id];
+        for (const nId of mp.neighbors) {
+            if (dist[nId] === undefined) {
+                dist[nId] = dist[id] + 1;
+                result.add(nId);
+                queue.push(nId);
+            }
         }
     }
-    // Sea-area-based events (gale)
+    return result;
+}
+
+// Check if a milepost is within an event's affected zone using hex distance.
+// For city-based events (snow/fog): BFS from the event city milepost.
+// For sea-area-based events (gale): BFS from the nearest milepost to each sea area point.
+function isMilepostInEventZone(evt, milepostId) {
+    const radius = evt.radius || 0;
+    if (evt.city) {
+        const cityMpId = gameState.cityToMilepost[evt.city];
+        if (cityMpId !== undefined) {
+            const inRange = getMilepostsInHexRange(cityMpId, radius);
+            if (inRange.has(milepostId)) return true;
+        }
+    }
     if (evt.seaAreas) {
         for (const areaName of evt.seaAreas) {
             const area = SEA_AREAS[areaName];
-            if (area && Math.hypot(px - area.x, py - area.y) <= radius) return true;
+            if (!area) continue;
+            // Find the closest milepost to this sea area reference point
+            const nearestId = findNearestMilepost(area.x, area.y);
+            if (nearestId !== null) {
+                const inRange = getMilepostsInHexRange(nearestId, radius);
+                if (inRange.has(milepostId)) return true;
+            }
         }
     }
     return false;
 }
+
+// Find the nearest milepost to a world coordinate point
+function findNearestMilepost(wx, wy) {
+    let bestId = null;
+    let bestDist = Infinity;
+    for (const mp of gameState.mileposts) {
+        const d = Math.hypot(mp.x - wx, mp.y - wy);
+        if (d < bestDist) {
+            bestDist = d;
+            bestId = mp.id;
+        }
+    }
+    return bestId;
+}
+
+// Convex hull of 2D points (Andrew's monotone chain algorithm)
+function convexHull(points) {
+    points = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    if (points.length <= 1) return points;
+    const cross = (O, A, B) => (A[0] - O[0]) * (B[1] - O[1]) - (A[1] - O[1]) * (B[0] - O[0]);
+    const lower = [];
+    for (const p of points) {
+        while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+        lower.push(p);
+    }
+    const upper = [];
+    for (let i = points.length - 1; i >= 0; i--) {
+        const p = points[i];
+        while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+        upper.push(p);
+    }
+    upper.pop();
+    lower.pop();
+    return lower.concat(upper);
+}
+
+// Expand a convex hull outward by a fixed pixel amount
+function expandHull(hull, amount) {
+    const expanded = [];
+    const n = hull.length;
+    for (let i = 0; i < n; i++) {
+        const prev = hull[(i - 1 + n) % n];
+        const curr = hull[i];
+        const next = hull[(i + 1) % n];
+        const dx1 = curr[0] - prev[0], dy1 = curr[1] - prev[1];
+        const dx2 = next[0] - curr[0], dy2 = next[1] - curr[1];
+        const len1 = Math.hypot(dx1, dy1) || 1;
+        const len2 = Math.hypot(dx2, dy2) || 1;
+        const nx1 = dy1 / len1, ny1 = -dx1 / len1;
+        const nx2 = dy2 / len2, ny2 = -dx2 / len2;
+        const nx = (nx1 + nx2) / 2;
+        const ny = (ny1 + ny2) / 2;
+        const nlen = Math.hypot(nx, ny) || 1;
+        expanded.push([curr[0] + (nx / nlen) * amount, curr[1] + (ny / nlen) * amount]);
+    }
+    return expanded;
+}
+
 
 function isEventBlocking(action, context) {
     // Check if active events block the proposed action
@@ -2545,23 +2710,14 @@ function isEventBlocking(action, context) {
 
         if (action === "load" || action === "deliver") {
             // Strike 121: No loading/delivery more than 3 mp from coast
-            if (evt.id === 121) {
-                // In full implementation, would need coast detection
+            if (evt.id === 121 && context.milepostId !== undefined) {
+                const d = gameState.coastDistance[context.milepostId];
+                if (d !== undefined && d > evt.radius) return true;
             }
             // Strike 122: No loading/delivery within 2 mp of coast
-            if (evt.id === 122) {
-                // Similar coast check
-            }
-        }
-
-        if (action === "move") {
-            // Strike 123: No movement on drawing player's rail lines
-            if (evt.id === 123) {
-                const drawingPlayer = gameState.players[activeEvent.drawingPlayerIndex];
-                const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-                if (currentPlayer === drawingPlayer) {
-                    return true; // Blocked
-                }
+            if (evt.id === 122 && context.milepostId !== undefined) {
+                const d = gameState.coastDistance[context.milepostId];
+                if (d !== undefined && d <= evt.radius) return true;
             }
         }
 
@@ -2574,13 +2730,8 @@ function isEventBlocking(action, context) {
                     return true; // Blocked
                 }
             }
-            // Snow/Fog/Gale: No building in affected area
-            if (evt.type === "snow" || evt.type === "fog" || evt.type === "gale") {
-                const location = context.location;
-                if (location && isPointInEventZone(evt, location.x, location.y)) {
-                    return true;
-                }
-            }
+            // Snow/Fog/Gale build blocking is enforced in findPath() which
+            // excludes mileposts in affected zones from pathfinding.
         }
     }
     return false;
@@ -2592,8 +2743,7 @@ function getEffectiveMovement(player) {
         const evt = activeEvent.card;
         if (evt.type === "snow" || evt.type === "fog" || evt.type === "gale") {
             if (player.trainLocation !== null) {
-                const trainMp = gameState.mileposts_by_id[player.trainLocation];
-                if (isPointInEventZone(evt, trainMp.x, trainMp.y)) {
+                if (isMilepostInEventZone(evt, player.trainLocation)) {
                     const baseMovement = TRAIN_TYPES[player.trainType].movement;
                     return Math.floor(baseMovement / 2);
                 }
@@ -3002,6 +3152,14 @@ function drawMap() {
         }
     }
 
+    // Build set of struck colors for Strike 123 track rendering
+    const struckTrackColors = new Set();
+    for (const ae of gameState.activeEvents) {
+        if (ae.card.id === 123) {
+            struckTrackColors.add(gameState.players[ae.drawingPlayerIndex].color);
+        }
+    }
+
     // Draw tracks
     ctx.lineWidth = Math.max(2, 3 * uiScale);
     const tracksByColor = {};
@@ -3011,6 +3169,11 @@ function drawMap() {
     }
 
     for (let color in tracksByColor) {
+        const isStruck = struckTrackColors.has(color);
+        if (isStruck) {
+            ctx.globalAlpha = 0.35;
+            ctx.setLineDash([6 * uiScale, 5 * uiScale]);
+        }
         ctx.strokeStyle = COLOR_MAP[color] || "#ffffff";
         for (let track of tracksByColor[color]) {
             const from = gameState.mileposts_by_id[track.from];
@@ -3021,6 +3184,10 @@ function drawMap() {
             ctx.moveTo(sx1, sy1);
             ctx.lineTo(sx2, sy2);
             ctx.stroke();
+        }
+        if (isStruck) {
+            ctx.globalAlpha = 1.0;
+            ctx.setLineDash([]);
         }
     }
 
@@ -3242,6 +3409,180 @@ function drawMap() {
                 ctx.textBaseline = "bottom";
                 ctx.fillText(cityName, sx, sy - Math.max(14, 20 * uiScale) - 2);
             }
+        }
+    }
+
+    // Draw active event zones on map (hex-accurate borders)
+    for (let aeIdx = 0; aeIdx < gameState.activeEvents.length; aeIdx++) {
+        const ae = gameState.activeEvents[aeIdx];
+        const evt = ae.card;
+        if (!evt.radius) continue;
+        if (evt.type !== "snow" && evt.type !== "fog" && evt.type !== "gale") continue;
+
+        // Choose zone color by event type
+        let zoneColor, borderColor, labelColor, shadowColor;
+        if (evt.type === "snow") {
+            zoneColor = [150, 200, 255];
+            borderColor = "rgba(180, 220, 255, 0.85)";
+            shadowColor = "rgba(150, 200, 255, 0.6)";
+            labelColor = "#b8e0ff";
+        } else if (evt.type === "fog") {
+            zoneColor = [180, 180, 180];
+            borderColor = "rgba(220, 220, 220, 0.8)";
+            shadowColor = "rgba(200, 200, 200, 0.5)";
+            labelColor = "#e0e0e0";
+        } else {
+            zoneColor = [80, 200, 200];
+            borderColor = "rgba(100, 230, 230, 0.85)";
+            shadowColor = "rgba(80, 220, 220, 0.5)";
+            labelColor = "#90eeee";
+        }
+
+        const cr = zoneColor[0], cg = zoneColor[1], cb = zoneColor[2];
+
+        // Collect all affected mileposts across all zone centers for this event
+        const allZoneMpIds = new Set();
+        const zoneCenterScreens = []; // for labels
+        const centerMpIds = [];
+
+        if (evt.city) {
+            const cityMpId = gameState.cityToMilepost[evt.city];
+            if (cityMpId !== undefined) {
+                centerMpIds.push(cityMpId);
+                const cityMp = gameState.mileposts_by_id[cityMpId];
+                zoneCenterScreens.push({ label: evt.city, sx: worldToScreen(cityMp.x, cityMp.y) });
+                for (const id of getMilepostsInHexRange(cityMpId, evt.radius)) allZoneMpIds.add(id);
+            }
+        }
+        if (evt.seaAreas) {
+            for (const areaName of evt.seaAreas) {
+                const area = SEA_AREAS[areaName];
+                if (!area) continue;
+                const nearId = findNearestMilepost(area.x, area.y);
+                if (nearId === null) continue;
+                centerMpIds.push(nearId);
+                zoneCenterScreens.push({ label: areaName, sx: worldToScreen(area.x, area.y) });
+                for (const id of getMilepostsInHexRange(nearId, evt.radius)) allZoneMpIds.add(id);
+            }
+        }
+
+        if (allZoneMpIds.size === 0) continue;
+
+        // Convert zone mileposts to screen coordinates for hull
+        const zoneScreenPoints = [];
+        for (const id of allZoneMpIds) {
+            const mp = gameState.mileposts_by_id[id];
+            const [sx, sy] = worldToScreen(mp.x, mp.y);
+            zoneScreenPoints.push([sx, sy]);
+        }
+
+        const hull = convexHull(zoneScreenPoints);
+        if (hull.length < 3) continue;
+        const expandedHull = expandHull(hull, Math.max(6, 8 * uiScale));
+
+        // Compute center of hull for gradient
+        let hcx = 0, hcy = 0;
+        for (const p of expandedHull) { hcx += p[0]; hcy += p[1]; }
+        hcx /= expandedHull.length;
+        hcy /= expandedHull.length;
+        const maxDist = Math.max(...zoneScreenPoints.map(p => Math.hypot(p[0] - hcx, p[1] - hcy))) + 20;
+
+        // Fill: radial gradient clipped to hull shape
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(expandedHull[0][0], expandedHull[0][1]);
+        for (let i = 1; i < expandedHull.length; i++) ctx.lineTo(expandedHull[i][0], expandedHull[i][1]);
+        ctx.closePath();
+        ctx.clip();
+
+        const zoneGrad = ctx.createRadialGradient(hcx, hcy, 0, hcx, hcy, maxDist);
+        zoneGrad.addColorStop(0, `rgba(${cr}, ${cg}, ${cb}, 0.40)`);
+        zoneGrad.addColorStop(0.7, `rgba(${cr}, ${cg}, ${cb}, 0.28)`);
+        zoneGrad.addColorStop(1, `rgba(${cr}, ${cg}, ${cb}, 0)`);
+        ctx.fillStyle = zoneGrad;
+        ctx.fillRect(0, 0, width, height);
+        ctx.restore();
+
+        // Border: dashed hull outline with glow
+        ctx.shadowColor = shadowColor;
+        ctx.shadowBlur = 6;
+        ctx.setLineDash([8 * uiScale, 4 * uiScale]);
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = Math.max(2, 2.5 * uiScale);
+        ctx.beginPath();
+        ctx.moveTo(expandedHull[0][0], expandedHull[0][1]);
+        for (let i = 1; i < expandedHull.length; i++) ctx.lineTo(expandedHull[i][0], expandedHull[i][1]);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+
+        // Labels
+        for (const zc of zoneCenterScreens) {
+            const [scx, scy] = zc.sx;
+            const labelText = zoneCenterScreens.length > 1 ? zc.label : evt.title.replace(/^(Snow|Fog|Gale)!\s*/, "$1: ");
+            ctx.font = `bold ${Math.max(9, 10 * uiScale)}px Arial`;
+            ctx.textAlign = "center";
+            const labelW = ctx.measureText(labelText).width + 12;
+            // Place label above the top of the hull near this center
+            const topY = Math.min(...expandedHull.map(p => p[1]));
+            const labelY = topY - Math.max(8, 10 * uiScale);
+            ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+            ctx.beginPath();
+            ctx.roundRect(scx - labelW / 2, labelY - Math.max(9, 10 * uiScale), labelW, Math.max(14, 16 * uiScale), 3);
+            ctx.fill();
+            ctx.fillStyle = labelColor;
+            ctx.fillText(labelText, scx, labelY);
+        }
+
+        // Snow: mark blocked mountain/alpine mileposts in zone with red X
+        if (evt.type === "snow") {
+            for (const id of allZoneMpIds) {
+                const mp = gameState.mileposts_by_id[id];
+                if (mp.terrain !== "mountain" && mp.terrain !== "alpine") continue;
+                const [sx, sy] = worldToScreen(mp.x, mp.y);
+                const xSize = Math.max(3, 4 * uiScale);
+                ctx.strokeStyle = "rgba(255, 80, 80, 0.7)";
+                ctx.lineWidth = Math.max(1, 1.5 * uiScale);
+                ctx.beginPath();
+                ctx.moveTo(sx - xSize, sy - xSize);
+                ctx.lineTo(sx + xSize, sy + xSize);
+                ctx.moveTo(sx + xSize, sy - xSize);
+                ctx.lineTo(sx - xSize, sy + xSize);
+                ctx.stroke();
+            }
+        }
+    }
+
+    // Draw strike 121/122 blocked city markers
+    for (const ae of gameState.activeEvents) {
+        const evt = ae.card;
+        if (evt.id !== 121 && evt.id !== 122) continue;
+        for (const mp of gameState.mileposts) {
+            if (!mp.city) continue;
+            const d = gameState.coastDistance[mp.id];
+            if (d === undefined) continue;
+            const blocked = (evt.id === 121 && d > evt.radius) || (evt.id === 122 && d <= evt.radius);
+            if (!blocked) continue;
+            const [sx, sy] = worldToScreen(mp.x, mp.y);
+            const ringRadius = Math.max(6, 9 * uiScale);
+            const xSize = Math.max(4, 5 * uiScale);
+            // Red ring
+            ctx.beginPath();
+            ctx.arc(sx, sy, ringRadius, 0, Math.PI * 2);
+            ctx.strokeStyle = "rgba(255, 60, 60, 0.7)";
+            ctx.lineWidth = Math.max(1.5, 2 * uiScale);
+            ctx.stroke();
+            // Red X
+            ctx.strokeStyle = "rgba(255, 60, 60, 0.6)";
+            ctx.lineWidth = Math.max(1, 1.5 * uiScale);
+            ctx.beginPath();
+            ctx.moveTo(sx - xSize, sy - xSize);
+            ctx.lineTo(sx + xSize, sy + xSize);
+            ctx.moveTo(sx + xSize, sy - xSize);
+            ctx.lineTo(sx - xSize, sy + xSize);
+            ctx.stroke();
         }
     }
 
@@ -3954,6 +4295,7 @@ function startGame() {
 
     // Initialize game
     generateHexGrid();
+    computeCoastDistances();
     gameState.canvas = document.getElementById("gameCanvas");
     gameState.ctx = gameState.canvas.getContext("2d");
 
@@ -4015,6 +4357,12 @@ function pickupGood(good) {
         return;
     }
 
+    // Check if an active strike blocks loading at this location
+    if (isEventBlocking("load", { milepostId: currentPlayer.trainLocation })) {
+        addLog("Strike in effect — cannot pick up goods here!");
+        return;
+    }
+
     // Check supply limit (chips = max in circulation at once)
     const goodData = GOODS[good];
     if (goodData) {
@@ -4052,6 +4400,12 @@ function deliverGood(cardIndex, demandIndex) {
     const currentCity = mp?.city?.name;
     if (currentCity !== demand.to) {
         addLog(`Must deliver to ${demand.to}!`);
+        return;
+    }
+
+    // Check if an active strike blocks delivery at this location
+    if (isEventBlocking("deliver", { milepostId: currentPlayer.trainLocation })) {
+        addLog("Strike in effect — cannot deliver goods here!");
         return;
     }
 
@@ -4593,7 +4947,8 @@ function updateUI() {
 
                 const canDeliver = gameState.phase === "operate" &&
                                    currentCity === demand.to &&
-                                   currentPlayer.loads.includes(demand.good);
+                                   currentPlayer.loads.includes(demand.good) &&
+                                   !isEventBlocking("deliver", { milepostId: currentPlayer.trainLocation });
                 const deliverBtn = canDeliver
                     ? `<button class="deliver-btn" onclick="event.stopPropagation(); deliverGood(${cardIdx}, ${dIdx})">💰 Deliver ECU ${demand.payout}M</button>`
                     : "";
@@ -4767,14 +5122,15 @@ function updateUI() {
         // Goods available at current city
         if (opCity && CITIES[opCity] && CITIES[opCity].goods.length > 0) {
             const trainFull = currentPlayer.loads.length >= TRAIN_TYPES[currentPlayer.trainType].capacity;
+            const strikeBlocked = isEventBlocking("load", { milepostId: currentPlayer.trainLocation });
             operateHtml += `<div style="font-size:11px; margin-bottom:8px; background:#333; padding:6px; border-radius:3px;">
-                <div style="color:#4a9e4a; margin-bottom:4px;"><strong>Available at ${opCity}:</strong></div>
+                <div style="color:#4a9e4a; margin-bottom:4px;"><strong>Available at ${opCity}:${strikeBlocked ? ' <span style="color:#ff6666;">(STRIKE)</span>' : ''}</strong></div>
                 ${CITIES[opCity].goods.map(g => {
                     const goodData = GOODS[g];
                     const inCirc = goodData ? getGoodsInCirculation(g) : 0;
                     const maxChips = goodData ? goodData.chips : 99;
                     const supplyLeft = maxChips - inCirc;
-                    const canPickThis = !trainFull && supplyLeft > 0;
+                    const canPickThis = !trainFull && supplyLeft > 0 && !strikeBlocked;
                     const supplyNote = supplyLeft <= 0 ? ' <span style="color:#ff6666;">(out)</span>' : ` <span style="color:#888;">(${supplyLeft}/${maxChips})</span>`;
                     return `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
@@ -4786,7 +5142,7 @@ function updateUI() {
         }
 
         // Delivery opportunities
-        if (opCity) {
+        if (opCity && !isEventBlocking("deliver", { milepostId: currentPlayer.trainLocation })) {
             const deliverable = [];
             currentPlayer.demandCards.forEach((card, cardIdx) => {
                 card.demands.forEach((demand, dIdx) => {
@@ -5052,6 +5408,11 @@ document.addEventListener("DOMContentLoaded", function() {
 
         // BUILD PHASE (initialBuilding or build): Click on mileposts to build
         if (gameState.phase === "initialBuilding" || gameState.phase === "build") {
+            // Strike 123: drawing player cannot build
+            if (isEventBlocking("build", {})) {
+                addLog("Strike in effect — you cannot build track!");
+                return;
+            }
             if (!gameState.selectedMilepost) {
                 if (canBuildFromMilepost(nearest, currentPlayer.color)) {
                     gameState.selectedMilepost = nearest;
