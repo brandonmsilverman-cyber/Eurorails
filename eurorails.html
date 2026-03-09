@@ -136,13 +136,30 @@
             display: block;
         }
 
-        #legendOverlay {
+        #leftPanelStack {
             position: fixed;
             top: 6px;
             left: 6px;
             z-index: 10;
-            pointer-events: none;
+            width: 480px;
             display: none;
+            flex-direction: column;
+            gap: 4px;
+            pointer-events: auto;
+            max-height: calc(100vh - 12px);
+            overflow-y: auto;
+            scrollbar-width: none;
+        }
+
+        #leftPanelStack::-webkit-scrollbar {
+            display: none;
+        }
+
+        #legendOverlay {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            width: 100%;
         }
 
         .legend-box {
@@ -150,19 +167,50 @@
             border: 1px solid rgba(100, 150, 200, 0.3);
             border-radius: 6px;
             padding: 8px 10px;
-            margin-bottom: 5px;
-            font-family: Arial, sans-serif;
             color: rgba(200, 220, 240, 0.7);
-            font-size: 11px;
+            font-size: 12px;
             line-height: 1.55;
             backdrop-filter: blur(4px);
+            transition: all 0.25s ease;
+            width: 100%;
         }
 
         .legend-box .legend-title {
             font-weight: bold;
             font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             color: rgba(180, 210, 240, 0.8);
-            margin-bottom: 3px;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+        }
+
+        .legend-box .legend-title .collapse-icon {
+            font-size: 10px;
+            opacity: 0.5;
+            transition: transform 0.25s ease;
+        }
+
+        .legend-box.collapsed .legend-title .collapse-icon {
+            transform: rotate(-90deg);
+        }
+
+        .legend-box .legend-content {
+            overflow: hidden;
+            max-height: 500px;
+            transition: max-height 0.3s ease, opacity 0.25s ease, margin-top 0.25s ease;
+            opacity: 1;
+            margin-top: 3px;
+        }
+
+        .legend-box.collapsed .legend-content {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
         }
 
         .legend-box .legend-item {
@@ -177,26 +225,21 @@
 
         .legend-box .goods-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr;
             gap: 0 10px;
         }
 
         #trainCardOverlay {
-            position: fixed;
-            top: 0;
-            left: 6px;
-            z-index: 10;
-            pointer-events: auto;
             display: none;
         }
 
         .train-status-card {
-            width: 368px;
+            width: 480px;
             background: linear-gradient(145deg, #2a1e0e, #1e1508);
             border: 1.5px solid #8a6a3a;
             border-radius: 8px;
             padding: 12px 14px;
-            font-size: 11px;
+            font-size: 12px;
             color: #d0c8b0;
             box-shadow: 0 4px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(180,150,80,0.1);
             position: relative;
@@ -217,6 +260,7 @@
             position: relative;
             z-index: 1;
             display: flex;
+            align-items: center;
             gap: 14px;
         }
 
@@ -227,7 +271,9 @@
 
         .train-status-card .train-header {
             font-weight: bold;
-            font-size: 13px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             margin-bottom: 8px;
             padding-bottom: 6px;
             border-bottom: 1px solid rgba(138, 106, 58, 0.4);
@@ -247,7 +293,7 @@
         }
 
         .train-status-card .train-loads-header {
-            font-size: 10px;
+            font-size: 11px;
             color: #998866;
             font-weight: bold;
             margin-bottom: 4px;
@@ -266,25 +312,26 @@
         }
 
         #demandCardsOverlay {
-            position: fixed;
-            top: 0;
-            left: 0;
             display: flex;
-            gap: 8px;
-            z-index: 10;
-            pointer-events: auto;
+            gap: 6px;
+            width: 100%;
         }
 
         .demand-card-overlay {
-            width: 180px;
+            flex: 1;
+            min-width: 0;
+            aspect-ratio: 59 / 92;
             background: linear-gradient(145deg, #1c2a3e, #162030);
             border: 1.5px solid #3a5a7a;
             border-radius: 8px;
-            padding: 10px;
-            font-size: 11px;
+            padding: 10px 8px;
+            font-size: 12px;
             color: #d0dae8;
             box-shadow: 0 4px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(100,160,220,0.1);
             transition: border-color 0.2s;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
         .demand-card-overlay.deliverable {
@@ -295,17 +342,26 @@
         .demand-card-overlay .card-header {
             text-align: center;
             font-weight: bold;
-            font-size: 10px;
+            font-size: 12px;
             color: #6a9ad0;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 6px;
-            padding-bottom: 4px;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+            padding-bottom: 3px;
             border-bottom: 1px solid #2a4a6a;
+            flex-shrink: 0;
+        }
+
+        .demand-card-overlay .card-demands-list {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            min-height: 0;
         }
 
         .demand-card-overlay .card-demand {
-            padding: 4px 0;
+            padding: 3px 0;
         }
 
         .demand-card-overlay .card-demand + .card-demand {
@@ -315,16 +371,18 @@
         .demand-card-overlay .good-name {
             font-weight: bold;
             color: #e0e8f0;
+            font-size: 12px;
         }
 
         .demand-card-overlay .payout {
             color: #ffdd44;
             font-weight: bold;
             float: right;
+            font-size: 12px;
         }
 
         .demand-card-overlay .source-cities {
-            font-size: 10px;
+            font-size: 11px;
             color: #8899aa;
             margin-top: 1px;
         }
@@ -340,7 +398,7 @@
         }
 
         .demand-card-overlay .dest-city {
-            font-size: 10px;
+            font-size: 11px;
             margin-top: 1px;
         }
 
@@ -358,7 +416,7 @@
         .demand-card-overlay .deliver-btn {
             width: 100%;
             padding: 4px;
-            margin-top: 3px;
+            margin-top: 2px;
             font-size: 10px;
             font-weight: bold;
             background: #3a8a3a;
@@ -636,41 +694,65 @@
             position: fixed;
             top: 0;
             left: 0;
+            right: 300px;
             display: flex;
-            flex-direction: column;
-            gap: 6px;
-            z-index: 10;
+            justify-content: center;
+            gap: 10px;
+            padding: 8px 12px;
+            z-index: 15;
+            pointer-events: none;
+        }
+
+        #activeEventsOverlay > * {
             pointer-events: auto;
         }
 
         .active-event-card {
-            width: 260px;
-            background: linear-gradient(145deg, #3a1010, #2a0808);
-            border: 1.5px solid #cc3333;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: linear-gradient(135deg, #4a1a1a, #3a1010);
+            border: 1.5px solid #aa4444;
             border-radius: 8px;
-            padding: 10px 12px;
-            font-size: 11px;
-            color: #ffcccc;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 6px rgba(200,50,50,0.2);
+            padding: 8px 16px;
+            font-size: 12px;
+            color: #e0c0c0;
+            box-shadow: 0 4px 20px rgba(140,40,40,0.35), inset 0 1px 0 rgba(255,100,100,0.1);
+            animation: eventPulse 2.5s ease-in-out infinite;
+        }
+
+        @keyframes eventPulse {
+            0%, 100% { border-color: #aa4444; box-shadow: 0 4px 20px rgba(140,40,40,0.35), inset 0 1px 0 rgba(255,100,100,0.1); }
+            50% { border-color: #cc5555; box-shadow: 0 4px 24px rgba(180,50,50,0.5), inset 0 1px 0 rgba(255,100,100,0.15); }
+        }
+
+        .active-event-card .event-icon {
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .active-event-card .event-text {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
         }
 
         .active-event-card .event-card-title {
             font-weight: bold;
             font-size: 12px;
-            color: #ff8888;
-            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #ff9999;
         }
 
         .active-event-card .event-card-desc {
-            color: #dda;
-            font-size: 10px;
-            line-height: 1.4;
-            margin-bottom: 4px;
+            font-size: 11px;
+            color: #cc9999;
         }
 
         .active-event-card .event-card-expiry {
-            font-size: 9px;
-            color: #cc8844;
+            font-size: 10px;
+            color: #886666;
             font-style: italic;
         }
 
@@ -765,9 +847,11 @@
     <div class="map-area">
         <canvas id="gameCanvas"></canvas>
     </div>
-    <div id="legendOverlay"></div>
-    <div id="trainCardOverlay"></div>
-    <div id="demandCardsOverlay"></div>
+    <div id="leftPanelStack">
+        <div id="legendOverlay"></div>
+        <div id="trainCardOverlay"></div>
+        <div id="demandCardsOverlay"></div>
+    </div>
     <div id="activeEventsOverlay"></div>
     <div class="sidebar">
         <div class="sidebar-section">
@@ -791,7 +875,7 @@
 
         <div class="sidebar-section">
             <h3>Log</h3>
-            <div id="gameLog" style="height: 150px; overflow-y: auto; font-size: 11px;"></div>
+            <div id="gameLog" style="height: 150px; overflow-y: auto; font-size: 12px;"></div>
         </div>
     </div>
 </div>
@@ -2438,7 +2522,7 @@ function buildDemandCardDemandsHtml(card) {
         const maxChips = goodData ? goodData.chips : 99;
         const exhausted = inCirc >= maxChips;
         const exhaustedStyle = exhausted ? 'opacity:0.4;' : '';
-        const exhaustedBadge = exhausted ? '<span style="color:#ff4444; font-size:9px; font-weight:bold; margin-left:4px;">SOLD OUT</span>' : '';
+        const exhaustedBadge = exhausted ? '<span style="color:#ff4444; font-size:10px; font-weight:bold; margin-left:4px;">SOLD OUT</span>' : '';
         return `
             <div class="card-demand" style="${exhaustedStyle}">
                 <div>
@@ -3707,9 +3791,12 @@ function drawMap() {
     }
 
     // ---- LEGENDS as fixed HTML overlay ----
+    const leftPanel = document.getElementById("leftPanelStack");
+    if (leftPanel && gameState.gameStarted) {
+        leftPanel.style.display = "flex";
+    }
     const legendEl = document.getElementById("legendOverlay");
     if (legendEl && gameState.gameStarted) {
-        legendEl.style.display = "block";
         // Build map legend once (static)
         if (!legendEl._mapBuilt) {
             const mlItems = [
@@ -3723,11 +3810,11 @@ function drawMap() {
                 { symbol: "---", color: "#88bbee", text: "Ferry route" },
             ];
 
-            let mapHtml = '<div class="legend-box"><div class="legend-title">Map Legend</div>';
+            let mapHtml = '<div class="legend-box collapsed" id="mapLegendBox"><div class="legend-title" onclick="document.getElementById(\'mapLegendBox\').classList.toggle(\'collapsed\')">Map Legend <span class="collapse-icon">&#9660;</span></div><div class="legend-content">';
             for (const item of mlItems) {
                 mapHtml += `<div class="legend-item"><span class="legend-symbol" style="color:${item.color}">${item.symbol}</span>${item.text}</div>`;
             }
-            mapHtml += '</div>';
+            mapHtml += '</div></div>';
             mapHtml += '<div id="goodsLegendBox"></div>';
 
             legendEl.innerHTML = mapHtml;
@@ -3737,8 +3824,11 @@ function drawMap() {
         // Rebuild goods legend every frame (supply counts change)
         const goodsBox = document.getElementById("goodsLegendBox");
         if (goodsBox) {
+            const isCollapsed = goodsBox.querySelector('.legend-box.collapsed') !== null;
             const goodsKeys = Object.keys(GOODS_ICONS).sort();
-            let goodsHtml = '<div class="legend-box"><div class="legend-title">Goods Legend</div><div class="goods-grid">';
+            const collapseClass = isCollapsed || !goodsBox._initialized ? ' collapsed' : '';
+            goodsBox._initialized = true;
+            let goodsHtml = `<div class="legend-box${collapseClass}" id="goodsLegendInner"><div class="legend-title" onclick="document.getElementById('goodsLegendInner').classList.toggle('collapsed')">Goods Legend <span class="collapse-icon">&#9660;</span></div><div class="legend-content"><div class="goods-grid">`;
             for (const key of goodsKeys) {
                 const goodData = GOODS[key];
                 const inCirc = goodData ? getGoodsInCirculation(key) : 0;
@@ -3747,18 +3837,17 @@ function drawMap() {
                 const exhausted = remaining <= 0;
                 const itemStyle = exhausted ? 'opacity:0.35;' : '';
                 const countColor = exhausted ? '#ff4444' : (remaining < maxChips ? '#ffaa44' : '#668877');
-                const countText = `<span style="color:${countColor}; font-size:9px; margin-left:2px;">${remaining}/${maxChips}</span>`;
-                const exhaustedTag = exhausted ? '<span style="color:#ff4444; font-size:8px; font-weight:bold;"> OUT</span>' : '';
+                const countText = `<span style="color:${countColor}; font-size:10px; margin-left:2px;">${remaining}/${maxChips}</span>`;
+                const exhaustedTag = exhausted ? '<span style="color:#ff4444; font-size:10px; font-weight:bold;"> OUT</span>' : '';
                 goodsHtml += `<div class="legend-item" style="${itemStyle}"><span class="legend-symbol">${GOODS_ICONS[key]}</span>${key}${exhaustedTag} ${countText}</div>`;
             }
-            goodsHtml += '</div></div>';
+            goodsHtml += '</div></div></div>';
             goodsBox.innerHTML = goodsHtml;
         }
     }
 
     // Render and position train status card below legends
     const trainCardEl = document.getElementById("trainCardOverlay");
-    let trainCardBottom = 0;
     if (trainCardEl && gameState.gameStarted) {
         const currentPlayer = gameState.players[gameState.currentPlayerIndex];
         const tt = TRAIN_TYPES[currentPlayer.trainType];
@@ -4133,30 +4222,12 @@ function drawMap() {
                 </div>
             </div>`;
         trainCardEl.style.display = "block";
-
-        if (legendEl) {
-            const legendRect = legendEl.getBoundingClientRect();
-            trainCardEl.style.top = (legendRect.bottom + 4) + "px";
-        }
-        trainCardBottom = trainCardEl.getBoundingClientRect().bottom;
     } else if (trainCardEl) {
         trainCardEl.style.display = "none";
         trainCardEl.innerHTML = "";
     }
 
-    // Position demand cards overlay below train card (or below legends if no train card)
-    const overlayEl = document.getElementById("demandCardsOverlay");
-    if (overlayEl) {
-        if (trainCardBottom > 0) {
-            overlayEl.style.top = (trainCardBottom + 4) + "px";
-        } else if (legendEl) {
-            const legendRect = legendEl.getBoundingClientRect();
-            overlayEl.style.top = (legendRect.bottom + 4) + "px";
-        }
-        overlayEl.style.left = "6px";
-    }
-
-    // Render and position active events overlay below demand cards
+    // Render active events as top-center banner
     const eventsOverlay = document.getElementById("activeEventsOverlay");
     if (eventsOverlay) {
         if (gameState.activeEvents && gameState.activeEvents.length > 0) {
@@ -4164,21 +4235,14 @@ function drawMap() {
                 const drawerName = gameState.players[ae.drawingPlayerIndex]?.name || "Unknown";
                 const expiryText = `Expires after ${drawerName}'s next turn`;
                 return `<div class="active-event-card">
-                    <div class="event-card-title">${ae.card.title}</div>
-                    <div class="event-card-desc">${ae.card.description}</div>
-                    <div class="event-card-expiry">${expiryText}</div>
+                    <div class="event-icon">&#9888;</div>
+                    <div class="event-text">
+                        <div class="event-card-title">${ae.card.title}</div>
+                        <div class="event-card-desc">${ae.card.description}</div>
+                        <div class="event-card-expiry">${expiryText}</div>
+                    </div>
                 </div>`;
             }).join("");
-
-            // Position below demand cards
-            if (overlayEl) {
-                const demandRect = overlayEl.getBoundingClientRect();
-                eventsOverlay.style.top = (demandRect.bottom + 4) + "px";
-            } else if (legendEl) {
-                const legendRect = legendEl.getBoundingClientRect();
-                eventsOverlay.style.top = (legendRect.bottom + 4) + "px";
-            }
-            eventsOverlay.style.left = "6px";
             eventsOverlay.style.display = "flex";
         } else {
             eventsOverlay.innerHTML = "";
@@ -5067,7 +5131,7 @@ function updateUI() {
             return `
             <div class="demand-card-overlay${hasDeliverable ? ' deliverable' : ''}">
                 <div class="card-header" style="color:${pColor}; border-bottom-color:${pColor}40;">${currentPlayer.name}</div>
-                ${demandsHtml}
+                <div class="card-demands-list">${demandsHtml}</div>
             </div>`;
         }).join("");
         demandOverlay.innerHTML = cardsHtml;
