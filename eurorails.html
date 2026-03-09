@@ -777,25 +777,16 @@
             </div>
         </div>
 
-        <div class="sidebar-section" id="currentPlayerSection">
-            <h3>Current Player</h3>
-            <div id="currentPlayerInfo"></div>
-        </div>
-
         <div class="sidebar-section">
             <h3>Players</h3>
             <div id="playersList"></div>
-        </div>
-
-        <div class="sidebar-section" id="buildSection" style="display:none;">
-            <h3>Build</h3>
-            <div id="buildPanel"></div>
         </div>
 
         <div class="sidebar-section">
             <h3>Actions</h3>
             <div id="actionButtons"></div>
         </div>
+
 
 
         <div class="sidebar-section">
@@ -4965,10 +4956,7 @@ function endTurn() {
 function updateUI() {
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
 
-    // Update current player info section
-    const locationName = getPlayerLocationName(currentPlayer);
-    const connectedCount = getConnectedMajorCities(currentPlayer.color).length;
-
+    // Update players list
     const phaseColorMap = {
         "initialBuilding": "#ff8800",
         "operate": "#4a9e4a",
@@ -4978,46 +4966,34 @@ function updateUI() {
                        gameState.phase === "operate" ? "Operate" : "Build";
     const phaseColor = phaseColorMap[gameState.phase] || "#fff";
 
-    const currentPlayerHtml = `
-        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
-            <span>Player:</span><span style="color:${COLOR_MAP[currentPlayer.color]}; font-weight:bold;">${currentPlayer.name}</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
-            <span>Phase:</span><span style="color:${phaseColor}; font-weight:bold;">${phaseText}</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
-            <span>Cash:</span><span style="color:#4a9eff; font-weight:bold;">ECU ${currentPlayer.cash}M</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
-            <span>Location:</span><span style="color:#fff; font-weight:bold;">${locationName}</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
-            <span>Train:</span><span>${currentPlayer.trainType}</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
-            <span>Speed/Cap:</span><span>${TRAIN_TYPES[currentPlayer.trainType].movement}mp / ${TRAIN_TYPES[currentPlayer.trainType].capacity} loads</span>
-        </div>
-        ${gameState.phase === "operate" ? `
-        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
-            <span>Movement:</span><span style="color:#ffff00; font-weight:bold;">${currentPlayer.movement}mp${currentPlayer.trainLocation && isInHalfSpeedZone(currentPlayer.trainLocation) ? ' (half-speed zone)' : ''}</span>
-        </div>
-        ` : ""}
-        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
-            <span>Major Cities:</span><span style="color:${connectedCount >= 7 ? '#4a9e4a' : '#ff8800'}; font-weight:bold;">${connectedCount}/7</span>
-        </div>
-    `;
-    document.getElementById("currentPlayerInfo").innerHTML = currentPlayerHtml;
-
-    // Update players list
     const playersList = document.getElementById("playersList");
-    playersList.innerHTML = gameState.players.map((p, i) => `
-        <div class="player-info ${i === gameState.currentPlayerIndex ? "active" : ""}">
-            <strong>${p.name}</strong> (${p.color})<br>
-            Cash: ECU ${p.cash}M<br>
-            Train: ${p.trainType}<br>
-            Loads: ${p.loads.length}/${TRAIN_TYPES[p.trainType].capacity}
-        </div>
-    `).join("");
+    playersList.innerHTML = gameState.players.map((p, i) => {
+        const isCurrent = i === gameState.currentPlayerIndex;
+        if (isCurrent) {
+            const connectedCount = getConnectedMajorCities(p.color).length;
+            return `<div class="player-info active">
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <strong style="color:${COLOR_MAP[p.color]};">${p.name}</strong>
+                    <span style="color:${phaseColor}; font-weight:bold; font-size:11px;">${phaseText}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:2px;">
+                    <span>Cash: <span style="color:#4a9eff; font-weight:bold;">ECU ${p.cash}M</span></span>
+                    <span>Cities: <span style="color:${connectedCount >= 7 ? '#4a9e4a' : '#ff8800'}; font-weight:bold;">${connectedCount}/7</span></span>
+                </div>
+                ${gameState.phase === "operate" ? `
+                <div style="font-size:11px; margin-bottom:2px;">
+                    Movement: <span style="color:#ffff00; font-weight:bold;">${p.movement}mp${p.trainLocation && isInHalfSpeedZone(p.trainLocation) ? ' (half-speed)' : ''}</span>
+                </div>` : ""}
+            </div>`;
+        } else {
+            return `<div class="player-info">
+                <div style="display:flex; justify-content:space-between;">
+                    <strong style="color:${COLOR_MAP[p.color]};">${p.name}</strong>
+                    <span style="font-size:11px;">ECU ${p.cash}M</span>
+                </div>
+            </div>`;
+        }
+    }).join("");
 
     // Update active events display (positioned on map, below demand cards)
     // Positioning is handled in drawMap() alongside legends/demand cards
@@ -5082,20 +5058,17 @@ function updateUI() {
         demandOverlay.innerHTML = "";
     }
 
-    // Update Build panel (separate dedicated section)
-    const buildSection = document.getElementById("buildSection");
-    const buildPanel = document.getElementById("buildPanel");
-    const isBuildPhase = gameState.phase === "initialBuilding" || gameState.phase === "build";
-
-    if (isBuildPhase) {
-        buildSection.style.display = "block";
+    // Update action buttons based on phase
+    const actionButtons = document.getElementById("actionButtons");
+    if (gameState.phase === "initialBuilding") {
         const remainingBudget = 20 - gameState.buildingThisTurn;
         const budgetPct = Math.round((remainingBudget / 20) * 100);
         const budgetColor = remainingBudget > 10 ? "#4a9e4a" : remainingBudget > 5 ? "#ffcc00" : "#ff4444";
-
         const cheapestActive = gameState.buildPathMode === "cheapest";
         const shortestActive = gameState.buildPathMode === "shortest";
-        let bHtml = `
+
+        let buildHtml = `
+            <div style="font-size: 12px; margin-bottom: 10px;">Click two mileposts to build track</div>
             <div style="display:flex; gap:4px; margin-bottom:8px;">
                 <button onclick="setBuildPathMode('cheapest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${cheapestActive ? '#4a9e4a' : '#555'}; background:${cheapestActive ? '#2a4a2a' : '#222'}; color:${cheapestActive ? '#88ff88' : '#888'}; cursor:pointer;">Cheapest</button>
                 <button onclick="setBuildPathMode('shortest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${shortestActive ? '#4a9eff' : '#555'}; background:${shortestActive ? '#1a2a4a' : '#222'}; color:${shortestActive ? '#88ccff' : '#888'}; cursor:pointer;">Shortest</button>
@@ -5108,14 +5081,8 @@ function updateUI() {
                 <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
                     <div style="background:${budgetColor}; height:100%; width:${budgetPct}%; transition:width 0.3s;"></div>
                 </div>
-            </div>
-            <div style="font-size:11px; margin-bottom:8px; display:flex; justify-content:space-between;">
-                <span>Total Cash:</span>
-                <strong style="color:#4a9eff;">ECU ${currentPlayer.cash}M</strong>
-            </div>
-        `;
+            </div>`;
 
-        // Cost breakdown for all builds this turn
         if (gameState.buildHistory.length > 0) {
             const totals = { clear: 0, mountain: 0, alpine: 0, river: 0, smallCity: 0, majorCity: 0, ferry: 0 };
             let totalSegments = 0;
@@ -5134,14 +5101,13 @@ function updateUI() {
             if (totals.river > 0) items.push(`${totals.river} river crossing (+${totals.river * 2}M)`);
             if (totals.ferry > 0) items.push(`${totals.ferry} ferry route`);
 
-            bHtml += `<div style="font-size:10px; margin-bottom:8px; background:#1a2a1a; border:1px solid #3a5a3a; border-radius:4px; padding:6px;">
+            buildHtml += `<div style="font-size:10px; margin-bottom:8px; background:#1a2a1a; border:1px solid #3a5a3a; border-radius:4px; padding:6px;">
                 <div style="color:#88bb88; margin-bottom:4px; font-weight:bold;">Turn Summary — ${totalSegments} segment${totalSegments !== 1 ? 's' : ''}</div>
                 <div style="color:#aaa; line-height:1.5;">${items.join('<br>')}</div>
             </div>`;
 
-            // Undo section
             const lastBuild = gameState.buildHistory[gameState.buildHistory.length - 1];
-            bHtml += `<div style="background:#3d2200; border:2px solid #cc6600; border-radius:4px; padding:8px; margin-bottom:8px;">
+            buildHtml += `<div style="background:#3d2200; border:2px solid #cc6600; border-radius:4px; padding:8px; margin-bottom:8px;">
                 <div style="font-size:10px; color:#ffaa44; margin-bottom:6px;">
                     Last build: <strong>ECU ${lastBuild.cost}M</strong> (${lastBuild.segments} segment${lastBuild.segments !== 1 ? 's' : ''})
                 </div>
@@ -5149,48 +5115,10 @@ function updateUI() {
             </div>`;
         }
 
-        // Train info + upgrade (only in regular build phase, not initial)
-        if (gameState.phase === "build") {
-            const tt = TRAIN_TYPES[currentPlayer.trainType];
-            const upgrades = getUpgradeOptions(currentPlayer);
-            const budgetSpent = gameState.buildingThisTurn > 0;
-            const canAffordUpgrade = currentPlayer.cash >= 20 && !budgetSpent;
-
-            bHtml += `<div style="font-size:11px; margin-bottom:8px; background:#333; padding:6px; border-radius:3px; border:1px solid #555;">
-                <div style="color:#4a9eff; margin-bottom:4px;"><strong>🚂 ${currentPlayer.trainType}</strong></div>
-                <div style="display:flex; justify-content:space-between;">
-                    <span>Speed: ${tt.movement}mp</span><span>Capacity: ${tt.capacity} loads</span>
-                </div>
-            </div>`;
-
-            if (upgrades.length > 0) {
-                const upgradeNote = budgetSpent ? `<div style="color:#ff6666; font-size:10px; margin-bottom:4px;">Cannot upgrade after building track</div>` : "";
-                bHtml += `<div style="font-size:11px; margin-bottom:8px;">
-                    <div style="color:#ff8800; margin-bottom:4px;"><strong>Upgrade (ECU 20M):</strong></div>
-                    ${upgradeNote}
-                    ${upgrades.map(u => `
-                        <button onclick="upgradeTo('${u.type}')" style="width:100%; margin-bottom:4px; padding:4px 8px; font-size:11px; ${canAffordUpgrade ? '' : 'opacity:0.5;'}" ${canAffordUpgrade ? '' : 'disabled'}>
-                            ⬆ ${u.type} (${u.desc})
-                        </button>
-                    `).join("")}
-                </div>`;
-            }
-        }
-
-        buildPanel.innerHTML = bHtml;
-    } else {
-        buildSection.style.display = "none";
-    }
-
-    // Update action buttons based on phase
-    const actionButtons = document.getElementById("actionButtons");
-    if (gameState.phase === "initialBuilding") {
-        actionButtons.innerHTML = `
-            <div style="font-size: 12px; margin-bottom: 10px;">Click two mileposts to build track</div>
-            <button onclick="endTurn()" style="width: 100%; margin-bottom: 5px;">End Building Turn</button>
-        `;
+        buildHtml += `<button onclick="endTurn()" style="width: 100%; margin-bottom: 5px;">End Building Turn</button>`;
+        actionButtons.innerHTML = buildHtml;
     } else if (gameState.phase === "operate") {
-        let operateHtml = "";
+        let operateHtml = `<div style="font-size: 12px; margin-bottom: 10px;">Click along your track to move train</div>`;
         const opCity = getPlayerCity(currentPlayer);
 
         // Trackage rights toggle
@@ -5198,7 +5126,7 @@ function updateUI() {
         operateHtml += `
             <div style="margin-bottom:8px;">
                 <button onclick="toggleTrackageRights()" style="width:100%; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${trActive ? '#cc6600' : '#555'}; background:${trActive ? '#3d2200' : '#222'}; color:${trActive ? '#ffaa44' : '#888'}; cursor:pointer;">
-                    🚂 Foreign Track: ${trActive ? 'ON (4M/opponent)' : 'OFF'}${Object.keys(gameState.trackageRightsPaidThisTurn).length > 0 ? ' ✓ PAID' : ''}
+                    🚂 Suggest Foreign Track: ${trActive ? 'ON (4M/opponent)' : 'OFF'}${Object.keys(gameState.trackageRightsPaidThisTurn).length > 0 ? ' ✓ PAID' : ''}
                 </button>
             </div>`;
 
@@ -5270,16 +5198,87 @@ function updateUI() {
                 </div>`;
         }
         operateHtml += `
-            <button onclick="endOperatePhase()" style="width: 100%; margin-bottom: 5px;">End Operate → Build Phase</button>
+            <button onclick="endOperatePhase()" style="width: 100%; margin-bottom: 5px;">Proceed to Build Phase</button>
             <div style="border-top: 1px solid #555; margin-top: 8px; padding-top: 8px;">
                 <button onclick="confirmDiscardHand()" style="width: 100%; padding: 4px 8px; font-size: 11px; background: rgba(180, 60, 60, 0.15); color: #cc7777; border: 1px solid #994444; border-radius: 3px; cursor: pointer;">Discard Hand & End Turn</button>
             </div>
         `;
         actionButtons.innerHTML = operateHtml;
     } else { // build phase
-        actionButtons.innerHTML = `
-            <button onclick="endTurn()" style="width: 100%; margin-bottom: 5px;">End Turn</button>
-        `;
+        const remainingBudget = 20 - gameState.buildingThisTurn;
+        const budgetPct = Math.round((remainingBudget / 20) * 100);
+        const budgetColor = remainingBudget > 10 ? "#4a9e4a" : remainingBudget > 5 ? "#ffcc00" : "#ff4444";
+        const cheapestActive = gameState.buildPathMode === "cheapest";
+        const shortestActive = gameState.buildPathMode === "shortest";
+
+        let buildHtml = `
+            <div style="font-size: 12px; margin-bottom: 10px;">Click two mileposts to build track</div>
+            <div style="display:flex; gap:4px; margin-bottom:8px;">
+                <button onclick="setBuildPathMode('cheapest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${cheapestActive ? '#4a9e4a' : '#555'}; background:${cheapestActive ? '#2a4a2a' : '#222'}; color:${cheapestActive ? '#88ff88' : '#888'}; cursor:pointer;">Cheapest</button>
+                <button onclick="setBuildPathMode('shortest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${shortestActive ? '#4a9eff' : '#555'}; background:${shortestActive ? '#1a2a4a' : '#222'}; color:${shortestActive ? '#88ccff' : '#888'}; cursor:pointer;">Shortest</button>
+            </div>
+            <div style="font-size:11px; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span>Turn Budget:</span>
+                    <strong style="color:${budgetColor};">${remainingBudget}M / 20M</strong>
+                </div>
+                <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
+                    <div style="background:${budgetColor}; height:100%; width:${budgetPct}%; transition:width 0.3s;"></div>
+                </div>
+            </div>`;
+
+        if (gameState.buildHistory.length > 0) {
+            const totals = { clear: 0, mountain: 0, alpine: 0, river: 0, smallCity: 0, majorCity: 0, ferry: 0 };
+            let totalSegments = 0;
+            for (const entry of gameState.buildHistory) {
+                if (entry.breakdown) {
+                    for (const k in totals) totals[k] += (entry.breakdown[k] || 0);
+                }
+                totalSegments += entry.segments;
+            }
+            const items = [];
+            if (totals.clear > 0) items.push(`${totals.clear} clear (${totals.clear}M)`);
+            if (totals.mountain > 0) items.push(`${totals.mountain} mountain (${totals.mountain * 2}M)`);
+            if (totals.alpine > 0) items.push(`${totals.alpine} alpine (${totals.alpine * 5}M)`);
+            if (totals.smallCity > 0) items.push(`${totals.smallCity} small city (${totals.smallCity * 3}M)`);
+            if (totals.majorCity > 0) items.push(`${totals.majorCity} major city (${totals.majorCity * 5}M)`);
+            if (totals.river > 0) items.push(`${totals.river} river crossing (+${totals.river * 2}M)`);
+            if (totals.ferry > 0) items.push(`${totals.ferry} ferry route`);
+
+            buildHtml += `<div style="font-size:10px; margin-bottom:8px; background:#1a2a1a; border:1px solid #3a5a3a; border-radius:4px; padding:6px;">
+                <div style="color:#88bb88; margin-bottom:4px; font-weight:bold;">Turn Summary — ${totalSegments} segment${totalSegments !== 1 ? 's' : ''}</div>
+                <div style="color:#aaa; line-height:1.5;">${items.join('<br>')}</div>
+            </div>`;
+
+            const lastBuild = gameState.buildHistory[gameState.buildHistory.length - 1];
+            buildHtml += `<div style="background:#3d2200; border:2px solid #cc6600; border-radius:4px; padding:8px; margin-bottom:8px;">
+                <div style="font-size:10px; color:#ffaa44; margin-bottom:6px;">
+                    Last build: <strong>ECU ${lastBuild.cost}M</strong> (${lastBuild.segments} segment${lastBuild.segments !== 1 ? 's' : ''})
+                </div>
+                <button onclick="undoLastBuild()" style="width:100%; padding:10px; font-size:14px; background:#cc6600; font-weight:bold; border-radius:4px;">↩ Undo Last Track</button>
+            </div>`;
+        }
+
+        // Train upgrade
+        const upgrades = getUpgradeOptions(currentPlayer);
+        const budgetSpent = gameState.buildingThisTurn > 0;
+        const canAffordUpgrade = currentPlayer.cash >= 20 && !budgetSpent;
+
+        if (upgrades.length > 0) {
+            const upgradeNote = budgetSpent ? `<div style="color:#ff6666; font-size:10px; margin-bottom:4px;">Cannot upgrade after building track</div>` : "";
+            buildHtml += `<div style="font-size:11px; margin-bottom:8px;">
+                <div style="color:#ff8800; margin-bottom:4px;"><strong>Upgrade (ECU 20M):</strong></div>
+                ${upgradeNote}
+                ${upgrades.map(u => `
+                    <button onclick="upgradeTo('${u.type}')" style="width:100%; margin-bottom:4px; padding:4px 8px; font-size:11px; ${canAffordUpgrade ? '' : 'opacity:0.5;'}" ${canAffordUpgrade ? '' : 'disabled'}>
+                        ⬆ ${u.type} (${u.desc})
+                    </button>
+                `).join("")}
+            </div>`;
+        }
+
+        buildHtml += `<button onclick="endTurn()" style="width: 100%; margin-bottom: 5px;">End Turn</button>`;
+        actionButtons.innerHTML = buildHtml;
     }
 }
 
