@@ -1200,12 +1200,13 @@ const LANDMASSES = {
 // Terrain regions
 const TERRAIN_REGIONS = {
     alpine: [
-        [[39,37], [45,35], [49,36], [53,36], [55,38], [53,41], [50,43], [48,44], [44,45], [41,44], [39,42], [39,37]]
+        [[39,37], [45,35], [49,36], [53,36], [55,38], [53,41], [50,43], [48,44], [44,48], [39,48], [37,44], [39,37]]
     ],
     mountain: [
         [[27,48], [31,47], [34,50], [36,53], [34,55], [31,53], [28,51], [27,48]],
         [[27,11], [31,11], [32,15], [30,17], [27,15], [27,11]],
         [[38,4], [43,4], [45,7], [43,11], [41,10], [39,7], [38,4]],
+        [[48,29], [53,28], [54,31], [53,34], [49,34], [48,31], [48,29]],
         [[54,29], [58,27], [61,31], [61,38], [59,40], [57,38], [55,34], [54,29]],
         [[54,43], [58,44], [60,48], [57,51], [54,49], [53,45], [54,43]],
         [[44,47], [47,49], [49,53], [51,57], [49,59], [47,55], [45,51], [44,47]],
@@ -1248,7 +1249,8 @@ const SEA_AREAS = {
     "Irish Sea":       [{ x: 23, y: 22 }],
     "Bay of Biscay":   [{ x: 19, y: 48 }],
     "Baltic Sea":      [{ x: 52, y: 17 }],
-    "Mediterranean":   [{ x: 34, y: 58 }, { x: 28, y: 72 }, { x: 45, y: 68 }],
+    "Mediterranean":   [{ x: 34, y: 58 }, { x: 28, y: 72 }, { x: 45, y: 68 }, { x: 59, y: 55 }],
+    "Black Sea":       [{ x: 65, y: 28 }, { x: 65, y: 36 }, { x: 65, y: 44 }],
     "Norwegian Sea":   [{ x: 22, y: 6 }],
     "Atlantic":        [
         { x: 13, y: 17 },  // NW of Ireland
@@ -1566,26 +1568,25 @@ function terrainHash(x, y) {
 
 // Compute how deep a point is inside a polygon (0 = edge, 1 = center)
 function polygonDepth(point, polygon) {
-    // Find centroid
-    let cx = 0, cy = 0;
+    // Minimum distance from point to any polygon edge
     const n = polygon.length - 1; // last point repeats first
+    let minEdgeDist = Infinity;
     for (let i = 0; i < n; i++) {
-        cx += polygon[i][0];
-        cy += polygon[i][1];
+        const j = i + 1;
+        const d = segmentDistance(point[0], point[1],
+            polygon[i][0], polygon[i][1], polygon[j][0], polygon[j][1]);
+        if (d < minEdgeDist) minEdgeDist = d;
     }
-    cx /= n;
-    cy /= n;
 
-    // Find approximate radius (avg distance from centroid to vertices)
+    // Normalize by half the avg centroid-to-vertex distance (approximate inradius)
+    let cx = 0, cy = 0;
+    for (let i = 0; i < n; i++) { cx += polygon[i][0]; cy += polygon[i][1]; }
+    cx /= n; cy /= n;
     let avgR = 0;
-    for (let i = 0; i < n; i++) {
-        avgR += Math.hypot(polygon[i][0] - cx, polygon[i][1] - cy);
-    }
+    for (let i = 0; i < n; i++) avgR += Math.hypot(polygon[i][0] - cx, polygon[i][1] - cy);
     avgR /= n;
 
-    // Point's distance from centroid, normalized by avgR
-    const distFromCenter = Math.hypot(point[0] - cx, point[1] - cy);
-    return Math.max(0, 1 - distFromCenter / avgR);
+    return Math.min(1, minEdgeDist / (avgR * 0.5));
 }
 
 function getTerrainType(x, y) {
