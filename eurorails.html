@@ -334,6 +334,25 @@
             flex-direction: column;
         }
 
+        .demand-card-overlay.placeholder {
+            background: linear-gradient(145deg, #0e1520, #0a1018);
+            border: 1.5px dashed #2a3a50;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.4);
+        }
+
+        .demand-card-overlay.discard-floater {
+            flex: none;
+            aspect-ratio: auto;
+            box-sizing: border-box;
+            pointer-events: none;
+        }
+
+        .demand-card-overlay.card-fly-floater {
+            flex: none;
+            aspect-ratio: auto;
+            box-sizing: border-box;
+        }
+
         .demand-card-overlay.deliverable {
             border-color: #4a9e4a;
             box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 8px rgba(74,158,74,0.3);
@@ -788,8 +807,7 @@
             opacity: 1;
         }
         .card-draw-preview.fly-to-position {
-            transition: transform 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.3s ease, width 0.7s ease, padding 0.7s ease;
-            opacity: 0;
+            transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94), width 0.5s ease, padding 0.5s ease;
         }
 
         /* Multi-card row container for equal height cards */
@@ -801,10 +819,13 @@
 
         /* Draw animation uses demand-card-overlay styling with animation overrides */
         .card-draw-preview.demand-card-overlay {
-            width: 200px;
+            width: 180px;
+            aspect-ratio: 59 / 92;
             text-align: left;
             display: flex;
             flex-direction: column;
+            padding: 10px 8px;
+            border-radius: 8px;
         }
 
         /* Event card draw style */
@@ -2367,7 +2388,8 @@ function drawCardForPlayer(player) {
         // Continue drawing until player has 3 demand cards
         return drawCardForPlayer(player);
     } else {
-        // Demand card - add to player's hand
+        // Demand card - add to player's hand, mark as animating for placeholder display
+        card._animating = true;
         player.demandCards.push(card);
         // Show draw animation for the new demand card
         queueCardAnimation(card, false);
@@ -2537,20 +2559,18 @@ function buildDemandCardDemandsHtml(card) {
 }
 
 function showCardDrawAnimation(cardData, isEvent) {
-    const overlay = document.createElement("div");
-    overlay.className = "card-draw-overlay";
-
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     const pColor = COLOR_MAP[currentPlayer.color] || "#4a9eff";
 
-    let cardHtml;
     if (isEvent) {
-        // Build human-readable expiry text
+        // Event cards still use full-screen overlay
+        const overlay = document.createElement("div");
+        overlay.className = "card-draw-overlay";
         const isPersistent = cardData.persistent;
         const expiryText = isPersistent
             ? `Active until after ${currentPlayer.name}'s next turn`
             : "Immediate effect (one-time)";
-        cardHtml = `
+        overlay.innerHTML = `
             <div class="card-draw-preview event">
                 <div class="draw-label">Event Card #${cardData.id}</div>
                 <div class="draw-title">${cardData.title}</div>
@@ -2559,147 +2579,160 @@ function showCardDrawAnimation(cardData, isEvent) {
                 <div style="font-size:11px; color:#ffcc88; margin: 4px 0 16px; font-style:italic;">${expiryText}</div>
                 <button class="event-dismiss-btn" style="padding:12px 36px; font-size:16px; font-weight:bold; background:#ffaa00; color:#000; border:none; border-radius:6px; cursor:pointer;">Continue</button>
             </div>`;
-    } else {
-        const demandsHtml = buildDemandCardDemandsHtml(cardData);
-        cardHtml = `
-            <div class="card-draw-preview demand-card-overlay" style="border-color:${pColor};">
-                <div class="card-header" style="color:${pColor}; border-bottom-color:${pColor}40;">New Demand Card</div>
-                ${demandsHtml}
-            </div>`;
-    }
-
-    overlay.innerHTML = cardHtml;
-    document.body.appendChild(overlay);
-
-    const preview = overlay.querySelector(".card-draw-preview");
-
-    // Phase 1: Fade in backdrop
-    requestAnimationFrame(() => {
-        overlay.classList.add("show");
-        // Phase 2: Reveal card (scale up + rotate)
-        setTimeout(() => preview.classList.add("reveal"), 100);
-    });
-
-    // Guard against double-dismiss
-    let dismissed = false;
-
-    // Dismiss animation: fly demand cards to position, fade out events
-    const dismiss = () => {
-        if (dismissed) return;
-        dismissed = true;
-        if (!document.body.contains(overlay)) { processNextCardAnimation(); return; }
-        const demandOverlay = document.getElementById("demandCardsOverlay");
-        if (demandOverlay && !isEvent) {
-            const cards = demandOverlay.querySelectorAll(".demand-card-overlay");
-            const targetCard = cards[cards.length - 1];
-            if (targetCard) {
-                const targetRect = targetCard.getBoundingClientRect();
-                const previewRect = preview.getBoundingClientRect();
-                const dx = targetRect.left + targetRect.width/2 - (previewRect.left + previewRect.width/2);
-                const dy = targetRect.top + targetRect.height/2 - (previewRect.top + previewRect.height/2);
-                const scale = Math.min(targetRect.width / previewRect.width, targetRect.height / previewRect.height);
-                preview.classList.add("fly-to-position");
-                preview.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
-            }
-        } else {
+        document.body.appendChild(overlay);
+        const preview = overlay.querySelector(".card-draw-preview");
+        requestAnimationFrame(() => {
+            overlay.classList.add("show");
+            setTimeout(() => preview.classList.add("reveal"), 100);
+        });
+        const btn = overlay.querySelector(".event-dismiss-btn");
+        if (btn) btn.addEventListener("click", (e) => {
+            e.stopPropagation();
             preview.style.transition = "transform 0.4s ease, opacity 0.4s ease";
             preview.style.transform = "scale(0.8)";
             preview.style.opacity = "0";
-        }
-        overlay.style.transition = "opacity 0.5s ease";
-        overlay.style.opacity = "0";
-        setTimeout(() => {
-            if (document.body.contains(overlay)) overlay.remove();
-            // Small delay before next animation to ensure clean transition
-            setTimeout(() => processNextCardAnimation(), 100);
-        }, 700);
-    };
-
-    if (isEvent) {
-        // Event cards: require explicit button click to continue
-        const btn = overlay.querySelector(".event-dismiss-btn");
-        if (btn) btn.addEventListener("click", (e) => { e.stopPropagation(); dismiss(); });
-    } else {
-        // Demand cards: auto-dismiss after delay, or click to dismiss early
-        // Give extra time when multiple cards are queued so player can digest each one
-        const autoDismissDelay = cardAnimationQueue.length > 0 ? 3800 : 2800;
-        overlay.addEventListener("click", dismiss, { once: true });
-        setTimeout(dismiss, autoDismissDelay);
+            overlay.style.transition = "opacity 0.5s ease";
+            overlay.style.opacity = "0";
+            setTimeout(() => {
+                if (document.body.contains(overlay)) overlay.remove();
+                setTimeout(() => processNextCardAnimation(), 100);
+            }, 500);
+        });
+        return;
     }
+
+    // Demand cards: fly directly to placeholder without full-screen overlay
+    showDemandCardFlyAnimation([cardData], () => processNextCardAnimation());
+}
+
+function animateCardDiscard(cardIndex, onComplete) {
+    const demandOverlay = document.getElementById("demandCardsOverlay");
+    const cardEl = demandOverlay ? demandOverlay.querySelector('[data-discarding="true"]') : null;
+
+    if (!cardEl) {
+        onComplete();
+        return;
+    }
+
+    const rect = cardEl.getBoundingClientRect();
+
+    // Create a floating clone at the card's current position
+    const floater = document.createElement("div");
+    floater.className = "demand-card-overlay discard-floater";
+    floater.innerHTML = cardEl.innerHTML;
+    floater.style.cssText = `
+        position: fixed;
+        z-index: 1000;
+        width: ${rect.width}px;
+        height: ${rect.height}px;
+        left: ${rect.left + rect.width / 2}px;
+        top: ${rect.top + rect.height / 2}px;
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+        transition: none;
+        border-color: ${getComputedStyle(cardEl).borderColor};
+    `;
+    document.body.appendChild(floater);
+
+    // Hide the original card immediately
+    cardEl.style.visibility = "hidden";
+
+    // Animate: fly up and fade out
+    requestAnimationFrame(() => {
+        floater.style.transition = "transform 0.4s cubic-bezier(0.4, 0, 1, 1), opacity 0.4s ease";
+        floater.style.transform = "translate(-50%, -50%) scale(0.6) translateY(-60px)";
+        floater.style.opacity = "0";
+    });
+
+    // Clean up and proceed
+    setTimeout(() => {
+        if (document.body.contains(floater)) floater.remove();
+        onComplete();
+    }, 450);
+}
+
+function showDemandCardFlyAnimation(cards, onComplete) {
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    const pColor = COLOR_MAP[currentPlayer.color] || "#4a9eff";
+    const demandOverlay = document.getElementById("demandCardsOverlay");
+    const placeholders = demandOverlay ? demandOverlay.querySelectorAll(".demand-card-overlay.placeholder") : [];
+
+    if (placeholders.length === 0) {
+        // No placeholders, just clear flags and finish
+        cards.forEach(c => delete c._animating);
+        updateUI();
+        setTimeout(onComplete, 100);
+        return;
+    }
+
+    const flyingCards = [];
+
+    cards.forEach((cardData, i) => {
+        const placeholder = placeholders[i];
+        if (!placeholder) return;
+
+        const targetRect = placeholder.getBoundingClientRect();
+
+        // Create a floating card element positioned at center screen
+        const floater = document.createElement("div");
+        floater.className = "demand-card-overlay card-fly-floater";
+        floater.style.cssText = `
+            position: fixed;
+            z-index: 1000;
+            border-color: ${pColor};
+            width: ${targetRect.width}px;
+            height: ${targetRect.height}px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%) scale(1.3);
+            opacity: 0;
+            transition: none;
+        `;
+        const demandsHtml = buildDemandCardDemandsHtml(cardData);
+        floater.innerHTML = `<div class="card-demands-list">${demandsHtml}</div>`;
+        document.body.appendChild(floater);
+        flyingCards.push({ floater, cardData, targetRect, delay: i * 80 });
+    });
+
+    // Phase 1: Fade in at center
+    requestAnimationFrame(() => {
+        flyingCards.forEach(({ floater, delay }) => {
+            setTimeout(() => {
+                floater.style.transition = "opacity 0.2s ease, transform 0.2s ease";
+                floater.style.opacity = "1";
+                floater.style.transform = "translate(-50%, -50%) scale(1)";
+            }, delay);
+        });
+
+        // Phase 2: Fly to placeholder position
+        const flyDelay = 400 + (flyingCards.length - 1) * 80;
+        setTimeout(() => {
+            flyingCards.forEach(({ floater, targetRect, delay }) => {
+                setTimeout(() => {
+                    floater.style.transition = "left 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94), top 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94), transform 0.45s ease";
+                    floater.style.left = (targetRect.left + targetRect.width / 2) + "px";
+                    floater.style.top = (targetRect.top + targetRect.height / 2) + "px";
+                    floater.style.transform = "translate(-50%, -50%) scale(1)";
+                }, delay);
+            });
+
+            // Phase 3: Clean up and reveal real cards
+            const cleanupDelay = 500 + (flyingCards.length - 1) * 80;
+            setTimeout(() => {
+                flyingCards.forEach(({ floater, cardData }) => {
+                    delete cardData._animating;
+                    if (document.body.contains(floater)) floater.remove();
+                });
+                updateUI();
+                setTimeout(onComplete, 100);
+            }, cleanupDelay);
+        }, flyDelay);
+    });
 }
 
 function showMultiCardDrawAnimation(cards) {
-    const overlay = document.createElement("div");
-    overlay.className = "card-draw-overlay";
-    overlay.style.gap = "0px";
-
-    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-    const pColor = COLOR_MAP[currentPlayer.color] || "#4a9eff";
-
-    let allCardsHtml = "";
-    for (let ci = 0; ci < cards.length; ci++) {
-        const cardData = cards[ci];
-        const demandsHtml = buildDemandCardDemandsHtml(cardData);
-        allCardsHtml += `
-            <div class="card-draw-preview demand-card-overlay" data-card-index="${ci}" style="border-color:${pColor};">
-                <div class="card-header" style="color:${pColor}; border-bottom-color:${pColor}40;">New Card ${ci + 1} of ${cards.length}</div>
-                ${demandsHtml}
-            </div>`;
-    }
-
-    overlay.innerHTML = `<div class="multi-card-row">${allCardsHtml}</div>`;
-    document.body.appendChild(overlay);
-
-    const previews = overlay.querySelectorAll(".card-draw-preview");
-
-    // Stagger the reveal animation
-    requestAnimationFrame(() => {
-        overlay.classList.add("show");
-        previews.forEach((preview, i) => {
-            setTimeout(() => preview.classList.add("reveal"), 100 + i * 150);
-        });
-    });
-
-    let dismissed = false;
-    const dismiss = () => {
-        if (dismissed) return;
-        dismissed = true;
-        if (!document.body.contains(overlay)) { processNextCardAnimation(); return; }
-
-        // Fly each card toward its demand card overlay position
-        const demandOverlay = document.getElementById("demandCardsOverlay");
-        const targetCards = demandOverlay ? demandOverlay.querySelectorAll(".demand-card-overlay") : [];
-
-        previews.forEach((preview, i) => {
-            const targetIdx = targetCards.length - cards.length + i;
-            const targetCard = targetCards[targetIdx];
-            if (targetCard) {
-                const targetRect = targetCard.getBoundingClientRect();
-                const previewRect = preview.getBoundingClientRect();
-                const dx = targetRect.left + targetRect.width/2 - (previewRect.left + previewRect.width/2);
-                const dy = targetRect.top + targetRect.height/2 - (previewRect.top + previewRect.height/2);
-                const scale = Math.min(targetRect.width / previewRect.width, targetRect.height / previewRect.height);
-                preview.classList.add("fly-to-position");
-                preview.style.transitionDelay = (i * 0.08) + "s";
-                preview.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
-            } else {
-                preview.style.transition = "transform 0.4s ease, opacity 0.4s ease";
-                preview.style.transform = "scale(0.8)";
-                preview.style.opacity = "0";
-            }
-        });
-
-        overlay.style.transition = "opacity 0.5s ease 0.2s";
-        overlay.style.opacity = "0";
-        setTimeout(() => {
-            if (document.body.contains(overlay)) overlay.remove();
-            setTimeout(() => processNextCardAnimation(), 100);
-        }, 800);
-    };
-
-    // Auto-dismiss after extra time for reading multiple cards, or click to dismiss
-    overlay.addEventListener("click", dismiss, { once: true });
-    setTimeout(dismiss, 2800 + cards.length * 1000);
+    // Use the same fly-to-placeholder animation as single cards
+    showDemandCardFlyAnimation(cards, () => processNextCardAnimation());
 }
 
 // Legacy wrappers for event overlay (used by drawCardForPlayer)
@@ -4454,8 +4487,10 @@ function startGame() {
     if (firstPlayer && firstPlayer.demandCards.length > 0) {
         cardAnimationHoldQueue = true;
         for (const card of firstPlayer.demandCards) {
+            card._animating = true;
             queueCardAnimation(card, false);
         }
+        updateUI(); // Re-render with placeholders visible
         flushCardAnimationQueue();
     }
 }
@@ -4534,6 +4569,10 @@ function deliverGood(cardIndex, demandIndex) {
         return;
     }
 
+    if (card._discarding || card._animating) {
+        return;
+    }
+
     const demand = card.demands[demandIndex];
     const matchingLoadIndex = currentPlayer.loads.findIndex(good => good === demand.good);
     if (matchingLoadIndex === -1) {
@@ -4559,19 +4598,32 @@ function deliverGood(cardIndex, demandIndex) {
     currentPlayer.cash += demand.payout;
     addLog(`${currentPlayer.name} delivered ${demand.good} to ${demand.to} for ECU ${demand.payout}M`);
 
-    // Remove the fulfilled card and its selection, then draw a replacement
-    currentPlayer.demandCards.splice(cardIndex, 1);
-    if (currentPlayer.selectedDemands) {
-        currentPlayer.selectedDemands.splice(cardIndex, 1);
-        currentPlayer.selectedDemands.push(null); // new card has no selection
-    }
-    drawCardForPlayer(currentPlayer);
-
     // Delivery is irreversible (draws a new card), so clear undo history
     gameState.operateHistory = [];
 
+    // Mark card as discarding so updateUI preserves it visually during animation
+    card._discarding = true;
+
+    // Update UI to reflect load/cash changes; card will show as discarding placeholder
     updateUI();
     drawMap();
+
+    // Animate the discard, then draw replacement
+    animateCardDiscard(cardIndex, () => {
+        // Remove the fulfilled card and its selection, then draw a replacement
+        currentPlayer.demandCards.splice(cardIndex, 1);
+        if (currentPlayer.selectedDemands) {
+            currentPlayer.selectedDemands.splice(cardIndex, 1);
+            currentPlayer.selectedDemands.push(null); // new card has no selection
+        }
+
+        // Hold queue so placeholder renders before animation starts (same pattern as discardHand)
+        cardAnimationHoldQueue = true;
+        drawCardForPlayer(currentPlayer);
+        updateUI();
+        drawMap();
+        flushCardAnimationQueue();
+    });
 }
 
 function toggleDemandSelection(cardIdx, demandIdx) {
@@ -4660,6 +4712,10 @@ function discardHand() {
     while (currentPlayer.demandCards.length < 3 && gameState.demandCardDeck.length > 0) {
         drawCardForPlayer(currentPlayer);
     }
+
+    // Render placeholders before animation starts
+    updateUI();
+    drawMap();
 
     // End turn after all card animations finish
     if (cardAnimationQueue.length > 0) {
@@ -5085,6 +5141,19 @@ function updateUI() {
     if (currentPlayer.demandCards.length > 0) {
         const pColor = COLOR_MAP[currentPlayer.color] || "#6a9ad0";
         const cardsHtml = currentPlayer.demandCards.map((card, cardIdx) => {
+            // Show empty placeholder for cards still being animated
+            if (card._animating) {
+                return `<div class="demand-card-overlay placeholder" data-card-idx="${cardIdx}"></div>`;
+            }
+
+            // Card being discarded: render normally but non-interactive (for discard animation)
+            if (card._discarding) {
+                const discardDemandsHtml = buildDemandCardDemandsHtml(card);
+                return `<div class="demand-card-overlay" data-discarding="true" style="pointer-events:none;">
+                    <div class="card-demands-list">${discardDemandsHtml}</div>
+                </div>`;
+            }
+
             const hasDeliverable = card.demands.some(d =>
                 gameState.phase === "operate" && currentCity === d.to && currentPlayer.loads.includes(d.good));
 
@@ -5130,7 +5199,6 @@ function updateUI() {
 
             return `
             <div class="demand-card-overlay${hasDeliverable ? ' deliverable' : ''}">
-                <div class="card-header" style="color:${pColor}; border-bottom-color:${pColor}40;">${currentPlayer.name}</div>
                 <div class="card-demands-list">${demandsHtml}</div>
             </div>`;
         }).join("");
