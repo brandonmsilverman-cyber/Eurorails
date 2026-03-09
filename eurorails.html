@@ -2378,6 +2378,13 @@ function drawCardForPlayer(player) {
     if (card.type === "event") {
         // Handle event card
         const eventCard = card.event;
+
+        // Only one gale can be active at a time — skip if a gale is already in effect
+        if (eventCard.type === "gale" && gameState.activeEvents.some(ae => ae.card.type === "gale")) {
+            addLog(`${eventCard.title} skipped — a gale is already active.`);
+            return drawCardForPlayer(player);
+        }
+
         addLog(`EVENT: ${eventCard.title}`);
 
         // Show event overlay
@@ -2785,6 +2792,10 @@ function getCoastalMilepostsForSeaAreas(areaNames) {
     const result = [];
     for (const mp of gameState.mileposts) {
         if (mp.neighbors.length >= 6) continue; // not coastal
+        // Eastern map edge mileposts aren't truly coastal — in reality
+        // there is more landmass to the east (Asia/Eastern Europe).
+        // Skip them so they don't act as gale origin points.
+        if (mp.x >= 62) continue;
         let nearestArea = null;
         let nearestDist = Infinity;
         for (const [name, points] of Object.entries(SEA_AREAS)) {
