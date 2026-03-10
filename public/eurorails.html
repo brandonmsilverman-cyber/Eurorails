@@ -2542,9 +2542,9 @@ let cardAnimationDoneCallback = null;
 
 let cardAnimationHoldQueue = false;
 
-function queueCardAnimation(cardData, isEvent) {
+function queueCardAnimation(cardData, isEvent, drawnBy) {
     if (suppressCardAnimation && !isEvent) return;
-    cardAnimationQueue.push({ cardData, isEvent });
+    cardAnimationQueue.push({ cardData, isEvent, drawnBy });
     if (!cardAnimationRunning && !cardAnimationHoldQueue) processNextCardAnimation();
 }
 
@@ -2580,8 +2580,8 @@ function processNextCardAnimation() {
         cardAnimationQueue.unshift(batch[0]);
     }
 
-    const { cardData, isEvent } = cardAnimationQueue.shift();
-    showCardDrawAnimation(cardData, isEvent);
+    const { cardData, isEvent, drawnBy } = cardAnimationQueue.shift();
+    showCardDrawAnimation(cardData, isEvent, drawnBy);
 }
 
 function buildDemandCardDemandsHtml(card) {
@@ -2607,9 +2607,10 @@ function buildDemandCardDemandsHtml(card) {
     }).join("");
 }
 
-function showCardDrawAnimation(cardData, isEvent) {
+function showCardDrawAnimation(cardData, isEvent, drawnBy) {
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-    const pColor = COLOR_MAP[currentPlayer.color] || "#4a9eff";
+    const drawingPlayer = drawnBy || currentPlayer;
+    const pColor = COLOR_MAP[drawingPlayer.color] || "#4a9eff";
 
     if (isEvent) {
         // Event cards still use full-screen overlay
@@ -2617,14 +2618,14 @@ function showCardDrawAnimation(cardData, isEvent) {
         overlay.className = "card-draw-overlay";
         const isPersistent = cardData.persistent;
         const expiryText = isPersistent
-            ? `Active until after ${currentPlayer.name}'s next turn`
+            ? `Active until after ${drawingPlayer.name}'s next turn`
             : "Immediate effect (one-time)";
         overlay.innerHTML = `
             <div class="card-draw-preview event">
                 <div class="draw-label">Event Card #${cardData.id}</div>
                 <div class="draw-title">${cardData.title}</div>
                 <div class="draw-event-desc">${cardData.description}</div>
-                <div style="font-size:12px; color:${pColor}; margin: 10px 0 4px; font-weight:bold;">Drawn by ${currentPlayer.name}</div>
+                <div style="font-size:12px; color:${pColor}; margin: 10px 0 4px; font-weight:bold;">Drawn by ${drawingPlayer.name}</div>
                 <div style="font-size:11px; color:#ffcc88; margin: 4px 0 16px; font-style:italic;">${expiryText}</div>
                 <button class="event-dismiss-btn" style="padding:12px 36px; font-size:16px; font-weight:bold; background:#ffaa00; color:#000; border:none; border-radius:6px; cursor:pointer;">Continue</button>
             </div>`;
@@ -2706,8 +2707,10 @@ function showDemandCardFlyAnimation(cards, onComplete) {
     const demandOverlay = document.getElementById("demandCardsOverlay");
     const placeholders = demandOverlay ? demandOverlay.querySelectorAll(".demand-card-overlay.placeholder") : [];
 
+    console.log('[Client] Fly animation:', { placeholders: placeholders.length, cards: cards.length, overlayHTML: demandOverlay?.innerHTML?.substring(0, 200) });
     if (placeholders.length === 0) {
         // No placeholders, just clear flags and finish
+        console.log('[Client] No placeholders found — skipping fly animation');
         cards.forEach(c => delete c._animating);
         updateUI();
         setTimeout(onComplete, 100);
@@ -5395,7 +5398,7 @@ function updateUI() {
             return `<div class="player-info">
                 <div style="display:flex; justify-content:space-between;">
                     <strong style="color:${COLOR_MAP[p.color]};">${p.name}</strong>
-                    <span style="font-size:11px;">ECU ${p.cash}M</span>
+                    <span style="font-size:11px;">ECU ${p.cash}M | ${p.demandCards.length} cards</span>
                 </div>
             </div>`;
         }
@@ -5407,7 +5410,8 @@ function updateUI() {
     // Update demand cards display (rendered as overlay cards on the map)
     const demandOverlay = document.getElementById("demandCardsOverlay");
     const currentCity = getPlayerCity(currentPlayer);
-    if (currentPlayer.demandCards.length > 0) {
+    const hasVisibleCards = currentPlayer.demandCards.length > 0 && !currentPlayer.demandCards[0].hidden;
+    if (hasVisibleCards) {
         const pColor = COLOR_MAP[currentPlayer.color] || "#6a9ad0";
         const cardsHtml = currentPlayer.demandCards.map((card, cardIdx) => {
             // Show empty placeholder for cards still being animated
@@ -6599,6 +6603,8 @@ const socket = io();
 let myPlayerId = null;
 let myRoomCode = null;
 let isHost = false;
+let pendingInitialCardAnimation = false;
+let pendingCardDrawAnimation = false;
 
 const LOBBY_COLORS = ["red", "blue", "green", "yellow", "purple", "orange"];
 const COLOR_DISPLAY = {
@@ -6817,15 +6823,21 @@ socket.on('gameStart', ({ state }) => {
         logDiv.scrollTop = logDiv.scrollHeight;
     }
 
-    const firstPlayer = gameState.players[0];
-    if (firstPlayer && firstPlayer.demandCards.length > 0) {
+    // Only animate initial cards for the first player (it's their turn, overlay will show).
+    // Other players get their animation when it first becomes their turn.
+    const myPlayer = gameState.players.find(p => p.id === myPlayerId);
+    const isFirstPlayer = myPlayer && gameState.players[0] && gameState.players[0].id === myPlayerId;
+    if (isFirstPlayer && myPlayer.demandCards.length > 0) {
+        pendingInitialCardAnimation = false;
         cardAnimationHoldQueue = true;
-        for (const card of firstPlayer.demandCards) {
+        for (const card of myPlayer.demandCards) {
             card._animating = true;
             queueCardAnimation(card, false);
         }
         updateUI();
         flushCardAnimationQueue();
+    } else {
+        pendingInitialCardAnimation = true;
     }
 });
 
@@ -6875,8 +6887,67 @@ socket.on('stateUpdate', ({ state, uiEvent }) => {
         logDiv.scrollTop = logDiv.scrollHeight;
     }
 
+    // Animate event cards drawn during this action
+    if (uiEvent?.drawnEvents && uiEvent.drawnEvents.length > 0) {
+        for (const eventCard of uiEvent.drawnEvents) {
+            queueCardAnimation(eventCard, true, uiEvent.drawnBy);
+        }
+    }
+
+    // Track whether a card animation was triggered (skip final updateUI if so,
+    // since the animation manages its own updateUI lifecycle)
+    let animationTriggered = false;
+
+    // Animate new demand card draw after delivery (only for the delivering player)
+    if (uiEvent?.type === 'delivery') {
+        console.log('[Client] Delivery uiEvent:', { hasNewCard: !!uiEvent.newCard, cardIndex: uiEvent.cardIndex });
+        const myPlayer = gameState.players.find(p => p.id === myPlayerId);
+        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+        console.log('[Client] Delivery check:', {
+            isMyTurn: currentPlayer?.id === myPlayerId,
+            myCards: myPlayer?.demandCards?.length,
+            newCard: uiEvent.newCard
+        });
+        if (myPlayer && currentPlayer && currentPlayer.id === myPlayerId && uiEvent.newCard) {
+            // Find the newly drawn card in our hand (it's the last one added)
+            const newCard = myPlayer.demandCards[myPlayer.demandCards.length - 1];
+            console.log('[Client] New card:', newCard);
+            if (newCard && !newCard.hidden) {
+                newCard._animating = true;
+                queueCardAnimation(newCard, false);
+                animationTriggered = true;
+                console.log('[Client] Delivery animation queued');
+            }
+        }
+    }
+
     if (uiEvent?.type === 'turnChanged' && uiEvent.overlay) {
         showTurnOverlay(uiEvent.overlay.playerName, uiEvent.overlay.playerColor, uiEvent.overlay.phaseLabel);
+    }
+
+    // If I just discarded my hand, defer card animation until my next turn
+    if (uiEvent?.type === 'turnChanged' && uiEvent.drawnBy) {
+        const myPlayer = gameState.players.find(p => p.id === myPlayerId);
+        if (myPlayer && uiEvent.drawnBy.name === myPlayer.name) {
+            pendingCardDrawAnimation = true;
+        }
+    }
+
+    // Animate demand cards the first time it becomes this player's turn
+    // (covers both initial deal and post-discard redraw)
+    if (pendingInitialCardAnimation || pendingCardDrawAnimation) {
+        const myPlayer = gameState.players.find(p => p.id === myPlayerId);
+        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+        if (myPlayer && currentPlayer && currentPlayer.id === myPlayerId && myPlayer.demandCards.length > 0) {
+            pendingInitialCardAnimation = false;
+            pendingCardDrawAnimation = false;
+            cardAnimationHoldQueue = true;
+            for (const card of myPlayer.demandCards) {
+                card._animating = true;
+                queueCardAnimation(card, false);
+            }
+            animationTriggered = true;
+        }
     }
 
     if (uiEvent?.type === 'gameOver') {
@@ -6886,6 +6957,11 @@ socket.on('stateUpdate', ({ state, uiEvent }) => {
 
     updateUI();
     drawMap();
+
+    // Flush card animations after updateUI has rendered placeholders
+    if (animationTriggered) {
+        flushCardAnimationQueue();
+    }
 });
 </script>
 

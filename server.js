@@ -601,8 +601,9 @@ function serverApplyEventEffect(gs, eventCard, logs) {
 
 // Draw one card for a player, processing events along the way.
 // Returns { card, logs } where card is the demand card drawn (or null), logs are event messages.
-function serverDrawCardForPlayer(gs, player, logs) {
+function serverDrawCardForPlayer(gs, player, logs, drawnEvents) {
     if (!logs) logs = [];
+    if (!drawnEvents) drawnEvents = [];
     while (gs.demandCardDeck.length > 0) {
         const card = gs.demandCardDeck.pop();
 
@@ -636,14 +637,15 @@ function serverDrawCardForPlayer(gs, player, logs) {
                 gs.gameLog.push(persistMsg);
             }
 
+            drawnEvents.push(eventCard);
             continue; // Keep drawing until we get a demand card
         }
 
         // Demand card
         player.demandCards.push(card);
-        return { card, logs };
+        return { card, logs, drawnEvents };
     }
-    return { card: null, logs };
+    return { card: null, logs, drawnEvents };
 }
 
 // Server-side endTurn: mutates gameState, returns UI hints for clients
@@ -818,10 +820,21 @@ function createGameState(playerList) {
 }
 
 // Produce a version of gameState safe to send to a specific player.
-// For now, sends full state. Later we'll hide other players' demand cards.
+// Each player sees their own demand cards in full, but only the count for opponents.
 function getStateForPlayer(gameState, playerId) {
     return {
-        players: gameState.players,
+        players: gameState.players.map(p => {
+            if (p.id === playerId) {
+                return p; // Full data for yourself
+            }
+            // Hide demand card contents for other players
+            const { demandCards, selectedDemands, ...rest } = p;
+            return {
+                ...rest,
+                demandCards: demandCards.map(() => ({ hidden: true })),
+                selectedDemands: [null, null, null]
+            };
+        }),
         currentPlayerIndex: gameState.currentPlayerIndex,
         turn: gameState.turn,
         phase: gameState.phase,
@@ -1173,7 +1186,9 @@ io.on('connection', (socket) => {
                     type: 'delivery',
                     logs: allDeliverLogs,
                     cardIndex,
-                    newCard: drawResult.card
+                    newCard: drawResult.card,
+                    drawnEvents: drawResult.drawnEvents,
+                    drawnBy: { name: deliverPlayer.name, color: deliverPlayer.color }
                 });
 
                 callback && callback({ success: true });
@@ -1338,25 +1353,31 @@ io.on('connection', (socket) => {
 
                 // Draw 3 new demand cards (processing events along the way)
                 const drawLogs = [];
+                const allDrawnEvents = [];
                 while (discardPlayer.demandCards.length < 3 && gs.demandCardDeck.length > 0) {
-                    serverDrawCardForPlayer(gs, discardPlayer, drawLogs);
+                    serverDrawCardForPlayer(gs, discardPlayer, drawLogs, allDrawnEvents);
                 }
 
                 // Discard hand also ends the turn
                 const turnResult = serverEndTurn(gs);
                 const allLogs = [discardMsg, ...drawLogs, ...turnResult.logs];
 
+                const drawnBy = { name: discardPlayer.name, color: discardPlayer.color };
                 if (turnResult.gameOver) {
                     broadcastStateUpdate(socket.roomCode, room, {
                         type: 'gameOver',
                         winner: turnResult.winner,
-                        logs: allLogs
+                        logs: allLogs,
+                        drawnEvents: allDrawnEvents,
+                        drawnBy
                     });
                 } else {
                     broadcastStateUpdate(socket.roomCode, room, {
                         type: 'turnChanged',
                         overlay: turnResult.overlay,
-                        logs: allLogs
+                        logs: allLogs,
+                        drawnEvents: allDrawnEvents,
+                        drawnBy
                     });
                 }
 
