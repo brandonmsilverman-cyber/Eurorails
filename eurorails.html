@@ -5687,12 +5687,112 @@ function updateUI() {
 
 
 function endGame(player) {
-    document.getElementById("winnerText").innerHTML = `
-        <strong>${player.name}</strong> wins!<br>
-        Connected cities: ${getConnectedMajorCities(player.color).length}/8<br>
-        Cash: ECU ${player.cash}M
+    showWinCelebration(player);
+}
+
+function showWinCelebration(player) {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0, 0, 0, 0.75);
+        z-index: 2000; pointer-events: auto; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        overflow: hidden;
     `;
-    document.getElementById("endGameModal").classList.add("show");
+
+    const modal = document.createElement("div");
+    modal.style.cssText = `
+        background: #2d2d2d;
+        padding: 40px 60px;
+        border-radius: 12px;
+        text-align: center;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        border: 2px solid #daa520;
+        z-index: 2001;
+        opacity: 0; transition: opacity 0.5s ease;
+    `;
+    modal.innerHTML = `
+        <div style="font-size: 36px; font-weight: bold; margin-bottom: 8px; color: #ffd700;">
+            Congratulations, you win!
+        </div>
+    `;
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    requestAnimationFrame(() => { modal.style.opacity = "1"; });
+
+    // Spawn 250 falling coins
+    const coinCount = 250;
+    const columns = 10;
+    const screenW = window.innerWidth;
+    const screenH = window.innerHeight;
+    const spacing = screenW / (columns + 1);
+
+    for (let i = 0; i < coinCount; i++) {
+        const coin = document.createElement("div");
+        const col = i % columns;
+        const row = Math.floor(i / columns);
+        const x = spacing * (col + 1) + (Math.random() - 0.5) * 30;
+        const startDelay = row * 0.3 + Math.random() * 0.2;
+        const fallDuration = 2.5 + Math.random() * 0.8;
+
+        coin.style.cssText = `
+            position: absolute;
+            left: ${x}px;
+            top: -80px;
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #ffe066, #daa520, #b8860b);
+            border: 3px solid #b8860b;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4), inset 0 -2px 4px rgba(0,0,0,0.2);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: bold; color: #5c3a00;
+            text-align: center; line-height: 1.1;
+            animation: winCoinFall${i} ${fallDuration}s ${startDelay}s ease-in forwards,
+                       coinWobble ${1.5 + Math.random() * 0.5}s ${startDelay}s ease-in-out infinite;
+        `;
+        coin.textContent = "1M ECU";
+
+        const style = document.createElement("style");
+        style.textContent = `
+            @keyframes winCoinFall${i} {
+                0% { top: -80px; opacity: 1; }
+                85% { opacity: 1; }
+                100% { top: ${screenH + 80}px; opacity: 0; }
+            }
+        `;
+        overlay.appendChild(style);
+        overlay.appendChild(coin);
+    }
+
+    const wobbleStyle = document.createElement("style");
+    wobbleStyle.textContent = `
+        @keyframes coinWobble {
+            0% { transform: rotate(-15deg) scale(1); }
+            25% { transform: rotate(10deg) scale(1.05); }
+            50% { transform: rotate(-8deg) scale(1); }
+            75% { transform: rotate(12deg) scale(1.03); }
+            100% { transform: rotate(-15deg) scale(1); }
+        }
+    `;
+    overlay.appendChild(wobbleStyle);
+
+    let dismissed = false;
+    function dismiss() {
+        if (dismissed) return;
+        dismissed = true;
+        clearTimeout(removeTimer);
+        if (document.body.contains(overlay)) overlay.remove();
+        document.getElementById("winnerText").innerHTML = `
+            <strong>${player.name}</strong> wins!<br>
+            Connected cities: ${getConnectedMajorCities(player.color).length}/8<br>
+            Cash: ECU ${player.cash}M
+        `;
+        document.getElementById("endGameModal").classList.add("show");
+    }
+    overlay.addEventListener("click", dismiss);
+
+    const removeTimer = setTimeout(dismiss, 20000);
 }
 
 // ============================================================================
