@@ -1954,7 +1954,7 @@ function findPath(startId, endId, playerColor, mode) {
     mode = mode || "cheapest";
     const dist = {};
     const prev = {};
-    const costTie = {}; // secondary cost tiebreaker for "shortest" mode
+    const costTie = {}; // secondary tiebreaker: real cost for "shortest", segment count for "cheapest"
     const heap = new MinHeap();
 
     // Build sets of edges owned by this player (free) and by other players (blocked)
@@ -2053,7 +2053,8 @@ function findPath(startId, endId, playerColor, mode) {
             // In "cheapest" mode, owned edges are free.
             const edgeWeight = mode === "shortest" ? 1 : realEdgeCost;
             const newDist = dist[current.id] + edgeWeight;
-            const newCostTie = costTie[current.id] + realEdgeCost;
+            // Tiebreaker: in "shortest" mode, prefer lower real cost; in "cheapest" mode, prefer fewer segments
+            const newCostTie = costTie[current.id] + (mode === "shortest" ? realEdgeCost : 1);
 
             if (newDist < dist[neighbor.id] || (newDist === dist[neighbor.id] && newCostTie < costTie[neighbor.id])) {
                 dist[neighbor.id] = newDist;
@@ -2079,7 +2080,7 @@ function findPath(startId, endId, playerColor, mode) {
             const realFerryCost = alreadyOwned ? 0 : fc.cost;
             const edgeWeight = mode === "shortest" ? 1 : realFerryCost;
             const newDist = dist[current.id] + edgeWeight;
-            const newCostTie = costTie[current.id] + realFerryCost;
+            const newCostTie = costTie[current.id] + (mode === "shortest" ? realFerryCost : 1);
 
             if (newDist < dist[neighborId] || (newDist === dist[neighborId] && newCostTie < costTie[neighborId])) {
                 dist[neighborId] = newDist;
