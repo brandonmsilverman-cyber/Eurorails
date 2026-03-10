@@ -6570,10 +6570,15 @@ document.addEventListener("DOMContentLoaded", function() {
                                 gameState.hoverValid = isFullyValid;
                                 gameState.pathPreviewValid = isFullyValid;
                                 // For ferry paths, cutoff is at the port or at movement limit
+                                // Movement ends at the ferry port (player crosses next turn),
+                                // so segments beyond the port should show as red (unreachable this turn)
                                 if (!isFullyValid && currentPlayer.movement > 0) {
                                     gameState.pathPreviewCutoff = getMaxStepsForMovement(hoverTrackResult.path, currentPlayer.movement);
                                     gameState.hoverValid = true;
                                     gameState.pathPreviewValid = true;
+                                } else if (isFullyValid && stepsToPort < hoverTrackResult.path.length - 1) {
+                                    // Can reach the port, but movement ends there — show beyond port as red
+                                    gameState.pathPreviewCutoff = stepsToPort;
                                 } else {
                                     gameState.pathPreviewCutoff = null;
                                 }
