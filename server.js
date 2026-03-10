@@ -1364,6 +1364,35 @@ io.on('connection', (socket) => {
                 break;
             }
 
+            case 'endOperatePhase': {
+                if (playerIndex !== gs.currentPlayerIndex) {
+                    return callback && callback({ success: false, error: 'Not your turn' });
+                }
+                if (gs.phase !== 'operate') {
+                    return callback && callback({ success: false, error: 'Not in operate phase' });
+                }
+
+                gs.phase = 'build';
+                gs.buildingThisTurn = 0;
+                gs.majorCitiesThisTurn = 0;
+                gs.buildHistory = [];
+                gs.operateHistory = [];
+                gs.trackageRightsPaidThisTurn = {};
+                gs.trackageRightsLog = [];
+
+                const phaseMsg = `${gs.players[playerIndex].name} moved to Build Phase`;
+                gs.gameLog.push(phaseMsg);
+                console.log(`Room ${socket.roomCode}: ${phaseMsg}`);
+
+                broadcastStateUpdate(socket.roomCode, room, {
+                    type: 'action',
+                    logs: [phaseMsg]
+                });
+
+                callback && callback({ success: true });
+                break;
+            }
+
             case 'undoBuild': {
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });

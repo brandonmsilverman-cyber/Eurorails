@@ -5201,7 +5201,20 @@ function undoLastOperate() {
 }
 
 function endOperatePhase() {
-    // Show trackage rights transfer modal if any payments were made
+    // In multiplayer, send action to server
+    if (typeof socket !== 'undefined' && myPlayerId) {
+        // Show trackage rights transfer modal before sending
+        showTrackageModal();
+        socket.emit('action', { type: 'endOperatePhase' }, (res) => {
+            if (res && !res.success) {
+                console.warn('[Client] endOperatePhase rejected:', res.error);
+                addLog(res.error);
+            }
+        });
+        return;
+    }
+
+    // Local fallback
     showTrackageModal();
     gameState.phase = "build";
     gameState.selectedMilepost = null;
