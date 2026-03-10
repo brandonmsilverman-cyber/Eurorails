@@ -9,6 +9,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
+const DISCONNECT_GRACE_MS = parseInt(process.env.DISCONNECT_GRACE_MS) || 300000; // 5 minutes
 
 // Redirect root to the game
 app.get('/', (req, res) => {
@@ -655,8 +656,13 @@ function serverDrawCardForPlayer(gs, player, logs, drawnEvents) {
 }
 
 // Server-side endTurn: mutates gameState, returns UI hints for clients
-function serverEndTurn(gs) {
+function serverEndTurn(gs, depth = 0) {
     const result = { logs: [], overlay: null, gameOver: false, winner: null };
+
+    // Guard against infinite recursion (all players abandoned/derailed)
+    if (depth >= gs.players.length) {
+        return result;
+    }
 
     // Check win condition
     const currentPlayer = gs.players[gs.currentPlayerIndex];
@@ -688,8 +694,22 @@ function serverEndTurn(gs) {
     // Move to next player
     gs.currentPlayerIndex = (gs.currentPlayerIndex + 1) % gs.players.length;
 
-    // Check if next player is derailed - skip turn
+    // Check if next player is abandoned - skip turn
     const nextPlayer = gs.players[gs.currentPlayerIndex];
+    if (nextPlayer.abandoned) {
+        const msg = `${nextPlayer.name} is abandoned and their turn is skipped`;
+        result.logs.push(msg);
+        gs.gameLog.push(msg);
+        // Recurse to skip
+        const innerResult = serverEndTurn(gs, depth + 1);
+        result.logs.push(...innerResult.logs);
+        result.overlay = innerResult.overlay;
+        result.gameOver = innerResult.gameOver;
+        result.winner = innerResult.winner;
+        return result;
+    }
+
+    // Check if next player is derailed - skip turn
     if (gs.derailedPlayers[gs.currentPlayerIndex]) {
         gs.derailedPlayers[gs.currentPlayerIndex]--;
         if (gs.derailedPlayers[gs.currentPlayerIndex] === 0) {
@@ -699,7 +719,7 @@ function serverEndTurn(gs) {
         result.logs.push(msg);
         gs.gameLog.push(msg);
         // Recurse to skip
-        const innerResult = serverEndTurn(gs);
+        const innerResult = serverEndTurn(gs, depth + 1);
         result.logs.push(...innerResult.logs);
         result.overlay = innerResult.overlay;
         result.gameOver = innerResult.gameOver;
@@ -903,6 +923,7 @@ io.on('connection', (socket) => {
             hostSessionToken: sessionToken,
             sessionToSocketId: new Map(),
             disconnectedPlayers: new Map(),
+            graceTimers: new Map(),
             gameStarted: false,
             gameState: null,
             maxPlayers: playerCount,
@@ -1793,25 +1814,120 @@ io.on('connection', (socket) => {
 
         const player = room.players.get(socket.id);
         console.log(`${player?.name || 'Unknown'} disconnected from room ${roomCode}`);
-        if (player) {
+
+        if (!player) return;
+
+        // --- Lobby disconnect (game not started) ---
+        if (!room.gameStarted) {
             room.sessionToSocketId.delete(player.sessionToken);
+            room.players.delete(socket.id);
+
+            if (room.players.size === 0) {
+                rooms.delete(roomCode);
+                console.log(`Room ${roomCode} deleted (empty)`);
+            } else {
+                // Transfer host if host left
+                if (room.hostSessionToken === player.sessionToken) {
+                    const nextPlayer = room.players.values().next().value;
+                    room.hostSessionToken = nextPlayer.sessionToken;
+                }
+                io.to(roomCode).emit('roomUpdate', getRoomInfo(roomCode));
+            }
+            broadcastRoomList();
+            return;
         }
+
+        // --- In-game disconnect (game started) ---
+        room.sessionToSocketId.delete(player.sessionToken);
         room.players.delete(socket.id);
 
-        if (room.players.size === 0) {
-            rooms.delete(roomCode);
-            console.log(`Room ${roomCode} deleted (empty)`);
-        } else {
-            // Transfer host if host left
-            if (player && room.hostSessionToken === player.sessionToken) {
-                const nextPlayer = room.players.values().next().value;
-                room.hostSessionToken = nextPlayer.sessionToken;
-            }
-            io.to(roomCode).emit('roomUpdate', getRoomInfo(roomCode));
+        // Move player to disconnectedPlayers keyed by sessionToken
+        room.disconnectedPlayers.set(player.sessionToken, {
+            name: player.name,
+            color: player.color,
+            sessionToken: player.sessionToken,
+        });
+
+        // Log to gameState
+        const disconnectMsg = `${player.name} disconnected`;
+        if (room.gameState) {
+            room.gameState.gameLog.push(disconnectMsg);
         }
+        console.log(`${player.name} disconnected from in-game room ${roomCode} (grace period started)`);
+
+        // Broadcast playerDisconnected to remaining players
+        io.to(roomCode).emit('playerDisconnected', {
+            sessionToken: player.sessionToken,
+            playerName: player.name,
+        });
+
+        // Start grace period timer
+        const graceTimer = setTimeout(() => {
+            expirePlayer(roomCode, player.sessionToken);
+        }, DISCONNECT_GRACE_MS);
+
+        // Store timer so it can be cancelled on reconnection (Step 3)
+        room.graceTimers.set(player.sessionToken, graceTimer);
+
         broadcastRoomList();
     });
 });
+
+// Called when a disconnected player's grace period expires without reconnection
+function expirePlayer(roomCode, sessionToken) {
+    const room = rooms.get(roomCode);
+    if (!room || !room.gameState) return;
+
+    // Clean up grace timer reference
+    if (room.graceTimers) {
+        room.graceTimers.delete(sessionToken);
+    }
+
+    // Remove from disconnectedPlayers
+    const disconnected = room.disconnectedPlayers.get(sessionToken);
+    if (!disconnected) return; // already reconnected or expired
+
+    room.disconnectedPlayers.delete(sessionToken);
+
+    // Mark player as abandoned in gameState
+    const gs = room.gameState;
+    const player = gs.players.find(p => p.id === sessionToken);
+    if (player) {
+        player.abandoned = true;
+        const msg = `${player.name} has been disconnected too long and is now abandoned`;
+        gs.gameLog.push(msg);
+        console.log(`Room ${roomCode}: ${msg}`);
+    }
+
+    // Broadcast playerAbandoned to remaining connected players
+    io.to(roomCode).emit('playerAbandoned', {
+        sessionToken,
+        playerName: disconnected.name,
+    });
+
+    // If ALL players are abandoned, delete the room — no need to advance turns
+    const allAbandoned = gs.players.every(p => p.abandoned);
+    if (allAbandoned) {
+        for (const timer of room.graceTimers.values()) {
+            clearTimeout(timer);
+        }
+        rooms.delete(roomCode);
+        console.log(`Room ${roomCode} deleted (all players abandoned)`);
+        broadcastRoomList();
+        return;
+    }
+
+    // If it's the abandoned player's turn, auto-end it
+    if (player && gs.currentPlayerIndex === gs.players.indexOf(player)) {
+        const result = serverEndTurn(gs);
+        broadcastStateUpdate(roomCode, room, {
+            type: 'turnChanged',
+            overlay: result.overlay,
+            logs: [...result.logs, `${player.name}'s turn was auto-skipped (abandoned)`],
+        });
+    }
+}
+
 
 function getRoomInfo(roomCode) {
     const room = rooms.get(roomCode);
