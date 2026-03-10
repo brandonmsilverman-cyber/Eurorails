@@ -1188,7 +1188,10 @@ io.on('connection', (socket) => {
                     cardIndex,
                     newCard: drawResult.card,
                     drawnEvents: drawResult.drawnEvents,
-                    drawnBy: { name: deliverPlayer.name, color: deliverPlayer.color }
+                    drawnBy: { name: deliverPlayer.name, color: deliverPlayer.color },
+                    deliveryGood: demand.good,
+                    deliveryTo: demand.to,
+                    deliveryPayout: demand.payout
                 });
 
                 callback && callback({ success: true });

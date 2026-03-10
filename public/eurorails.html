@@ -2655,6 +2655,107 @@ function showCardDrawAnimation(cardData, isEvent, drawnBy) {
     showDemandCardFlyAnimation([cardData], () => processNextCardAnimation());
 }
 
+function showDeliveryCelebration(good, destination, payout, onComplete) {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 2000; pointer-events: auto; cursor: pointer; overflow: hidden;
+    `;
+
+    // Text banner
+    const banner = document.createElement("div");
+    banner.style.cssText = `
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        text-align: center; z-index: 2001;
+        font-family: 'Georgia', serif; color: #fff;
+        text-shadow: 0 0 20px rgba(255,200,0,0.8), 0 2px 4px rgba(0,0,0,0.7);
+        opacity: 0; transition: opacity 0.5s ease;
+    `;
+    banner.innerHTML = `
+        <div style="font-size: 28px; font-weight: bold; margin-bottom: 8px;">
+            ${good} delivered to ${destination}
+        </div>
+        <div style="font-size: 36px; font-weight: bold; color: #ffd700;">
+            You earned ${payout}M ECU!
+        </div>
+    `;
+    overlay.appendChild(banner);
+    document.body.appendChild(overlay);
+
+    requestAnimationFrame(() => { banner.style.opacity = "1"; });
+
+    // Spawn coins
+    const coinCount = Math.min(payout, 50); // cap at 50 for sanity
+    const columns = Math.min(coinCount, 10);
+    const screenW = window.innerWidth;
+    const screenH = window.innerHeight;
+    const spacing = screenW / (columns + 1);
+
+    for (let i = 0; i < coinCount; i++) {
+        const coin = document.createElement("div");
+        const col = i % columns;
+        const row = Math.floor(i / columns);
+        const x = spacing * (col + 1) + (Math.random() - 0.5) * 30;
+        const startDelay = row * 0.3 + Math.random() * 0.2;
+        const fallDuration = 2.5 + Math.random() * 0.8;
+
+        coin.style.cssText = `
+            position: absolute;
+            left: ${x}px;
+            top: -60px;
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #ffe066, #daa520, #b8860b);
+            border: 2px solid #b8860b;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4), inset 0 -2px 4px rgba(0,0,0,0.2);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 7px; font-weight: bold; color: #5c3a00;
+            text-align: center; line-height: 1.1;
+            animation: coinFall${i} ${fallDuration}s ${startDelay}s ease-in forwards,
+                       coinSpin ${2 + Math.random()}s ${startDelay}s linear infinite;
+        `;
+        coin.textContent = "1M ECU";
+
+        // Create unique keyframes for each coin's fall path
+        const style = document.createElement("style");
+        style.textContent = `
+            @keyframes coinFall${i} {
+                0% { top: -60px; opacity: 1; }
+                85% { opacity: 1; }
+                100% { top: ${screenH + 60}px; opacity: 0; }
+            }
+        `;
+        overlay.appendChild(style);
+        overlay.appendChild(coin);
+    }
+
+    // Add shared spin keyframe
+    const spinStyle = document.createElement("style");
+    spinStyle.textContent = `
+        @keyframes coinSpin {
+            0% { transform: rotateY(0deg); }
+            100% { transform: rotateY(360deg); }
+        }
+    `;
+    overlay.appendChild(spinStyle);
+
+    // Allow dismissing early with a click anywhere
+    let dismissed = false;
+    function dismiss() {
+        if (dismissed) return;
+        dismissed = true;
+        clearTimeout(fadeTimer);
+        clearTimeout(removeTimer);
+        if (document.body.contains(overlay)) overlay.remove();
+        if (onComplete) onComplete();
+    }
+    overlay.addEventListener("click", dismiss);
+
+    // Fade out banner at 3s, remove overlay at 4s
+    const fadeTimer = setTimeout(() => { banner.style.opacity = "0"; }, 3000);
+    const removeTimer = setTimeout(dismiss, 4000);
+}
+
 function animateCardDiscard(cardIndex, onComplete) {
     const demandOverlay = document.getElementById("demandCardsOverlay");
     const cardEl = demandOverlay ? demandOverlay.querySelector('[data-discarding="true"]') : null;
@@ -4791,18 +4892,20 @@ function deliverGood(cardIndex, demandIndex) {
     updateUI();
     drawMap();
 
-    animateCardDiscard(cardIndex, () => {
-        currentPlayer.demandCards.splice(cardIndex, 1);
-        if (currentPlayer.selectedDemands) {
-            currentPlayer.selectedDemands.splice(cardIndex, 1);
-            currentPlayer.selectedDemands.push(null);
-        }
+    showDeliveryCelebration(demand.good, demand.to, demand.payout, () => {
+        animateCardDiscard(cardIndex, () => {
+            currentPlayer.demandCards.splice(cardIndex, 1);
+            if (currentPlayer.selectedDemands) {
+                currentPlayer.selectedDemands.splice(cardIndex, 1);
+                currentPlayer.selectedDemands.push(null);
+            }
 
-        cardAnimationHoldQueue = true;
-        drawCardForPlayer(currentPlayer);
-        updateUI();
-        drawMap();
-        flushCardAnimationQueue();
+            cardAnimationHoldQueue = true;
+            drawCardForPlayer(currentPlayer);
+            updateUI();
+            drawMap();
+            flushCardAnimationQueue();
+        });
     });
 }
 
@@ -6987,34 +7090,42 @@ socket.on('stateUpdate', ({ state, uiEvent }) => {
     // since the animation manages its own updateUI lifecycle)
     let animationTriggered = false;
 
-    // Animate discard + draw after delivery (only for the delivering player)
+    // Animate delivery celebration, then discard + draw (only for the delivering player)
     if (uiEvent?.type === 'delivery') {
         const myPlayer = gameState.players.find(p => p.id === myPlayerId);
         const currentPlayer = gameState.players[gameState.currentPlayerIndex];
         if (myPlayer && currentPlayer && currentPlayer.id === myPlayerId) {
-            // Set up draw animation for the new card
-            if (uiEvent.newCard) {
-                const newCard = myPlayer.demandCards[myPlayer.demandCards.length - 1];
-                if (newCard && !newCard.hidden) {
-                    newCard._animating = true;
-                    cardAnimationHoldQueue = true;
-                    queueCardAnimation(newCard, false);
-                    animationTriggered = true;
-                }
-            }
+            animationTriggered = true;
 
-            // Animate the discard floater (snapshotted before state was applied)
-            if (discardFloater) {
-                document.body.appendChild(discardFloater);
-                requestAnimationFrame(() => {
-                    discardFloater.style.transition = "transform 0.4s cubic-bezier(0.4, 0, 1, 1), opacity 0.4s ease";
-                    discardFloater.style.transform = "translate(-50%, -50%) scale(0.6) translateY(-60px)";
-                    discardFloater.style.opacity = "0";
-                });
-                setTimeout(() => {
-                    if (document.body.contains(discardFloater)) discardFloater.remove();
-                }, 450);
-            }
+            // Show celebration overlay first; card animations happen after it finishes
+            showDeliveryCelebration(uiEvent.deliveryGood, uiEvent.deliveryTo, uiEvent.deliveryPayout, () => {
+                // Set up draw animation for the new card
+                if (uiEvent.newCard) {
+                    const newCard = myPlayer.demandCards[myPlayer.demandCards.length - 1];
+                    if (newCard && !newCard.hidden) {
+                        newCard._animating = true;
+                        cardAnimationHoldQueue = true;
+                        queueCardAnimation(newCard, false);
+                    }
+                }
+
+                // Animate the discard floater (snapshotted before state was applied)
+                if (discardFloater) {
+                    document.body.appendChild(discardFloater);
+                    requestAnimationFrame(() => {
+                        discardFloater.style.transition = "transform 0.4s cubic-bezier(0.4, 0, 1, 1), opacity 0.4s ease";
+                        discardFloater.style.transform = "translate(-50%, -50%) scale(0.6) translateY(-60px)";
+                        discardFloater.style.opacity = "0";
+                    });
+                    setTimeout(() => {
+                        if (document.body.contains(discardFloater)) discardFloater.remove();
+                    }, 450);
+                }
+
+                updateUI();
+                drawMap();
+                flushCardAnimationQueue();
+            });
         }
     }
 
@@ -7057,7 +7168,8 @@ socket.on('stateUpdate', ({ state, uiEvent }) => {
 
     // Flush card animations after updateUI has rendered placeholders.
     // If the turn overlay is showing for the current player, defer until they click Ready.
-    if (animationTriggered) {
+    // For delivery, card animations are flushed inside the celebration callback.
+    if (animationTriggered && uiEvent?.type !== 'delivery') {
         const myPlayer = gameState.players.find(p => p.id === myPlayerId);
         const currentPlayer = gameState.players[gameState.currentPlayerIndex];
         const isMyTurn = myPlayer && currentPlayer && currentPlayer.id === myPlayerId;
