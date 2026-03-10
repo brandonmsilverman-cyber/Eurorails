@@ -9,13 +9,13 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
-// Serve static files from public/
-app.use(express.static(path.join(__dirname, 'public')));
-
 // Redirect root to the game
 app.get('/', (req, res) => {
     res.redirect('/eurorails.html');
 });
+
+// Serve static files from public/
+app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Game Constants (shared with client) ---
 
