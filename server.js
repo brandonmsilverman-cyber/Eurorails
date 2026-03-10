@@ -197,6 +197,38 @@ function generateDeck() {
     return deck;
 }
 
+const RIVERS = {
+    rhine: [[43,38], [42,36], [41,33], [41,30], [40,28], [39,27]],
+    danube: [[48,38], [51,37], [53,36], [55,37], [57,38], [59,42], [60,44]],
+    loire: [[35,38], [32,39], [29,39], [27.5,40]],
+    elbe: [[50,24], [48,26], [46,24], [44,23]],
+    vistula: [[56,20], [57,24], [58,26], [58,30]],
+    po: [[42,44], [44,43], [46,43], [48,43]],
+    rhone: [[39,43], [38,46], [38,50]],
+    seine: [[33,35], [35,37]],
+    garonne: [[29.5,47], [31,48], [33,50]],
+    douro: [[19,54], [20,54], [22,55]]
+};
+
+function segmentsIntersect(ax1, ay1, ax2, ay2, bx1, by1, bx2, by2) {
+    const dx1 = ax2 - ax1, dy1 = ay2 - ay1;
+    const dx2 = bx2 - bx1, dy2 = by2 - by1;
+    const denom = dx1 * dy2 - dy1 * dx2;
+    if (Math.abs(denom) < 1e-10) return false;
+    const t = ((bx1 - ax1) * dy2 - (by1 - ay1) * dx2) / denom;
+    const u = ((bx1 - ax1) * dy1 - (by1 - ay1) * dx1) / denom;
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+}
+
+function crossesRiver(x1, y1, x2, y2, river) {
+    for (let i = 0; i < river.length - 1; i++) {
+        const [rx1, ry1] = river[i];
+        const [rx2, ry2] = river[i + 1];
+        if (segmentsIntersect(x1, y1, x2, y2, rx1, ry1, rx2, ry2)) return true;
+    }
+    return false;
+}
+
 const TRAIN_TYPES = {
     "Freight": { movement: 9, capacity: 2 },
     "Fast Freight": { movement: 12, capacity: 2 },
@@ -332,16 +364,133 @@ function getCityAtMilepost(gs, milepostId) {
 }
 
 // Draw one card for a player, skipping event cards (events handled separately during turns)
-function serverDrawCardForPlayer(gs, player) {
+// Apply immediate event effects on the server
+function serverApplyEventEffect(gs, eventCard, logs) {
+    if (eventCard.type === "tax") {
+        for (const player of gs.players) {
+            let tax = 0;
+            if (player.cash > 200) tax = 25;
+            else if (player.cash > 150) tax = 20;
+            else if (player.cash > 100) tax = 15;
+            else if (player.cash > 50) tax = 10;
+            if (tax > 0) {
+                const paid = Math.min(tax, player.cash);
+                player.cash -= paid;
+                const msg = `${player.name} pays ECU ${paid}M in taxes`;
+                logs.push(msg);
+                gs.gameLog.push(msg);
+            }
+        }
+    } else if (eventCard.type === "derailment" && gs.eventZones) {
+        const zone = gs.eventZones[eventCard.id];
+        if (zone) {
+            const zoneSet = new Set(zone);
+            for (let pIdx = 0; pIdx < gs.players.length; pIdx++) {
+                const player = gs.players[pIdx];
+                if (player.trainLocation === null) continue;
+                if (zoneSet.has(player.trainLocation)) {
+                    gs.derailedPlayers[pIdx] = 1;
+                    if (player.loads.length > 0) player.loads.pop();
+                    const msg = `${player.name} derailed! Loses next turn and 1 load.`;
+                    logs.push(msg);
+                    gs.gameLog.push(msg);
+                }
+            }
+        }
+    } else if (eventCard.type === "flood" && gs.milepostPositions) {
+        const river = RIVERS[eventCard.river];
+        if (river) {
+            const tracksToRemove = [];
+            for (let i = 0; i < gs.tracks.length; i++) {
+                const track = gs.tracks[i];
+                const mp1 = gs.milepostPositions[track.from];
+                const mp2 = gs.milepostPositions[track.to];
+                if (mp1 && mp2 && crossesRiver(mp1.x, mp1.y, mp2.x, mp2.y, river)) {
+                    tracksToRemove.push(i);
+                    gs.destroyedRiverTracks.push(track);
+                }
+            }
+            for (let i = tracksToRemove.length - 1; i >= 0; i--) {
+                gs.tracks.splice(tracksToRemove[i], 1);
+            }
+            const msg = `${eventCard.title}: ${tracksToRemove.length} track segments destroyed.`;
+            logs.push(msg);
+            gs.gameLog.push(msg);
+        }
+    } else if (eventCard.type === "gale" && eventCard.id === 138 && gs.eventZones) {
+        const zone = gs.eventZones[138];
+        if (zone) {
+            const zoneSet = new Set(zone);
+            for (let pIdx = 0; pIdx < gs.players.length; pIdx++) {
+                const player = gs.players[pIdx];
+                if (player.trainLocation === null) continue;
+                // Check if at a ferry port
+                let atFerryPort = false;
+                if (gs.ferryConnections) {
+                    for (const fc of gs.ferryConnections) {
+                        if (fc.fromId === player.trainLocation || fc.toId === player.trainLocation) {
+                            atFerryPort = true;
+                            break;
+                        }
+                    }
+                }
+                if (atFerryPort && zoneSet.has(player.trainLocation)) {
+                    gs.derailedPlayers[pIdx] = 1;
+                    if (player.loads.length > 0) player.loads.pop();
+                    const msg = `${player.name} caught in gale at ferry port! Loses next turn and 1 load.`;
+                    logs.push(msg);
+                    gs.gameLog.push(msg);
+                }
+            }
+        }
+    }
+}
+
+// Draw one card for a player, processing events along the way.
+// Returns { card, logs } where card is the demand card drawn (or null), logs are event messages.
+function serverDrawCardForPlayer(gs, player, logs) {
+    if (!logs) logs = [];
     while (gs.demandCardDeck.length > 0) {
         const card = gs.demandCardDeck.pop();
-        if (card.type === "demand") {
-            player.demandCards.push(card);
-            return card;
+
+        if (card.type === "event") {
+            const eventCard = card.event;
+
+            // Only one gale active at a time
+            if (eventCard.type === "gale" && gs.activeEvents.some(ae => ae.card.type === "gale")) {
+                const msg = `${eventCard.title} skipped — a gale is already active.`;
+                logs.push(msg);
+                gs.gameLog.push(msg);
+                continue;
+            }
+
+            const eventMsg = `EVENT: ${eventCard.title}`;
+            logs.push(eventMsg);
+            gs.gameLog.push(eventMsg);
+
+            // Apply immediate effects
+            serverApplyEventEffect(gs, eventCard, logs);
+
+            // Persistent events stay active
+            if (eventCard.persistent) {
+                gs.activeEvents.push({
+                    card: eventCard,
+                    drawingPlayerIndex: gs.currentPlayerIndex,
+                    drawingPlayerTurnEnded: false
+                });
+                const persistMsg = `Event active for one full round`;
+                logs.push(persistMsg);
+                gs.gameLog.push(persistMsg);
+            }
+
+            continue; // Keep drawing until we get a demand card
         }
-        // Event cards drawn during replacement are discarded
+
+        // Demand card
+        player.demandCards.push(card);
+        return { card, logs };
     }
-    return null;
+    return { card: null, logs };
 }
 
 // Server-side endTurn: mutates gameState, returns UI hints for clients
@@ -653,7 +802,7 @@ io.on('connection', (socket) => {
     });
 
     // Client sends cityToMilepost mapping after generating hex grid
-    socket.on('setCityToMilepost', ({ cityToMilepost, ferryConnections, coastDistance }) => {
+    socket.on('setCityToMilepost', ({ cityToMilepost, ferryConnections, coastDistance, milepostPositions, eventZones }) => {
         const room = rooms.get(socket.roomCode);
         if (!room || !room.gameState) return;
         // Only set once (first client to send it)
@@ -661,7 +810,9 @@ io.on('connection', (socket) => {
             room.gameState.cityToMilepost = cityToMilepost;
             room.gameState.ferryConnections = ferryConnections;
             room.gameState.coastDistance = coastDistance || {};
-            console.log(`Room ${socket.roomCode}: received cityToMilepost (${Object.keys(cityToMilepost).length} cities), coastDistance (${Object.keys(room.gameState.coastDistance).length} entries)`);
+            room.gameState.milepostPositions = milepostPositions || {};
+            room.gameState.eventZones = eventZones || {};
+            console.log(`Room ${socket.roomCode}: received cityToMilepost (${Object.keys(cityToMilepost).length} cities), milepostPositions (${Object.keys(room.gameState.milepostPositions).length}), eventZones (${Object.keys(room.gameState.eventZones).length})`);
         }
     });
 
@@ -853,13 +1004,14 @@ io.on('connection', (socket) => {
                     deliverPlayer.selectedDemands.splice(cardIndex, 1);
                     deliverPlayer.selectedDemands.push(null);
                 }
-                const newCard = serverDrawCardForPlayer(gs, deliverPlayer);
+                const drawResult = serverDrawCardForPlayer(gs, deliverPlayer, []);
+                const allDeliverLogs = [deliverMsg, ...drawResult.logs];
 
                 broadcastStateUpdate(socket.roomCode, room, {
                     type: 'delivery',
-                    logs: [deliverMsg],
+                    logs: allDeliverLogs,
                     cardIndex,
-                    newCard
+                    newCard: drawResult.card
                 });
 
                 callback && callback({ success: true });
@@ -1013,14 +1165,15 @@ io.on('connection', (socket) => {
                 gs.gameLog.push(discardMsg);
                 console.log(`Room ${socket.roomCode}: ${discardMsg}`);
 
-                // Draw 3 new demand cards
+                // Draw 3 new demand cards (processing events along the way)
+                const drawLogs = [];
                 while (discardPlayer.demandCards.length < 3 && gs.demandCardDeck.length > 0) {
-                    serverDrawCardForPlayer(gs, discardPlayer);
+                    serverDrawCardForPlayer(gs, discardPlayer, drawLogs);
                 }
 
                 // Discard hand also ends the turn
                 const turnResult = serverEndTurn(gs);
-                const allLogs = [discardMsg, ...turnResult.logs];
+                const allLogs = [discardMsg, ...drawLogs, ...turnResult.logs];
 
                 if (turnResult.gameOver) {
                     broadcastStateUpdate(socket.roomCode, room, {
