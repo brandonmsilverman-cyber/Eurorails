@@ -4802,6 +4802,18 @@ function dropGood(loadIndex) {
 }
 
 function upgradeTo(trainType) {
+    // In multiplayer, send action to server
+    if (typeof socket !== 'undefined' && myPlayerId) {
+        socket.emit('action', { type: 'upgradeTo', trainType }, (res) => {
+            if (res && !res.success) {
+                console.warn('[Client] upgradeTo rejected:', res.error);
+                addLog(res.error);
+            }
+        });
+        return;
+    }
+
+    // Local fallback
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     const upgradeCost = 20;
 
@@ -4810,7 +4822,6 @@ function upgradeTo(trainType) {
         return;
     }
 
-    // Upgrade costs 20M which is the entire turn build budget
     if (gameState.buildingThisTurn > 0) {
         addLog("Cannot upgrade — you've already built track this turn!");
         return;
@@ -4818,7 +4829,7 @@ function upgradeTo(trainType) {
 
     currentPlayer.cash -= upgradeCost;
     currentPlayer.trainType = trainType;
-    gameState.buildingThisTurn = 20; // consumes entire build budget
+    gameState.buildingThisTurn = 20;
     addLog(`${currentPlayer.name} upgraded train to ${trainType} (ECU 20M)`);
     updateUI();
     drawMap();
@@ -5132,6 +5143,21 @@ function endOperatePhase() {
 }
 
 function endTurn() {
+    // In multiplayer, send action to server; server will broadcast stateUpdate
+    if (typeof socket !== 'undefined' && myPlayerId) {
+        socket.emit('action', { type: 'endTurn' }, (res) => {
+            if (res && !res.success) {
+                console.warn('[Client] endTurn rejected:', res.error);
+            }
+        });
+        return;
+    }
+
+    // Local single-player fallback (should not reach here in multiplayer)
+    endTurnLocal();
+}
+
+function endTurnLocal() {
     // Check win condition first
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     if (checkWinCondition(currentPlayer)) {
@@ -5177,7 +5203,7 @@ function endTurn() {
         }
         addLog(`${nextPlayer.name} is derailed and loses this turn!`);
         // Skip this player's turn by recursing
-        endTurn();
+        endTurnLocal();
         return;
     }
 
@@ -6551,38 +6577,31 @@ socket.on('roomUpdate', (info) => {
     renderLobbyRoom(info);
 });
 
-socket.on('gameStart', ({ players }) => {
-    // Wire multiplayer players into the existing startGame flow
-    gameState.players = [];
-    gameState.demandCardDeck = generateDeck();
+socket.on('gameStart', ({ state }) => {
+    // Apply server-authoritative state
+    gameState.players = state.players;
+    gameState.currentPlayerIndex = state.currentPlayerIndex;
+    gameState.turn = state.turn;
+    gameState.phase = state.phase;
+    gameState.buildingPhaseCount = state.buildingPhaseCount;
+    gameState.initialBuildingRounds = state.initialBuildingRounds;
+    gameState.gameStarted = state.gameStarted;
+    gameState.tracks = state.tracks;
+    gameState.ferryOwnership = state.ferryOwnership;
+    gameState.gameLog = state.gameLog;
+    gameState.buildingThisTurn = state.buildingThisTurn;
+    gameState.majorCitiesThisTurn = state.majorCitiesThisTurn;
+    gameState.halfSpeedActive = state.halfSpeedActive;
+    gameState.activeEvents = state.activeEvents;
+    gameState.derailedPlayers = state.derailedPlayers;
+    gameState.destroyedRiverTracks = state.destroyedRiverTracks;
+    gameState.trackageRightsPaidThisTurn = state.trackageRightsPaidThisTurn;
+    gameState.trackageRightsLog = state.trackageRightsLog;
 
-    for (const p of players) {
-        const demandCards = [];
-        while (demandCards.length < 3 && gameState.demandCardDeck.length > 0) {
-            const card = gameState.demandCardDeck.pop();
-            if (card.type === "demand") {
-                demandCards.push(card);
-            }
-        }
-
-        gameState.players.push({
-            id: p.id,
-            name: p.name,
-            color: p.color,
-            cash: 50,
-            trainType: "Freight",
-            trainLocation: null,
-            demandCards: demandCards,
-            loads: [],
-            movement: 0,
-            ferryState: null,
-            selectedDemands: [null, null, null]
-        });
-    }
-
-    gameState.gameStarted = true;
-    gameState.phase = "initialBuilding";
-    gameState.buildingPhaseCount = 0;
+    console.log('[Client] Received game state from server');
+    console.log('[Client] Players:', gameState.players.map(p => p.name + '/' + p.color));
+    console.log('[Client] Deck remaining:', state.demandCardDeck, 'cards');
+    console.log('[Client] My demand cards:', gameState.players.find(p => p.id === myPlayerId)?.demandCards.length);
 
     document.getElementById("setupScreen").classList.add("hidden");
     document.getElementById("gameContainer").style.display = "flex";
@@ -6592,10 +6611,25 @@ socket.on('gameStart', ({ players }) => {
     gameState.canvas = document.getElementById("gameCanvas");
     gameState.ctx = gameState.canvas.getContext("2d");
 
+    // Send cityToMilepost to server so it can do win condition checks
+    socket.emit('setCityToMilepost', {
+        cityToMilepost: gameState.cityToMilepost,
+        ferryConnections: gameState.ferryConnections.map(fc => ({
+            fromId: fc.fromId, toId: fc.toId, cost: fc.cost
+        }))
+    });
+
     drawMap();
     updateUI();
 
-    addLog("Game started! Initial building phase (2 rounds)");
+    // Render server log entries to the DOM (already in gameState.gameLog)
+    const logDiv = document.getElementById("gameLog");
+    if (logDiv) {
+        for (const msg of state.gameLog) {
+            logDiv.innerHTML += `<div class="log-entry">${msg}</div>`;
+        }
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
 
     const firstPlayer = gameState.players[0];
     if (firstPlayer && firstPlayer.demandCards.length > 0) {
@@ -6607,6 +6641,65 @@ socket.on('gameStart', ({ players }) => {
         updateUI();
         flushCardAnimationQueue();
     }
+});
+
+// Apply server state update to local gameState
+function applyServerState(state) {
+    gameState.players = state.players;
+    gameState.currentPlayerIndex = state.currentPlayerIndex;
+    gameState.turn = state.turn;
+    gameState.phase = state.phase;
+    gameState.buildingPhaseCount = state.buildingPhaseCount;
+    gameState.initialBuildingRounds = state.initialBuildingRounds;
+    gameState.gameStarted = state.gameStarted;
+    gameState.tracks = state.tracks;
+    gameState.ferryOwnership = state.ferryOwnership;
+    gameState.gameLog = state.gameLog;
+    gameState.buildingThisTurn = state.buildingThisTurn;
+    gameState.majorCitiesThisTurn = state.majorCitiesThisTurn;
+    gameState.halfSpeedActive = state.halfSpeedActive;
+    gameState.activeEvents = state.activeEvents;
+    gameState.derailedPlayers = state.derailedPlayers;
+    gameState.destroyedRiverTracks = state.destroyedRiverTracks;
+    gameState.trackageRightsPaidThisTurn = state.trackageRightsPaidThisTurn;
+    gameState.trackageRightsLog = state.trackageRightsLog;
+
+    // Clear client-only UI state on turn change
+    gameState.selectedMilepost = null;
+    gameState.pathPreview = null;
+    gameState.pathPreviewCost = null;
+    gameState.pathPreviewCutoff = null;
+    gameState.pathPreviewForeignSegments = [];
+    gameState.buildPathMode = "cheapest";
+    gameState.useTrackageRights = false;
+    gameState.buildHistory = [];
+    gameState.operateHistory = [];
+}
+
+socket.on('stateUpdate', ({ state, uiEvent }) => {
+    console.log('[Client] State update received:', uiEvent?.type);
+    applyServerState(state);
+
+    // Render new log entries to the DOM
+    const logDiv = document.getElementById("gameLog");
+    if (logDiv && uiEvent?.logs) {
+        for (const msg of uiEvent.logs) {
+            logDiv.innerHTML += `<div class="log-entry">${msg}</div>`;
+        }
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    if (uiEvent?.type === 'turnChanged' && uiEvent.overlay) {
+        showTurnOverlay(uiEvent.overlay.playerName, uiEvent.overlay.playerColor, uiEvent.overlay.phaseLabel);
+    }
+
+    if (uiEvent?.type === 'gameOver') {
+        const winner = gameState.players.find(p => p.name === uiEvent.winner);
+        if (winner) endGame(winner);
+    }
+
+    updateUI();
+    drawMap();
 });
 </script>
 

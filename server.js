@@ -1,0 +1,738 @@
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+const PORT = process.env.PORT || 3000;
+
+// Serve static files from public/
+app.use(express.static(path.join(__dirname, 'public')));
+
+// --- Game Constants (shared with client) ---
+
+const MAJOR_CITIES = ["Amsterdam", "Berlin", "Essen", "London", "Madrid", "Milano", "Paris", "Vienna"];
+
+const CITIES = {
+    "Aberdeen": { x: 29.5, y: 13, type: "small", goods: ["Fish", "Oil"], country: "UK" },
+    "Glasgow": { x: 27, y: 17, type: "small", goods: ["Sheep"], country: "UK" },
+    "Belfast": { x: 22, y: 19, type: "small", goods: ["Potatoes"], country: "UK" },
+    "Edinburgh": { x: 29, y: 17.5, type: "small", goods: [], country: "UK" },
+    "Newcastle": { x: 30.5, y: 21, type: "small", goods: ["Oil"], country: "UK" },
+    "Dublin": { x: 19, y: 24, type: "small", goods: ["Beer"], country: "Ireland" },
+    "Manchester": { x: 30, y: 25, type: "medium", goods: ["Cars"], country: "UK" },
+    "Birmingham": { x: 30.5, y: 28, type: "medium", goods: ["China", "Iron", "Steel", "Chocolate"], country: "UK" },
+    "Cardiff": { x: 28, y: 30, type: "small", goods: ["Coal", "Hops"], country: "UK" },
+    "London": { x: 33, y: 30, type: "major", goods: ["Tourists"], country: "UK" },
+    "Cork": { x: 17, y: 29, type: "small", goods: ["Cork", "Sheep"], country: "Ireland" },
+    "Oslo": { x: 44, y: 8, type: "medium", goods: ["Fish", "Oil", "Wood"], country: "Norway" },
+    "Stockholm": { x: 53, y: 9, type: "medium", goods: ["Iron"], country: "Sweden" },
+    "Göteborg": { x: 47, y: 13, type: "medium", goods: ["Machinery"], country: "Sweden" },
+    "København": { x: 48, y: 19, type: "medium", goods: ["Cheese"], country: "Denmark" },
+    "Århus": { x: 45.5, y: 17, type: "small", goods: ["Cheese"], country: "Denmark" },
+    "Amsterdam": { x: 38, y: 27, type: "major", goods: ["Flowers", "Cheese"], country: "Netherlands" },
+    "Antwerpen": { x: 38.5, y: 30, type: "medium", goods: ["Imports"], country: "Belgium" },
+    "Bruxelles": { x: 38, y: 32, type: "medium", goods: ["Chocolate"], country: "Belgium" },
+    "Luxembourg": { x: 40, y: 35, type: "small", goods: ["Steel"], country: "Luxembourg" },
+    "Hamburg": { x: 44, y: 22, type: "medium", goods: ["Imports"], country: "Germany" },
+    "Bremen": { x: 43, y: 24, type: "medium", goods: ["Machinery"], country: "Germany" },
+    "Essen": { x: 41, y: 28, type: "major", goods: ["Steel", "Tourists"], country: "Germany" },
+    "Berlin": { x: 50.5, y: 24, type: "major", goods: [], country: "Germany" },
+    "Leipzig": { x: 49, y: 28, type: "medium", goods: ["China"], country: "Germany" },
+    "Frankfurt": { x: 43, y: 32, type: "medium", goods: ["Beer", "Wine"], country: "Germany" },
+    "Stuttgart": { x: 44, y: 36, type: "medium", goods: ["Cars"], country: "Germany" },
+    "München": { x: 47, y: 38, type: "medium", goods: ["Beer", "Cars"], country: "Germany" },
+    "Szczecin": { x: 52, y: 22, type: "small", goods: ["Potatoes"], country: "Poland" },
+    "Warszawa": { x: 58, y: 26, type: "medium", goods: ["Ham"], country: "Poland" },
+    "Lodz": { x: 57, y: 28, type: "small", goods: ["Potatoes"], country: "Poland" },
+    "Wroclaw": { x: 54, y: 30, type: "medium", goods: ["Coal", "Copper"], country: "Poland" },
+    "Krakow": { x: 57, y: 33, type: "medium", goods: ["Coal"], country: "Poland" },
+    "Kaliningrad": { x: 58, y: 19, type: "small", goods: ["Iron"], country: "Russia" },
+    "Paris": { x: 35, y: 37, type: "major", goods: [], country: "France" },
+    "Nantes": { x: 28, y: 39, type: "medium", goods: ["Cattle", "Machinery"], country: "France" },
+    "Bordeaux": { x: 30, y: 46, type: "medium", goods: ["Wine"], country: "France" },
+    "Toulouse": { x: 33, y: 50, type: "medium", goods: ["Wheat"], country: "France" },
+    "Lyon": { x: 38.5, y: 44, type: "medium", goods: ["Wheat"], country: "France" },
+    "Marseille": { x: 38, y: 51, type: "medium", goods: ["Bauxite"], country: "France" },
+    "Bilbao": { x: 27, y: 50, type: "small", goods: ["Sheep"], country: "Spain" },
+    "Porto": { x: 19, y: 54, type: "medium", goods: ["Fish", "Wine", "Cork"], country: "Portugal" },
+    "Madrid": { x: 24, y: 58, type: "major", goods: [], country: "Spain" },
+    "Lisboa": { x: 17, y: 61, type: "medium", goods: ["Cork"], country: "Portugal" },
+    "Sevilla": { x: 21, y: 66, type: "medium", goods: ["Cork", "Oranges"], country: "Spain" },
+    "Valencia": { x: 28, y: 62, type: "medium", goods: ["Oranges"], country: "Spain" },
+    "Barcelona": { x: 33, y: 56, type: "medium", goods: ["Machinery"], country: "Spain" },
+    "Bern": { x: 41, y: 39, type: "medium", goods: ["Cattle", "Cheese"], country: "Switzerland" },
+    "Zürich": { x: 43, y: 38, type: "medium", goods: ["Chocolate"], country: "Switzerland" },
+    "Vienna": { x: 53, y: 36, type: "major", goods: ["Wine"], country: "Austria" },
+    "Milano": { x: 43.5, y: 43, type: "major", goods: [], country: "Italy" },
+    "Torino": { x: 41, y: 44, type: "medium", goods: ["Cars"], country: "Italy" },
+    "Venezia": { x: 48, y: 43, type: "medium", goods: [], country: "Italy" },
+    "Firenze": { x: 46, y: 48, type: "medium", goods: ["Marble"], country: "Italy" },
+    "Roma": { x: 48, y: 54, type: "medium", goods: [], country: "Italy" },
+    "Napoli": { x: 51, y: 58, type: "medium", goods: ["Tobacco"], country: "Italy" },
+    "Zagreb": { x: 53, y: 42, type: "medium", goods: ["Labor"], country: "Croatia" },
+    "Budapest": { x: 57, y: 38, type: "medium", goods: ["Bauxite"], country: "Hungary" },
+    "Sarajevo": { x: 56, y: 47, type: "small", goods: ["Labor", "Wood"], country: "Bosnia" },
+    "Beograd": { x: 59, y: 44, type: "medium", goods: ["Copper", "Labor", "Oil"], country: "Serbia" },
+    "Praha": { x: 51, y: 31, type: "medium", goods: ["Beer"], country: "Czech" }
+};
+
+const GOODS = {
+    "Bauxite": { chips: 3, sources: ["Budapest", "Marseille"] },
+    "Beer": { chips: 4, sources: ["Dublin", "Frankfurt", "München", "Praha"] },
+    "Cars": { chips: 3, sources: ["Manchester", "München", "Stuttgart", "Torino"] },
+    "Cattle": { chips: 3, sources: ["Bern", "Nantes"] },
+    "Cheese": { chips: 4, sources: ["Århus", "Bern", "Amsterdam", "København"] },
+    "China": { chips: 3, sources: ["Birmingham", "Leipzig"] },
+    "Chocolate": { chips: 3, sources: ["Bruxelles", "Zürich"] },
+    "Coal": { chips: 3, sources: ["Cardiff", "Krakow", "Wroclaw"] },
+    "Copper": { chips: 3, sources: ["Beograd", "Wroclaw"] },
+    "Cork": { chips: 3, sources: ["Cork", "Lisboa", "Sevilla"] },
+    "Fish": { chips: 3, sources: ["Aberdeen", "Oslo", "Porto"] },
+    "Flowers": { chips: 3, sources: ["Amsterdam"] },
+    "Ham": { chips: 3, sources: ["Warszawa"] },
+    "Hops": { chips: 3, sources: ["Cardiff"] },
+    "Imports": { chips: 3, sources: ["Antwerpen", "Hamburg"] },
+    "Iron": { chips: 3, sources: ["Birmingham", "Kaliningrad", "Stockholm"] },
+    "Labor": { chips: 3, sources: ["Beograd", "Sarajevo", "Zagreb"] },
+    "Machinery": { chips: 4, sources: ["Barcelona", "Bremen", "Göteborg", "Nantes"] },
+    "Marble": { chips: 3, sources: ["Firenze"] },
+    "Oil": { chips: 4, sources: ["Aberdeen", "Beograd", "Newcastle", "Oslo"] },
+    "Oranges": { chips: 3, sources: ["Sevilla", "Valencia"] },
+    "Potatoes": { chips: 3, sources: ["Belfast", "Lodz", "Szczecin"] },
+    "Sheep": { chips: 3, sources: ["Bilbao", "Cork", "Glasgow"] },
+    "Steel": { chips: 3, sources: ["Birmingham", "Luxembourg", "Essen"] },
+    "Tobacco": { chips: 3, sources: ["Napoli"] },
+    "Tourists": { chips: 3, sources: ["London", "Essen"] },
+    "Wheat": { chips: 3, sources: ["Lyon", "Toulouse"] },
+    "Wine": { chips: 4, sources: ["Bordeaux", "Frankfurt", "Porto", "Vienna"] },
+    "Wood": { chips: 3, sources: ["Oslo", "Sarajevo"] }
+};
+
+const EVENT_CARDS = [
+    { id: 121, type: "strike", title: "Strike! Coast Restriction", description: "No train may pick up or deliver any load to any city more than 3 mileposts from any coast.", effect: "coastal", radius: 3, persistent: true },
+    { id: 122, type: "strike", title: "Strike! Coastal Blockade", description: "No train may pick up or deliver any load at any city within 2 mileposts of any coast.", effect: "coastal_close", radius: 2, persistent: true },
+    { id: 123, type: "strike", title: "Strike! Rail Closure", description: "No train may move on the drawing player's rail lines. Drawing player may not build track.", effect: "player_strike", persistent: true },
+    { id: 124, type: "tax", title: "Excess Profit Tax!", description: "All players pay tax based on cash on hand: 0-50M=0, 51-100M=10M, 101-150M=15M, 151-200M=20M, 201+=25M", persistent: false },
+    { id: 125, type: "derailment", title: "Derailment! Milano/Roma", description: "All trains within 3 mileposts of Milano/Roma lose 1 turn and 1 load.", cities: ["Milano", "Roma"], radius: 3, persistent: false },
+    { id: 126, type: "derailment", title: "Derailment! London/Birmingham", description: "All trains within 2 mileposts of London/Birmingham lose 1 turn and 1 load.", cities: ["London", "Birmingham"], radius: 2, persistent: false },
+    { id: 127, type: "derailment", title: "Derailment! Paris/Marseille", description: "All trains within 3 mileposts of Paris/Marseille lose 1 turn and 1 load.", cities: ["Paris", "Marseille"], radius: 3, persistent: false },
+    { id: 128, type: "derailment", title: "Derailment! Berlin/Hamburg", description: "All trains within 3 mileposts of Berlin/Hamburg lose 1 turn and 1 load.", cities: ["Berlin", "Hamburg"], radius: 3, persistent: false },
+    { id: 129, type: "derailment", title: "Derailment! Madrid/Barcelona", description: "All trains within 3 mileposts of Madrid/Barcelona lose 1 turn and 1 load.", cities: ["Madrid", "Barcelona"], radius: 3, persistent: false },
+    { id: 130, type: "snow", title: "Snow! Torino", description: "All trains within 6 mileposts of Torino move at half rate.", city: "Torino", radius: 6, blockedTerrain: ["alpine"], persistent: true },
+    { id: 131, type: "snow", title: "Snow! München", description: "All trains within 5 mileposts of München move at half rate.", city: "München", radius: 5, blockedTerrain: ["mountain"], persistent: true },
+    { id: 132, type: "snow", title: "Snow! Praha", description: "All trains within 4 mileposts of Praha move at half rate.", city: "Praha", radius: 4, blockedTerrain: ["mountain"], persistent: true },
+    { id: 133, type: "snow", title: "Snow! Krakow", description: "All trains within 6 mileposts of Krakow move at half rate.", city: "Krakow", radius: 6, blockedTerrain: ["mountain"], persistent: true },
+    { id: 134, type: "fog", title: "Fog! Frankfurt", description: "All trains within 4 mileposts of Frankfurt move at half rate.", city: "Frankfurt", radius: 4, persistent: true },
+    { id: 135, type: "flood", title: "Flood! Rhine River", description: "No train may cross the Rhine River. All rail lines over this river are destroyed.", river: "rhine", persistent: false },
+    { id: 136, type: "flood", title: "Flood! Danube River", description: "No train may cross the Danube River. All rail lines over this river are destroyed.", river: "danube", persistent: false },
+    { id: 137, type: "flood", title: "Flood! Loire River", description: "No train may cross the Loire River. All rail lines over this river are destroyed.", river: "loire", persistent: false },
+    { id: 138, type: "gale", title: "Gale! North Sea & English Channel", description: "All trains within 6 mileposts of the North Sea or English Channel move at half rate.", seaAreas: ["North Sea", "English Channel"], radius: 6, persistent: true },
+    { id: 139, type: "gale", title: "Gale! Baltic & Mediterranean", description: "All trains within 4 mileposts of the Baltic Sea or Mediterranean move at half rate.", seaAreas: ["Baltic Sea", "Mediterranean"], radius: 4, persistent: true },
+    { id: 140, type: "gale", title: "Gale! Atlantic & Bay of Biscay", description: "All trains within 4 mileposts of the Atlantic or Bay of Biscay move at half rate.", seaAreas: ["Atlantic", "Bay of Biscay"], radius: 4, persistent: true }
+];
+
+// --- Deck Generation ---
+
+function calculatePayout(distance, chips) {
+    const rarityBonus = chips === 3 ? 1.12 : 1.0;
+    return Math.round((5 + Math.pow(distance, 1.3) * 0.25) * rarityBonus);
+}
+
+const DEMAND_MIN_DISTANCE = 5;
+
+function generateDeck() {
+    const deck = [];
+    const goodsKeys = Object.keys(GOODS);
+    const cities = Object.keys(CITIES);
+    const MIN_SPREAD = 15;
+
+    function generateDemand() {
+        const good = goodsKeys[Math.floor(Math.random() * goodsKeys.length)];
+        const sources = GOODS[good].sources;
+        const from = sources[Math.floor(Math.random() * sources.length)];
+        let to, minDist, attempts = 0;
+        do {
+            to = cities[Math.floor(Math.random() * cities.length)];
+            if (to === from || sources.includes(to)) { attempts++; continue; }
+            const toCoords = CITIES[to];
+            minDist = sources.reduce((min, src) => {
+                if (src === to) return min;
+                const sc = CITIES[src];
+                return Math.min(min, Math.hypot(sc.x - toCoords.x, sc.y - toCoords.y));
+            }, Infinity);
+            attempts++;
+        } while ((to === from || sources.includes(to) || minDist < DEMAND_MIN_DISTANCE) && attempts < 50);
+        const payout = calculatePayout(minDist, GOODS[good].chips);
+        return { good, from, to, payout, minDist };
+    }
+
+    for (let i = 0; i < 120; i++) {
+        let demands, cardAttempts = 0;
+        do {
+            demands = [generateDemand(), generateDemand(), generateDemand()];
+            const dists = demands.map(d => d.minDist);
+            const spread = Math.max(...dists) - Math.min(...dists);
+            cardAttempts++;
+        } while (demands.some(d => d.minDist === Infinity) ||
+                 (Math.max(...demands.map(d => d.minDist)) - Math.min(...demands.map(d => d.minDist))) < MIN_SPREAD &&
+                 cardAttempts < 30);
+        demands.sort((a, b) => a.minDist - b.minDist);
+        deck.push({ type: "demand", demands: demands.map(({ minDist, ...rest }) => rest), fulfilled: [false, false, false] });
+    }
+
+    for (let i = 0; i < EVENT_CARDS.length; i++) {
+        deck.push({ type: "event", event: EVENT_CARDS[i] });
+    }
+
+    // Shuffle
+    for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+
+    return deck;
+}
+
+const TRAIN_TYPES = {
+    "Freight": { movement: 9, capacity: 2 },
+    "Fast Freight": { movement: 12, capacity: 2 },
+    "Heavy Freight": { movement: 9, capacity: 3 },
+    "Superfreight": { movement: 12, capacity: 3 }
+};
+
+// --- Game Logic Helpers ---
+
+function getFerryKey(id1, id2) {
+    return id1 < id2 ? id1 + "|" + id2 : id2 + "|" + id1;
+}
+
+function playerOwnsFerry(ferryOwnership, ferryKey, playerColor) {
+    const owners = ferryOwnership[ferryKey] || [];
+    return owners.includes(playerColor);
+}
+
+function getPlayerOwnedMileposts(gs, playerColor) {
+    const owned = new Set();
+    for (const track of gs.tracks) {
+        if (track.color === playerColor) {
+            owned.add(track.from);
+            owned.add(track.to);
+        }
+    }
+    if (gs.ferryConnections) {
+        for (const fc of gs.ferryConnections) {
+            const ferryKey = getFerryKey(fc.fromId, fc.toId);
+            if (playerOwnsFerry(gs.ferryOwnership, ferryKey, playerColor)) {
+                owned.add(fc.fromId);
+                owned.add(fc.toId);
+            }
+        }
+    }
+    return owned;
+}
+
+function getConnectedMajorCities(gs, playerColor) {
+    if (!gs.cityToMilepost) return [];
+
+    const cityMileposts = {};
+    for (const cityName in gs.cityToMilepost) {
+        const mpId = gs.cityToMilepost[cityName];
+        if (!cityMileposts[mpId]) cityMileposts[mpId] = [];
+        cityMileposts[mpId].push(cityName);
+    }
+
+    const owned = getPlayerOwnedMileposts(gs, playerColor);
+    const visited = new Set();
+    const connectedCities = [];
+
+    function bfs(startId) {
+        const queue = [startId];
+        const localVisited = new Set([startId]);
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+            if (cityMileposts[current]) {
+                for (const cityName of cityMileposts[current]) {
+                    if (MAJOR_CITIES.includes(cityName) && !connectedCities.includes(cityName)) {
+                        connectedCities.push(cityName);
+                    }
+                }
+            }
+            for (const track of gs.tracks) {
+                if (track.color === playerColor) {
+                    let neighbor = null;
+                    if (track.from === current) neighbor = track.to;
+                    else if (track.to === current) neighbor = track.from;
+                    if (neighbor && !localVisited.has(neighbor)) {
+                        localVisited.add(neighbor);
+                        queue.push(neighbor);
+                    }
+                }
+            }
+        }
+    }
+
+    for (const mpId of owned) {
+        if (!visited.has(mpId)) {
+            bfs(mpId);
+            visited.add(mpId);
+        }
+    }
+
+    return connectedCities;
+}
+
+function checkWinCondition(gs, player) {
+    if (player.cash < 250) return false;
+    if (!gs.cityToMilepost) return false; // Can't check without hex grid data
+    const connectedCities = getConnectedMajorCities(gs, player.color);
+    return connectedCities.length >= 7;
+}
+
+// Server-side endTurn: mutates gameState, returns UI hints for clients
+function serverEndTurn(gs) {
+    const result = { logs: [], overlay: null, gameOver: false, winner: null };
+
+    // Check win condition
+    const currentPlayer = gs.players[gs.currentPlayerIndex];
+    if (checkWinCondition(gs, currentPlayer)) {
+        result.gameOver = true;
+        result.winner = currentPlayer.name;
+        result.logs.push(`${currentPlayer.name} wins the game!`);
+        gs.gameLog.push(`${currentPlayer.name} wins the game!`);
+        return result;
+    }
+
+    // Expire persistent events
+    gs.activeEvents = gs.activeEvents.filter(ae => {
+        if (gs.currentPlayerIndex === ae.drawingPlayerIndex) {
+            if (ae.drawingPlayerTurnEnded) return false;
+            ae.drawingPlayerTurnEnded = true;
+        }
+        return true;
+    });
+
+    // Reset building limits for new player
+    gs.buildingThisTurn = 0;
+    gs.majorCitiesThisTurn = 0;
+    gs.trackageRightsPaidThisTurn = {};
+    gs.trackageRightsLog = [];
+
+    // Move to next player
+    gs.currentPlayerIndex = (gs.currentPlayerIndex + 1) % gs.players.length;
+
+    // Check if next player is derailed - skip turn
+    const nextPlayer = gs.players[gs.currentPlayerIndex];
+    if (gs.derailedPlayers[gs.currentPlayerIndex]) {
+        gs.derailedPlayers[gs.currentPlayerIndex]--;
+        if (gs.derailedPlayers[gs.currentPlayerIndex] === 0) {
+            delete gs.derailedPlayers[gs.currentPlayerIndex];
+        }
+        const msg = `${nextPlayer.name} is derailed and loses this turn!`;
+        result.logs.push(msg);
+        gs.gameLog.push(msg);
+        // Recurse to skip
+        const innerResult = serverEndTurn(gs);
+        result.logs.push(...innerResult.logs);
+        result.overlay = innerResult.overlay;
+        result.gameOver = innerResult.gameOver;
+        result.winner = innerResult.winner;
+        return result;
+    }
+
+    // Determine next phase
+    if (gs.phase === "initialBuilding") {
+        if (gs.currentPlayerIndex === 0) {
+            gs.buildingPhaseCount++;
+            if (gs.buildingPhaseCount >= gs.initialBuildingRounds) {
+                gs.phase = "operate";
+                for (const player of gs.players) {
+                    player.movement = TRAIN_TYPES[player.trainType].movement;
+                }
+            }
+        }
+        if (gs.phase === "initialBuilding") {
+            const msg = `Initial building round ${gs.buildingPhaseCount + 1}: ${gs.players[gs.currentPlayerIndex].name}`;
+            result.logs.push(msg);
+            gs.gameLog.push(msg);
+        }
+    } else if (gs.phase === "build" || gs.phase === "operate") {
+        gs.phase = "operate";
+        const player = gs.players[gs.currentPlayerIndex];
+        const baseMovement = TRAIN_TYPES[player.trainType].movement;
+
+        if (player.ferryState) {
+            // TODO: gale ferry blocking check requires hex grid (isMilepostInEventZone)
+            // For now, always allow ferry crossing
+            const destPortId = player.ferryState.destPortId;
+            player.trainLocation = destPortId;
+            player.ferryState = null;
+            player.movement = Math.floor(baseMovement / 2);
+            const msg = `${player.name} crosses ferry. Half speed: ${player.movement}mp`;
+            result.logs.push(msg);
+            gs.gameLog.push(msg);
+        } else {
+            player.movement = baseMovement;
+            const msg = `${player.name} starts Operate Phase (${player.movement}mp)`;
+            result.logs.push(msg);
+            gs.gameLog.push(msg);
+        }
+    }
+
+    gs.turn++;
+
+    // Build overlay info for clients
+    let phaseLabel = "";
+    if (gs.phase === "initialBuilding") phaseLabel = "Initial Building Phase";
+    else if (gs.phase === "operate") phaseLabel = "Operate Phase";
+    else phaseLabel = "Build Phase";
+
+    result.overlay = {
+        playerName: gs.players[gs.currentPlayerIndex].name,
+        playerColor: gs.players[gs.currentPlayerIndex].color,
+        phaseLabel
+    };
+
+    return result;
+}
+
+// Broadcast state update to all players in a room
+function broadcastStateUpdate(roomCode, room, uiEvent) {
+    for (const [socketId] of room.players) {
+        const state = getStateForPlayer(room.gameState, socketId);
+        io.to(socketId).emit('stateUpdate', { state, uiEvent });
+    }
+}
+
+// --- Game State Initialization ---
+
+function createGameState(playerList) {
+    const deck = generateDeck();
+
+    const players = playerList.map(p => {
+        const demandCards = [];
+        while (demandCards.length < 3 && deck.length > 0) {
+            const card = deck.pop();
+            if (card.type === "demand") {
+                demandCards.push(card);
+            }
+            // Event cards drawn during initial deal are discarded
+        }
+        return {
+            id: p.id,
+            name: p.name,
+            color: p.color,
+            cash: 50,
+            trainType: "Freight",
+            trainLocation: null,
+            demandCards: demandCards,
+            loads: [],
+            movement: 0,
+            ferryState: null,
+            selectedDemands: [null, null, null]
+        };
+    });
+
+    return {
+        players,
+        currentPlayerIndex: 0,
+        turn: 1,
+        phase: "initialBuilding",
+        buildingPhaseCount: 0,
+        initialBuildingRounds: 2,
+        gameStarted: true,
+        demandCardDeck: deck,
+        tracks: [],
+        ferryOwnership: {},
+        gameLog: ["Game started! Initial building phase (2 rounds)"],
+        buildingThisTurn: 0,
+        majorCitiesThisTurn: 0,
+        halfSpeedActive: {},
+        activeEvents: [],
+        derailedPlayers: {},
+        destroyedRiverTracks: [],
+        trackageRightsPaidThisTurn: {},
+        trackageRightsLog: []
+    };
+}
+
+// Produce a version of gameState safe to send to a specific player.
+// For now, sends full state. Later we'll hide other players' demand cards.
+function getStateForPlayer(gameState, playerId) {
+    return {
+        players: gameState.players,
+        currentPlayerIndex: gameState.currentPlayerIndex,
+        turn: gameState.turn,
+        phase: gameState.phase,
+        buildingPhaseCount: gameState.buildingPhaseCount,
+        initialBuildingRounds: gameState.initialBuildingRounds,
+        gameStarted: gameState.gameStarted,
+        demandCardDeck: gameState.demandCardDeck.length, // only send count, not contents
+        tracks: gameState.tracks,
+        ferryOwnership: gameState.ferryOwnership,
+        gameLog: gameState.gameLog,
+        buildingThisTurn: gameState.buildingThisTurn,
+        majorCitiesThisTurn: gameState.majorCitiesThisTurn,
+        halfSpeedActive: gameState.halfSpeedActive,
+        activeEvents: gameState.activeEvents,
+        derailedPlayers: gameState.derailedPlayers,
+        destroyedRiverTracks: gameState.destroyedRiverTracks,
+        trackageRightsPaidThisTurn: gameState.trackageRightsPaidThisTurn,
+        trackageRightsLog: gameState.trackageRightsLog
+    };
+}
+
+// --- Room Management ---
+
+const rooms = new Map(); // roomCode -> { players: Map<socketId, {name, color}>, hostId, gameStarted, gameState }
+
+function generateRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars (0/O, 1/I)
+    let code = '';
+    for (let i = 0; i < 4; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return code;
+}
+
+function getUniqueRoomCode() {
+    let code;
+    do {
+        code = generateRoomCode();
+    } while (rooms.has(code));
+    return code;
+}
+
+// --- Socket.IO ---
+
+io.on('connection', (socket) => {
+    console.log(`Player connected: ${socket.id}`);
+
+    socket.on('createRoom', ({ playerName }, callback) => {
+        const roomCode = getUniqueRoomCode();
+        const room = {
+            players: new Map(),
+            hostId: socket.id,
+            gameStarted: false,
+            gameState: null
+        };
+        room.players.set(socket.id, { name: playerName, color: null });
+        rooms.set(roomCode, room);
+        socket.join(roomCode);
+        socket.roomCode = roomCode;
+
+        console.log(`Room ${roomCode} created by ${playerName}`);
+        callback({ success: true, roomCode, playerId: socket.id });
+        io.to(roomCode).emit('roomUpdate', getRoomInfo(roomCode));
+    });
+
+    socket.on('joinRoom', ({ roomCode, playerName }, callback) => {
+        const code = roomCode.toUpperCase();
+        const room = rooms.get(code);
+
+        if (!room) {
+            return callback({ success: false, error: 'Room not found' });
+        }
+        if (room.gameStarted) {
+            return callback({ success: false, error: 'Game already in progress' });
+        }
+        if (room.players.size >= 6) {
+            return callback({ success: false, error: 'Room is full' });
+        }
+
+        room.players.set(socket.id, { name: playerName, color: null });
+        socket.join(code);
+        socket.roomCode = code;
+
+        console.log(`${playerName} joined room ${code}`);
+        callback({ success: true, roomCode: code, playerId: socket.id });
+        io.to(code).emit('roomUpdate', getRoomInfo(code));
+    });
+
+    socket.on('selectColor', ({ color }) => {
+        const room = rooms.get(socket.roomCode);
+        if (!room) return;
+
+        const player = room.players.get(socket.id);
+        if (!player) return;
+
+        // Check if color is already taken by another player
+        for (const [id, p] of room.players) {
+            if (id !== socket.id && p.color === color) return;
+        }
+
+        player.color = color;
+        io.to(socket.roomCode).emit('roomUpdate', getRoomInfo(socket.roomCode));
+    });
+
+    socket.on('startGame', () => {
+        const room = rooms.get(socket.roomCode);
+        if (!room) return;
+        if (socket.id !== room.hostId) return;
+        if (room.players.size < 1) return;
+
+        // Check all players have selected colors
+        for (const [, p] of room.players) {
+            if (!p.color) return;
+        }
+
+        room.gameStarted = true;
+
+        // Build player list in join order
+        const playerList = [];
+        for (const [id, p] of room.players) {
+            playerList.push({ id, name: p.name, color: p.color });
+        }
+
+        // Create authoritative game state on server
+        room.gameState = createGameState(playerList);
+
+        console.log(`Game started in room ${socket.roomCode} with ${playerList.length} players`);
+        console.log(`Deck has ${room.gameState.demandCardDeck.length} cards remaining`);
+
+        // Send each player the game state
+        for (const [socketId] of room.players) {
+            const state = getStateForPlayer(room.gameState, socketId);
+            io.to(socketId).emit('gameStart', { state });
+        }
+    });
+
+    // Client sends cityToMilepost mapping after generating hex grid
+    socket.on('setCityToMilepost', ({ cityToMilepost, ferryConnections }) => {
+        const room = rooms.get(socket.roomCode);
+        if (!room || !room.gameState) return;
+        // Only set once (first client to send it)
+        if (!room.gameState.cityToMilepost) {
+            room.gameState.cityToMilepost = cityToMilepost;
+            room.gameState.ferryConnections = ferryConnections;
+            console.log(`Room ${socket.roomCode}: received cityToMilepost (${Object.keys(cityToMilepost).length} cities)`);
+        }
+    });
+
+    // Game action handler
+    socket.on('action', (action, callback) => {
+        const room = rooms.get(socket.roomCode);
+        if (!room || !room.gameState) {
+            return callback && callback({ success: false, error: 'No active game' });
+        }
+
+        const gs = room.gameState;
+        const playerIndex = gs.players.findIndex(p => p.id === socket.id);
+        if (playerIndex === -1) {
+            return callback && callback({ success: false, error: 'Not a player in this game' });
+        }
+
+        switch (action.type) {
+            case 'endTurn': {
+                // Validate: must be current player's turn
+                if (playerIndex !== gs.currentPlayerIndex) {
+                    return callback && callback({ success: false, error: 'Not your turn' });
+                }
+
+                console.log(`Room ${socket.roomCode}: ${gs.players[playerIndex].name} ends turn`);
+                const result = serverEndTurn(gs);
+
+                if (result.gameOver) {
+                    broadcastStateUpdate(socket.roomCode, room, {
+                        type: 'gameOver',
+                        winner: result.winner,
+                        logs: result.logs
+                    });
+                } else {
+                    broadcastStateUpdate(socket.roomCode, room, {
+                        type: 'turnChanged',
+                        overlay: result.overlay,
+                        logs: result.logs
+                    });
+                }
+
+                callback && callback({ success: true });
+                break;
+            }
+
+            case 'upgradeTo': {
+                if (playerIndex !== gs.currentPlayerIndex) {
+                    return callback && callback({ success: false, error: 'Not your turn' });
+                }
+
+                const trainType = action.trainType;
+                if (!TRAIN_TYPES[trainType]) {
+                    return callback && callback({ success: false, error: 'Invalid train type' });
+                }
+
+                const upgradePlayer = gs.players[playerIndex];
+                const upgradeCost = 20;
+
+                if (upgradePlayer.cash < upgradeCost) {
+                    return callback && callback({ success: false, error: 'Not enough cash' });
+                }
+                if (gs.buildingThisTurn > 0) {
+                    return callback && callback({ success: false, error: 'Already built track this turn' });
+                }
+
+                upgradePlayer.cash -= upgradeCost;
+                upgradePlayer.trainType = trainType;
+                gs.buildingThisTurn = 20;
+
+                const upgradeMsg = `${upgradePlayer.name} upgraded train to ${trainType} (ECU 20M)`;
+                gs.gameLog.push(upgradeMsg);
+                console.log(`Room ${socket.roomCode}: ${upgradeMsg}`);
+
+                broadcastStateUpdate(socket.roomCode, room, {
+                    type: 'action',
+                    logs: [upgradeMsg]
+                });
+
+                callback && callback({ success: true });
+                break;
+            }
+
+            default:
+                callback && callback({ success: false, error: `Unknown action: ${action.type}` });
+        }
+    });
+
+    socket.on('disconnect', () => {
+        const roomCode = socket.roomCode;
+        if (!roomCode) return;
+
+        const room = rooms.get(roomCode);
+        if (!room) return;
+
+        const player = room.players.get(socket.id);
+        console.log(`${player?.name || 'Unknown'} disconnected from room ${roomCode}`);
+        room.players.delete(socket.id);
+
+        if (room.players.size === 0) {
+            rooms.delete(roomCode);
+            console.log(`Room ${roomCode} deleted (empty)`);
+        } else {
+            // Transfer host if host left
+            if (room.hostId === socket.id) {
+                room.hostId = room.players.keys().next().value;
+            }
+            io.to(roomCode).emit('roomUpdate', getRoomInfo(roomCode));
+        }
+    });
+});
+
+function getRoomInfo(roomCode) {
+    const room = rooms.get(roomCode);
+    if (!room) return null;
+
+    const players = [];
+    for (const [id, p] of room.players) {
+        players.push({ id, name: p.name, color: p.color, isHost: id === room.hostId });
+    }
+    return { roomCode, players, hostId: room.hostId };
+}
+
+// --- Start Server ---
+
+server.listen(PORT, () => {
+    console.log(`Eurorails server running at http://localhost:${PORT}`);
+});
