@@ -10,6 +10,7 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 const DISCONNECT_GRACE_MS = parseInt(process.env.DISCONNECT_GRACE_MS) || 300000; // 5 minutes
+const TURN_TIMER_MS = parseInt(process.env.TURN_TIMER_MS) || 90000; // 90 seconds
 
 // Redirect root to the game
 app.get('/', (req, res) => {
@@ -924,6 +925,7 @@ io.on('connection', (socket) => {
             sessionToSocketId: new Map(),
             disconnectedPlayers: new Map(),
             graceTimers: new Map(),
+            turnTimers: new Map(),
             gameStarted: false,
             gameState: null,
             maxPlayers: playerCount,
@@ -1805,6 +1807,76 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Step 3: Rejoin a game in progress using session token
+    socket.on('rejoinGame', ({ roomCode, sessionToken }, callback) => {
+        if (typeof roomCode !== 'string' || typeof sessionToken !== 'string') {
+            return callback && callback({ success: false, error: 'Invalid parameters' });
+        }
+        const code = roomCode.toUpperCase();
+        const room = rooms.get(code);
+
+        if (!room) {
+            return callback && callback({ success: false, error: 'Room not found' });
+        }
+        if (!room.gameStarted) {
+            return callback && callback({ success: false, error: 'Game not started' });
+        }
+
+        // Must be in disconnectedPlayers
+        const disconnected = room.disconnectedPlayers.get(sessionToken);
+        if (!disconnected) {
+            return callback && callback({ success: false, error: 'No disconnected player with that session' });
+        }
+
+        // Cancel grace timer
+        const graceTimer = room.graceTimers.get(sessionToken);
+        if (graceTimer) {
+            clearTimeout(graceTimer);
+            room.graceTimers.delete(sessionToken);
+        }
+
+        // Cancel turn timer
+        const turnTimer = room.turnTimers.get(sessionToken);
+        if (turnTimer) {
+            clearTimeout(turnTimer);
+            room.turnTimers.delete(sessionToken);
+            io.to(code).emit('turnTimerCancelled', {
+                playerName: disconnected.name,
+                sessionToken,
+            });
+        }
+
+        // Broadcast to other players BEFORE this socket joins the room
+        // so the reconnecting player doesn't receive their own event
+        io.to(code).emit('playerReconnected', {
+            sessionToken,
+            playerName: disconnected.name,
+        });
+
+        // Move back from disconnectedPlayers to active players
+        room.disconnectedPlayers.delete(sessionToken);
+        room.players.set(socket.id, {
+            name: disconnected.name,
+            color: disconnected.color,
+            sessionToken,
+        });
+        room.sessionToSocketId.set(sessionToken, socket.id);
+        socket.join(code);
+        socket.roomCode = code;
+
+        const reconnectMsg = `${disconnected.name} reconnected`;
+        if (room.gameState) {
+            room.gameState.gameLog.push(reconnectMsg);
+        }
+        console.log(`Room ${code}: ${reconnectMsg}`);
+
+        // Send current state to reconnected player
+        const state = getStateForPlayer(room.gameState, sessionToken);
+        callback && callback({ success: true, state });
+
+        broadcastRoomList();
+    });
+
     socket.on('disconnect', () => {
         const roomCode = socket.roomCode;
         if (!roomCode) return;
@@ -1866,12 +1938,78 @@ io.on('connection', (socket) => {
             expirePlayer(roomCode, player.sessionToken);
         }, DISCONNECT_GRACE_MS);
 
-        // Store timer so it can be cancelled on reconnection (Step 3)
+        // Store timer so it can be cancelled on reconnection
         room.graceTimers.set(player.sessionToken, graceTimer);
+
+        // Step 3: If it's this player's turn, start a turn timer
+        if (room.gameState) {
+            const gs = room.gameState;
+            const playerIndex = gs.players.findIndex(p => p.id === player.sessionToken);
+            if (playerIndex === gs.currentPlayerIndex) {
+                io.to(roomCode).emit('turnTimerStarted', {
+                    playerName: player.name,
+                    expiresIn: TURN_TIMER_MS,
+                });
+
+                const turnTimer = setTimeout(() => {
+                    expireTurn(roomCode, player.sessionToken);
+                }, TURN_TIMER_MS);
+
+                room.turnTimers.set(player.sessionToken, turnTimer);
+            }
+        }
 
         broadcastRoomList();
     });
 });
+
+// Called when a disconnected current player's turn timer expires
+function expireTurn(roomCode, sessionToken) {
+    const room = rooms.get(roomCode);
+    if (!room || !room.gameState) return;
+
+    // Clean up turn timer reference
+    room.turnTimers.delete(sessionToken);
+
+    const gs = room.gameState;
+    const playerIndex = gs.players.findIndex(p => p.id === sessionToken);
+
+    // Only act if it's still this player's turn (they haven't reconnected and ended turn)
+    if (playerIndex !== gs.currentPlayerIndex) return;
+
+    const player = gs.players[playerIndex];
+    const msg = `${player.name}'s turn was auto-skipped (disconnected)`;
+    gs.gameLog.push(msg);
+    console.log(`Room ${roomCode}: ${msg}`);
+
+    io.to(roomCode).emit('turnTimerExpired', {
+        playerName: player.name,
+    });
+
+    const result = serverEndTurn(gs);
+    broadcastStateUpdate(roomCode, room, {
+        type: 'turnChanged',
+        overlay: result.overlay,
+        logs: [...result.logs, msg],
+    });
+
+    // If the new current player is also disconnected, start a turn timer for them too
+    // But only if there's at least one connected player (avoid pointless cycling)
+    const hasConnectedPlayer = gs.players.some(p =>
+        !p.abandoned && !room.disconnectedPlayers.has(p.id)
+    );
+    const newCurrentPlayer = gs.players[gs.currentPlayerIndex];
+    if (hasConnectedPlayer && newCurrentPlayer && room.disconnectedPlayers.has(newCurrentPlayer.id)) {
+        io.to(roomCode).emit('turnTimerStarted', {
+            playerName: newCurrentPlayer.name,
+            expiresIn: TURN_TIMER_MS,
+        });
+        const nextTurnTimer = setTimeout(() => {
+            expireTurn(roomCode, newCurrentPlayer.id);
+        }, TURN_TIMER_MS);
+        room.turnTimers.set(newCurrentPlayer.id, nextTurnTimer);
+    }
+}
 
 // Called when a disconnected player's grace period expires without reconnection
 function expirePlayer(roomCode, sessionToken) {
@@ -1909,6 +2047,9 @@ function expirePlayer(roomCode, sessionToken) {
     const allAbandoned = gs.players.every(p => p.abandoned);
     if (allAbandoned) {
         for (const timer of room.graceTimers.values()) {
+            clearTimeout(timer);
+        }
+        for (const timer of room.turnTimers.values()) {
             clearTimeout(timer);
         }
         rooms.delete(roomCode);
