@@ -5945,6 +5945,11 @@ document.addEventListener("DOMContentLoaded", function() {
 
         const currentPlayer = gameState.players[gameState.currentPlayerIndex];
 
+        // In multiplayer, only allow interaction on your own turn
+        const isMultiplayer = typeof socket !== 'undefined' && myPlayerId;
+        const isMyTurn = !isMultiplayer || (currentPlayer && currentPlayer.id === myPlayerId);
+        if (!isMyTurn) return;
+
         // OPERATE PHASE: Click on mileposts to move train
         if (gameState.phase === "operate") {
             // Deploy train if not deployed yet
@@ -6405,13 +6410,24 @@ document.addEventListener("DOMContentLoaded", function() {
 
         const prev = gameState.hoveredMilepost;
         const prevValid = gameState.hoverValid;
+
+        // In multiplayer, don't show path previews or hover validity when it's not your turn
+        const isMultiplayer = typeof socket !== 'undefined' && myPlayerId;
+        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+        const isMyTurn = !isMultiplayer || (currentPlayer && currentPlayer.id === myPlayerId);
+
         if (nearest && nearestDist < 1) {
             gameState.hoveredMilepost = nearest;
-            canvas.style.cursor = "pointer";
+            canvas.style.cursor = isMyTurn ? "pointer" : "default";
 
-            // Compute hover validity
-            const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-            if (gameState.phase === "initialBuilding" || gameState.phase === "build") {
+            // Compute hover validity (only for current turn player)
+            if (!isMyTurn) {
+                gameState.hoverValid = null;
+                gameState.pathPreview = null;
+                gameState.pathPreviewCost = null;
+                gameState.pathPreviewCutoff = null;
+                gameState.pathPreviewForeignSegments = [];
+            } else if (gameState.phase === "initialBuilding" || gameState.phase === "build") {
                 if (gameState.selectedMilepost) {
                     // Building second click: check if path is affordable (fully or partially)
                     let pathResult = findPath(gameState.selectedMilepost.id, nearest.id, currentPlayer.color, gameState.buildPathMode);
