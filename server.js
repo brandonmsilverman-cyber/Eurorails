@@ -1768,7 +1768,7 @@ function getRoomInfo(roomCode) {
     for (const [id, p] of room.players) {
         players.push({ id, name: p.name, color: p.color, isHost: id === room.hostId });
     }
-    return { roomCode, players, hostId: room.hostId, maxPlayers: room.maxPlayers };
+    return { roomCode, players, hostId: room.hostId, maxPlayers: room.maxPlayers, password: room.password || null };
 }
 
 function getRoomList() {
