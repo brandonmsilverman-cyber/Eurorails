@@ -937,6 +937,32 @@ io.on('connection', (socket) => {
         broadcastRoomList();
     });
 
+    socket.on('leaveRoom', () => {
+        const roomCode = socket.roomCode;
+        if (!roomCode) return;
+
+        const room = rooms.get(roomCode);
+        if (!room) return;
+        if (room.gameStarted) return; // can't leave mid-game
+
+        const player = room.players.get(socket.id);
+        console.log(`${player?.name || 'Unknown'} left room ${roomCode}`);
+        room.players.delete(socket.id);
+        socket.leave(roomCode);
+        socket.roomCode = null;
+
+        if (room.players.size === 0) {
+            rooms.delete(roomCode);
+            console.log(`Room ${roomCode} deleted (empty)`);
+        } else {
+            if (room.hostId === socket.id) {
+                room.hostId = room.players.keys().next().value;
+            }
+            io.to(roomCode).emit('roomUpdate', getRoomInfo(roomCode));
+        }
+        broadcastRoomList();
+    });
+
     socket.on('selectColor', ({ color }) => {
         const room = rooms.get(socket.roomCode);
         if (!room) return;

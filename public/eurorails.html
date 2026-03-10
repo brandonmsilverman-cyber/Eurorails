@@ -922,7 +922,8 @@
             <div id="lobbyColorPicker" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
         </div>
 
-        <div class="setup-buttons">
+        <div class="setup-buttons" style="gap: 10px;">
+            <button onclick="leaveRoom()" style="padding: 12px 24px; font-size: 14px; background: #555; border: 1px solid #666;">Back</button>
             <button id="lobbyStartBtn" onclick="lobbyStartGame()" style="display: none; padding: 12px 40px; font-size: 16px;">Start Game</button>
             <div id="lobbyWaiting" style="color: #888; font-size: 14px;">Waiting for host to start...</div>
         </div>
@@ -6875,6 +6876,16 @@ function escapeHtml(str) {
 function showLobbyRoom() {
     document.getElementById("lobbyJoinCreate").style.display = "none";
     document.getElementById("lobbyRoom").style.display = "block";
+}
+
+function leaveRoom() {
+    socket.emit('leaveRoom');
+    myRoomCode = null;
+    myPlayerId = null;
+    isHost = false;
+    document.getElementById("lobbyRoom").style.display = "none";
+    document.getElementById("lobbyJoinCreate").style.display = "block";
+    document.getElementById("lobbyError").textContent = "";
 }
 
 function selectLobbyColor(color) {
