@@ -2413,6 +2413,21 @@ function getConnectedMajorCities(playerColor) {
                     }
                 }
             }
+
+            // Also traverse ferry connections owned by this player
+            for (let fc of gameState.ferryConnections) {
+                const ferryKey = getFerryKey(fc.fromId, fc.toId);
+                if (playerOwnsFerry(ferryKey, playerColor)) {
+                    let neighbor = null;
+                    if (fc.fromId === current) neighbor = fc.toId;
+                    else if (fc.toId === current) neighbor = fc.fromId;
+
+                    if (neighbor && !local_visited.has(neighbor)) {
+                        local_visited.add(neighbor);
+                        queue.push(neighbor);
+                    }
+                }
+            }
         }
     }
 
@@ -4673,8 +4688,8 @@ function generateDeck() {
             const dists = demands.map(d => d.minDist);
             const spread = Math.max(...dists) - Math.min(...dists);
             cardAttempts++;
-        } while (demands.some(d => d.minDist === Infinity) ||
-                 (Math.max(...demands.map(d => d.minDist)) - Math.min(...demands.map(d => d.minDist))) < MIN_SPREAD &&
+        } while ((demands.some(d => d.minDist === Infinity) ||
+                 (Math.max(...demands.map(d => d.minDist)) - Math.min(...demands.map(d => d.minDist))) < MIN_SPREAD) &&
                  cardAttempts < 30);
         // Sort demands by distance (short → long) for readable card layout
         demands.sort((a, b) => a.minDist - b.minDist);
@@ -5365,7 +5380,8 @@ function undoLastOperate() {
         currentPlayer.trainLocation = null;
         addLog(`Undid train deployment`);
     } else if (last.type === "pickup") {
-        currentPlayer.loads.splice(currentPlayer.loads.lastIndexOf(last.good), 1);
+        const loadIdx = currentPlayer.loads.lastIndexOf(last.good);
+        if (loadIdx !== -1) currentPlayer.loads.splice(loadIdx, 1);
         addLog(`Undid pickup of ${last.good}`);
     } else if (last.type === "drop") {
         currentPlayer.loads.splice(last.loadIndex, 0, last.good);
@@ -5434,15 +5450,6 @@ function endTurnLocal() {
         return;
     }
 
-    // Expire persistent events: remove those where the drawing player's next turn has ended
-    gameState.activeEvents = gameState.activeEvents.filter(ae => {
-        if (gameState.currentPlayerIndex === ae.drawingPlayerIndex) {
-            if (ae.drawingPlayerTurnEnded) return false; // Already played next turn, expire now
-            ae.drawingPlayerTurnEnded = true; // Mark: next endTurn for this player will expire it
-        }
-        return true;
-    });
-
     // Clear any in-progress build selection
     gameState.selectedMilepost = null;
     gameState.pathPreview = null;
@@ -5463,7 +5470,7 @@ function endTurnLocal() {
     // Move to next player
     gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
 
-    // Check if current player is derailed - if so, skip turn
+    // Check if current player is derailed - if so, skip turn (before event expiry and turn increment)
     const nextPlayer = gameState.players[gameState.currentPlayerIndex];
     if (gameState.derailedPlayers[gameState.currentPlayerIndex]) {
         gameState.derailedPlayers[gameState.currentPlayerIndex]--;
@@ -5475,6 +5482,16 @@ function endTurnLocal() {
         endTurnLocal();
         return;
     }
+
+    // Expire persistent events: remove those where the drawing player's next turn has ended
+    // (runs only for non-derailed players so skipped turns don't count toward event expiry)
+    gameState.activeEvents = gameState.activeEvents.filter(ae => {
+        if (gameState.currentPlayerIndex === ae.drawingPlayerIndex) {
+            if (ae.drawingPlayerTurnEnded) return false; // Already played next turn, expire now
+            ae.drawingPlayerTurnEnded = true; // Mark: next endTurn for this player will expire it
+        }
+        return true;
+    });
 
     // Determine next phase
     if (gameState.phase === "initialBuilding") {
@@ -6053,7 +6070,7 @@ function showWinNotification(player, playerColor) {
 function showEndGameModal(player) {
     document.getElementById("winnerText").innerHTML = `
         <strong>${player.name}</strong> wins!<br>
-        Connected cities: ${getConnectedMajorCities(player.color).length}/8<br>
+        Connected cities: ${getConnectedMajorCities(player.color).length}/7<br>
         Cash: ECU ${player.cash}M
     `;
     document.getElementById("endGameModal").classList.add("show");
