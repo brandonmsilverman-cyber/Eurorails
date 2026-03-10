@@ -4931,6 +4931,22 @@ function showTurnOverlay(playerName, playerColor, phaseLabel) {
     document.getElementById("turnOverlayPlayer").textContent = playerName;
     document.getElementById("turnOverlayPlayer").style.color = COLOR_MAP[playerColor] || playerColor;
     document.getElementById("turnOverlayPhase").textContent = phaseLabel;
+
+    // In multiplayer, only show Ready button if it's this client's turn
+    const readyBtn = document.getElementById("turnOverlayReadyBtn");
+    const isMultiplayer = typeof socket !== 'undefined' && myPlayerId;
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    const isMyTurn = !isMultiplayer || (currentPlayer && currentPlayer.id === myPlayerId);
+
+    if (isMyTurn) {
+        readyBtn.style.display = '';
+        readyBtn.textContent = 'Ready';
+    } else {
+        readyBtn.style.display = 'none';
+        // Auto-dismiss after a short delay for non-current players
+        setTimeout(() => dismissTurnOverlay(), 2000);
+    }
+
     document.getElementById("turnOverlay").classList.add("show");
 }
 
@@ -5449,7 +5465,22 @@ function updateUI() {
 
     // Update action buttons based on phase
     const actionButtons = document.getElementById("actionButtons");
-    if (gameState.phase === "initialBuilding") {
+
+    // In multiplayer, show waiting message if it's not this client's turn
+    const isMultiplayer = typeof socket !== 'undefined' && myPlayerId;
+    const isMyTurn = !isMultiplayer || (gameState.players[gameState.currentPlayerIndex] && gameState.players[gameState.currentPlayerIndex].id === myPlayerId);
+
+    if (isMultiplayer && !isMyTurn) {
+        const waitingFor = gameState.players[gameState.currentPlayerIndex];
+        const phaseLabel = gameState.phase === "initialBuilding" ? "Initial Building" :
+                          gameState.phase === "operate" ? "Operate" : "Build";
+        actionButtons.innerHTML = `
+            <div style="text-align:center; padding:20px 10px; color:#888;">
+                <div style="font-size:14px; margin-bottom:8px;">Waiting for</div>
+                <div style="font-size:16px; font-weight:bold; color:${COLOR_MAP[waitingFor?.color] || '#fff'}; margin-bottom:4px;">${waitingFor?.name || 'other player'}</div>
+                <div style="font-size:12px; color:#666;">${phaseLabel} Phase</div>
+            </div>`;
+    } else if (gameState.phase === "initialBuilding") {
         const remainingBudget = 20 - gameState.buildingThisTurn;
         const budgetPct = Math.round((remainingBudget / 20) * 100);
         const budgetColor = remainingBudget > 10 ? "#4a9e4a" : remainingBudget > 5 ? "#ffcc00" : "#ff4444";
@@ -6542,7 +6573,7 @@ document.querySelector(".map-area")?.addEventListener("wheel", function(e) {
         <h2>Next Turn</h2>
         <div class="player-name" id="turnOverlayPlayer"></div>
         <div class="phase-label" id="turnOverlayPhase"></div>
-        <button onclick="dismissTurnOverlay()" style="padding: 10px 40px; font-size: 16px;">Ready</button>
+        <button id="turnOverlayReadyBtn" onclick="dismissTurnOverlay()" style="padding: 10px 40px; font-size: 16px;">Ready</button>
     </div>
 </div>
 
