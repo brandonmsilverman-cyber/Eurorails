@@ -12,6 +12,11 @@ const PORT = process.env.PORT || 3000;
 // Serve static files from public/
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Redirect root to the game
+app.get('/', (req, res) => {
+    res.redirect('/eurorails.html');
+});
+
 // --- Game Constants (shared with client) ---
 
 const MAJOR_CITIES = ["Amsterdam", "Berlin", "Essen", "London", "Madrid", "Milano", "Paris", "Vienna"];
