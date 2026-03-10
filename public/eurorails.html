@@ -6876,6 +6876,39 @@ function applyServerState(state) {
 
 socket.on('stateUpdate', ({ state, uiEvent }) => {
     console.log('[Client] State update received:', uiEvent?.type);
+
+    // Before applying server state, snapshot the discarded card's DOM element for animation
+    let discardFloater = null;
+    if (uiEvent?.type === 'delivery' && uiEvent.cardIndex != null) {
+        const myPlayer = gameState.players.find(p => p.id === myPlayerId);
+        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+        if (myPlayer && currentPlayer && currentPlayer.id === myPlayerId) {
+            const demandOverlay = document.getElementById("demandCardsOverlay");
+            if (demandOverlay) {
+                const cardEls = demandOverlay.querySelectorAll(".demand-card-overlay");
+                const cardEl = cardEls[uiEvent.cardIndex];
+                if (cardEl) {
+                    const rect = cardEl.getBoundingClientRect();
+                    discardFloater = document.createElement("div");
+                    discardFloater.className = "demand-card-overlay discard-floater";
+                    discardFloater.innerHTML = cardEl.innerHTML;
+                    discardFloater.style.cssText = `
+                        position: fixed;
+                        z-index: 1000;
+                        width: ${rect.width}px;
+                        height: ${rect.height}px;
+                        left: ${rect.left + rect.width / 2}px;
+                        top: ${rect.top + rect.height / 2}px;
+                        transform: translate(-50%, -50%) scale(1);
+                        opacity: 1;
+                        transition: none;
+                        border-color: ${getComputedStyle(cardEl).borderColor};
+                    `;
+                }
+            }
+        }
+    }
+
     applyServerState(state);
 
     // Render new log entries to the DOM
@@ -6898,25 +6931,33 @@ socket.on('stateUpdate', ({ state, uiEvent }) => {
     // since the animation manages its own updateUI lifecycle)
     let animationTriggered = false;
 
-    // Animate new demand card draw after delivery (only for the delivering player)
+    // Animate discard + draw after delivery (only for the delivering player)
     if (uiEvent?.type === 'delivery') {
-        console.log('[Client] Delivery uiEvent:', { hasNewCard: !!uiEvent.newCard, cardIndex: uiEvent.cardIndex });
         const myPlayer = gameState.players.find(p => p.id === myPlayerId);
         const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-        console.log('[Client] Delivery check:', {
-            isMyTurn: currentPlayer?.id === myPlayerId,
-            myCards: myPlayer?.demandCards?.length,
-            newCard: uiEvent.newCard
-        });
-        if (myPlayer && currentPlayer && currentPlayer.id === myPlayerId && uiEvent.newCard) {
-            // Find the newly drawn card in our hand (it's the last one added)
-            const newCard = myPlayer.demandCards[myPlayer.demandCards.length - 1];
-            console.log('[Client] New card:', newCard);
-            if (newCard && !newCard.hidden) {
-                newCard._animating = true;
-                queueCardAnimation(newCard, false);
-                animationTriggered = true;
-                console.log('[Client] Delivery animation queued');
+        if (myPlayer && currentPlayer && currentPlayer.id === myPlayerId) {
+            // Set up draw animation for the new card
+            if (uiEvent.newCard) {
+                const newCard = myPlayer.demandCards[myPlayer.demandCards.length - 1];
+                if (newCard && !newCard.hidden) {
+                    newCard._animating = true;
+                    cardAnimationHoldQueue = true;
+                    queueCardAnimation(newCard, false);
+                    animationTriggered = true;
+                }
+            }
+
+            // Animate the discard floater (snapshotted before state was applied)
+            if (discardFloater) {
+                document.body.appendChild(discardFloater);
+                requestAnimationFrame(() => {
+                    discardFloater.style.transition = "transform 0.4s cubic-bezier(0.4, 0, 1, 1), opacity 0.4s ease";
+                    discardFloater.style.transform = "translate(-50%, -50%) scale(0.6) translateY(-60px)";
+                    discardFloater.style.opacity = "0";
+                });
+                setTimeout(() => {
+                    if (document.body.contains(discardFloater)) discardFloater.remove();
+                }, 450);
             }
         }
     }
