@@ -363,6 +363,159 @@ function getCityAtMilepost(gs, milepostId) {
     return null;
 }
 
+// --- Server-side movement helpers ---
+
+function serverIsInHalfSpeedZone(gs, milepostId) {
+    for (const activeEvent of gs.activeEvents) {
+        const evt = activeEvent.card;
+        if (evt.type === "snow" || evt.type === "fog" || evt.type === "gale") {
+            const zone = gs.eventZones && gs.eventZones[evt.id];
+            if (zone && zone.includes(milepostId)) return true;
+        }
+    }
+    return false;
+}
+
+function serverGetPathMovementCost(gs, path) {
+    let cost = 0;
+    for (let i = 1; i < path.length; i++) {
+        cost += serverIsInHalfSpeedZone(gs, path[i]) ? 2 : 1;
+    }
+    return cost;
+}
+
+function serverGetMaxStepsForMovement(gs, path, availableMovement) {
+    let spent = 0;
+    for (let i = 1; i < path.length; i++) {
+        const stepCost = serverIsInHalfSpeedZone(gs, path[i]) ? 2 : 1;
+        if (spent + stepCost > availableMovement) return i - 1;
+        spent += stepCost;
+    }
+    return path.length - 1;
+}
+
+// Validate that each edge in path exists in tracks (own or foreign) or ferryConnections
+// Returns { valid, foreignSegments: [indices], ferryCrossings: [indices], error }
+function serverValidatePath(gs, path, playerColor) {
+    const foreignSegments = [];
+    const ferryCrossings = [];
+
+    for (let i = 0; i < path.length - 1; i++) {
+        const fromId = path[i];
+        const toId = path[i + 1];
+
+        // Check track segments
+        let found = false;
+        let isForeign = false;
+        for (const t of gs.tracks) {
+            if ((t.from === fromId && t.to === toId) || (t.to === fromId && t.from === toId)) {
+                found = true;
+                if (t.color !== playerColor) isForeign = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            // Check ferry connections
+            const ferryKey = getFerryKey(fromId, toId);
+            if (ferryKey && playerOwnsFerry(gs.ferryOwnership, ferryKey, playerColor)) {
+                ferryCrossings.push(i);
+                found = true;
+            }
+        }
+
+        if (!found) {
+            return { valid: false, error: `No track connection between ${fromId} and ${toId}` };
+        }
+
+        if (isForeign) foreignSegments.push(i);
+    }
+
+    return { valid: true, foreignSegments, ferryCrossings };
+}
+
+// Get unique foreign track owner colors along a path up to endIdx
+function serverGetForeignTrackOwners(gs, path, endIdx, playerColor, foreignSegments) {
+    const owners = new Set();
+    for (let i = 0; i < endIdx; i++) {
+        if (!foreignSegments.includes(i)) continue;
+        const fromId = path[i];
+        const toId = path[i + 1];
+        for (const track of gs.tracks) {
+            if (track.color === playerColor) continue;
+            if ((track.from === fromId && track.to === toId) ||
+                (track.to === fromId && track.from === toId)) {
+                owners.add(track.color);
+                break;
+            }
+        }
+    }
+    return owners;
+}
+
+// Charge trackage rights on the server. Returns { ok, newlyPaidOwners, totalFee, error }
+function serverChargeTrackageRights(gs, movePlayer, path, foreignSegments, actualEndIdx) {
+    const owners = serverGetForeignTrackOwners(gs, path, actualEndIdx, movePlayer.color, foreignSegments);
+    if (owners.size === 0) return { ok: true, newlyPaidOwners: [], totalFee: 0 };
+
+    const unpaid = [];
+    for (const ownerColor of owners) {
+        if (!gs.trackageRightsPaidThisTurn[ownerColor]) {
+            unpaid.push(ownerColor);
+        }
+    }
+    if (unpaid.length === 0) return { ok: true, newlyPaidOwners: [], totalFee: 0 };
+
+    const totalFee = unpaid.length * 4;
+    if (totalFee > movePlayer.cash) {
+        return { ok: false, newlyPaidOwners: [], totalFee, error: `Not enough cash for trackage rights! Need ECU ${totalFee}M, have ECU ${movePlayer.cash}M` };
+    }
+
+    // Pay each unpaid owner
+    const logs = [];
+    for (const ownerColor of unpaid) {
+        movePlayer.cash -= 4;
+        const owner = gs.players.find(p => p.color === ownerColor);
+        if (owner) {
+            owner.cash += 4;
+            gs.trackageRightsLog.push({ from: movePlayer.name, to: owner.name, amount: 4 });
+            logs.push(`${movePlayer.name} paid ECU 4M to ${owner.name} for trackage rights`);
+        }
+        gs.trackageRightsPaidThisTurn[ownerColor] = true;
+    }
+    return { ok: true, newlyPaidOwners: unpaid, totalFee, logs };
+}
+
+// Check if a move would strand the player on foreign track without enough cash
+function serverCheckTrackageStrandRisk(gs, movePath, playerColor, cashAfterFees) {
+    if (!movePath || movePath.length === 0) return true;
+    const destId = movePath[movePath.length - 1];
+
+    // If destination is on the player's own network, they're fine
+    const owned = getPlayerOwnedMileposts(gs, playerColor);
+    if (owned.has(destId)) return true;
+
+    // Player will end up on foreign track — need at least 4M for next turn's fee
+    // But check if there's a viable delivery at any city along the path
+    const currentPlayer = gs.players.find(p => p.color === playerColor);
+    if (!currentPlayer) return cashAfterFees >= 4;
+
+    let potentialCash = cashAfterFees;
+    for (let i = 0; i < movePath.length; i++) {
+        const cityName = getCityAtMilepost(gs, movePath[i]);
+        if (!cityName) continue;
+        for (const card of currentPlayer.demandCards) {
+            for (const demand of card.demands) {
+                if (demand.to === cityName && currentPlayer.loads.includes(demand.good)) {
+                    potentialCash += demand.payout;
+                }
+            }
+        }
+    }
+
+    return potentialCash >= 4;
+}
+
 // Draw one card for a player, skipping event cards (events handled separately during turns)
 // Apply immediate event effects on the server
 function serverApplyEventEffect(gs, eventCard, logs) {
@@ -516,11 +669,13 @@ function serverEndTurn(gs) {
         return true;
     });
 
-    // Reset building limits for new player
+    // Reset building limits and history for new player
     gs.buildingThisTurn = 0;
     gs.majorCitiesThisTurn = 0;
     gs.trackageRightsPaidThisTurn = {};
     gs.trackageRightsLog = [];
+    gs.operateHistory = [];
+    gs.buildHistory = [];
 
     // Move to next player
     gs.currentPlayerIndex = (gs.currentPlayerIndex + 1) % gs.players.length;
@@ -656,7 +811,9 @@ function createGameState(playerList) {
         derailedPlayers: {},
         destroyedRiverTracks: [],
         trackageRightsPaidThisTurn: {},
-        trackageRightsLog: []
+        trackageRightsLog: [],
+        operateHistory: [],
+        buildHistory: []
     };
 }
 
@@ -682,7 +839,9 @@ function getStateForPlayer(gameState, playerId) {
         derailedPlayers: gameState.derailedPlayers,
         destroyedRiverTracks: gameState.destroyedRiverTracks,
         trackageRightsPaidThisTurn: gameState.trackageRightsPaidThisTurn,
-        trackageRightsLog: gameState.trackageRightsLog
+        trackageRightsLog: gameState.trackageRightsLog,
+        operateHistory: gameState.operateHistory,
+        buildHistory: gameState.buildHistory
     };
 }
 
@@ -922,6 +1081,7 @@ io.on('connection', (socket) => {
                 }
 
                 pickupPlayer.loads.push(good);
+                gs.operateHistory.push({ type: 'pickup', good });
                 const pickupMsg = `${pickupPlayer.name} picked up ${good}`;
                 gs.gameLog.push(pickupMsg);
                 console.log(`Room ${socket.roomCode}: ${pickupMsg}`);
@@ -949,6 +1109,7 @@ io.on('connection', (socket) => {
 
                 const droppedGood = dropPlayer.loads[loadIndex];
                 dropPlayer.loads.splice(loadIndex, 1);
+                gs.operateHistory.push({ type: 'drop', good: droppedGood, loadIndex });
                 const dropMsg = `${dropPlayer.name} dropped ${droppedGood}`;
                 gs.gameLog.push(dropMsg);
                 console.log(`Room ${socket.roomCode}: ${dropMsg}`);
@@ -991,7 +1152,8 @@ io.on('connection', (socket) => {
                     return callback && callback({ success: false, error: 'Strike in effect — cannot deliver goods here' });
                 }
 
-                // Apply delivery
+                // Apply delivery — clear operate history (delivery commits the turn's moves)
+                gs.operateHistory = [];
                 deliverPlayer.loads.splice(matchingLoadIndex, 1);
                 deliverPlayer.cash += demand.payout;
                 const deliverMsg = `${deliverPlayer.name} delivered ${demand.good} to ${demand.to} for ECU ${demand.payout}M`;
@@ -1108,6 +1270,14 @@ io.on('connection', (socket) => {
                 gs.buildingThisTurn += buildCost;
                 gs.majorCitiesThisTurn += (majorCityCount || 0);
 
+                // Record build for undo
+                gs.buildHistory.push({
+                    segments: newSegments,
+                    cost: buildCost,
+                    majorCities: majorCityCount || 0,
+                    ferries: ferries ? ferries.filter(fk => gs.ferryOwnership[fk] && gs.ferryOwnership[fk].includes(buildPlayer.color)) : []
+                });
+
                 const buildMsg = `${buildPlayer.name} built track for ECU ${buildCost}M (${20 - gs.buildingThisTurn}M remaining this turn)`;
                 gs.gameLog.push(buildMsg);
                 logs.push(buildMsg);
@@ -1138,6 +1308,7 @@ io.on('connection', (socket) => {
                 }
 
                 deployPlayer.trainLocation = milepostId;
+                gs.operateHistory.push({ type: 'deploy' });
                 const cityName = getCityAtMilepost(gs, milepostId) || "milepost";
                 const deployMsg = `${deployPlayer.name} deployed train at ${cityName}`;
                 gs.gameLog.push(deployMsg);
@@ -1186,6 +1357,306 @@ io.on('connection', (socket) => {
                         type: 'turnChanged',
                         overlay: turnResult.overlay,
                         logs: allLogs
+                    });
+                }
+
+                callback && callback({ success: true });
+                break;
+            }
+
+            case 'undoBuild': {
+                if (playerIndex !== gs.currentPlayerIndex) {
+                    return callback && callback({ success: false, error: 'Not your turn' });
+                }
+
+                if (gs.buildHistory.length === 0) {
+                    return callback && callback({ success: false, error: 'Nothing to undo' });
+                }
+
+                const undoBuildPlayer = gs.players[playerIndex];
+                const lastBuild = gs.buildHistory.pop();
+
+                // Remove track segments (excluding ferry segments)
+                const trackSegs = lastBuild.segments - (lastBuild.ferries ? lastBuild.ferries.length : 0);
+                for (let i = 0; i < trackSegs; i++) {
+                    gs.tracks.pop();
+                }
+
+                // Remove ferry ownership
+                if (lastBuild.ferries) {
+                    for (const ferryKey of lastBuild.ferries) {
+                        const owners = gs.ferryOwnership[ferryKey];
+                        if (owners) {
+                            const idx = owners.lastIndexOf(undoBuildPlayer.color);
+                            if (idx !== -1) owners.splice(idx, 1);
+                            if (owners.length === 0) delete gs.ferryOwnership[ferryKey];
+                        }
+                    }
+                }
+
+                // Refund cost
+                undoBuildPlayer.cash += lastBuild.cost;
+                gs.buildingThisTurn -= lastBuild.cost;
+                gs.majorCitiesThisTurn -= lastBuild.majorCities;
+
+                const undoBuildMsg = `${undoBuildPlayer.name} undid last build (refunded ECU ${lastBuild.cost}M)`;
+                gs.gameLog.push(undoBuildMsg);
+                console.log(`Room ${socket.roomCode}: ${undoBuildMsg}`);
+
+                broadcastStateUpdate(socket.roomCode, room, {
+                    type: 'action',
+                    logs: [undoBuildMsg]
+                });
+
+                callback && callback({ success: true });
+                break;
+            }
+
+            case 'commitMove': {
+                if (playerIndex !== gs.currentPlayerIndex) {
+                    return callback && callback({ success: false, error: 'Not your turn' });
+                }
+                if (gs.phase !== 'operate') {
+                    return callback && callback({ success: false, error: 'Not in operate phase' });
+                }
+
+                const movePlayer = gs.players[playerIndex];
+                if (movePlayer.trainLocation === null) {
+                    return callback && callback({ success: false, error: 'Train not deployed' });
+                }
+                if (movePlayer.ferryState) {
+                    return callback && callback({ success: false, error: 'Waiting for ferry' });
+                }
+                if (movePlayer.movement <= 0) {
+                    return callback && callback({ success: false, error: 'No movement remaining' });
+                }
+
+                const { path } = action;
+                if (!path || !Array.isArray(path) || path.length < 2) {
+                    return callback && callback({ success: false, error: 'Invalid path' });
+                }
+                if (path[0] !== movePlayer.trainLocation) {
+                    return callback && callback({ success: false, error: 'Path does not start at train location' });
+                }
+
+                // Validate path connectivity
+                const validation = serverValidatePath(gs, path, movePlayer.color);
+                if (!validation.valid) {
+                    return callback && callback({ success: false, error: validation.error });
+                }
+
+                // Save state for undo
+                const prevLocation = movePlayer.trainLocation;
+                const prevMovement = movePlayer.movement;
+                const prevFerryState = movePlayer.ferryState ? JSON.parse(JSON.stringify(movePlayer.ferryState)) : null;
+                const prevCash = movePlayer.cash;
+                const prevOwnerCash = {};
+                for (const p of gs.players) {
+                    if (p.color !== movePlayer.color) prevOwnerCash[p.color] = p.cash;
+                }
+
+                const logs = [];
+                let newlyPaidOwners = [];
+
+                // Handle ferry crossings
+                if (validation.ferryCrossings.length > 0) {
+                    const ferryIdx = validation.ferryCrossings[0];
+                    const portMilepostId = path[ferryIdx];
+                    const destPortId = path[ferryIdx + 1];
+
+                    if (portMilepostId !== movePlayer.trainLocation) {
+                        // Need to move to port first
+                        const stepsToPort = ferryIdx;
+                        const pathToPort = path.slice(0, stepsToPort + 1);
+                        const costToPort = serverGetPathMovementCost(gs, pathToPort);
+
+                        if (costToPort > movePlayer.movement) {
+                            // Partial move toward ferry port
+                            const maxSteps = serverGetMaxStepsForMovement(gs, path, movePlayer.movement);
+                            const partialPath = path.slice(0, maxSteps + 1);
+                            const partialDestId = path[maxSteps];
+
+                            // Check and charge trackage rights for partial path
+                            if (validation.foreignSegments.length > 0) {
+                                const owners = serverGetForeignTrackOwners(gs, path, maxSteps, movePlayer.color, validation.foreignSegments);
+                                let pendingFee = 0;
+                                for (const oc of owners) {
+                                    if (!gs.trackageRightsPaidThisTurn[oc]) pendingFee += 4;
+                                }
+                                if (!serverCheckTrackageStrandRisk(gs, partialPath, movePlayer.color, movePlayer.cash - pendingFee)) {
+                                    return callback && callback({ success: false, error: "Cannot move here — you'd be stranded on foreign track without enough cash" });
+                                }
+                                const trResult = serverChargeTrackageRights(gs, movePlayer, path, validation.foreignSegments, maxSteps);
+                                if (!trResult.ok) {
+                                    return callback && callback({ success: false, error: trResult.error });
+                                }
+                                newlyPaidOwners = trResult.newlyPaidOwners;
+                                if (trResult.logs) logs.push(...trResult.logs);
+                            }
+
+                            movePlayer.trainLocation = partialDestId;
+                            movePlayer.movement = 0;
+                            const partialCost = serverGetPathMovementCost(gs, partialPath);
+                            const cityName = getCityAtMilepost(gs, partialDestId) || "milepost";
+                            const moveMsg = `Partial move toward ferry: moved ${maxSteps} steps (${partialCost}mp) to ${cityName}`;
+                            logs.push(moveMsg);
+                            gs.gameLog.push(moveMsg);
+
+                            gs.operateHistory.push({
+                                type: 'move', prevLocation, prevMovement, prevFerryState, prevCash, newlyPaidOwners, prevOwnerCash
+                            });
+
+                            broadcastStateUpdate(socket.roomCode, room, { type: 'action', logs });
+                            return callback && callback({ success: true });
+                        }
+
+                        // Can reach port — charge trackage rights for path to port
+                        if (validation.foreignSegments.length > 0) {
+                            const trResult = serverChargeTrackageRights(gs, movePlayer, path, validation.foreignSegments, stepsToPort);
+                            if (!trResult.ok) {
+                                return callback && callback({ success: false, error: trResult.error });
+                            }
+                            newlyPaidOwners = trResult.newlyPaidOwners;
+                            if (trResult.logs) logs.push(...trResult.logs);
+                        }
+
+                        movePlayer.trainLocation = portMilepostId;
+                        movePlayer.movement -= costToPort;
+                    }
+
+                    // Set ferry state
+                    movePlayer.ferryState = { destPortId };
+                    movePlayer.movement = 0;
+                    const portCity = getCityAtMilepost(gs, portMilepostId) || "ferry port";
+                    const ferryMsg = `Arrived at ${portCity}. Waiting for ferry. Turn ends.`;
+                    logs.push(ferryMsg);
+                    gs.gameLog.push(ferryMsg);
+
+                    gs.operateHistory.push({
+                        type: 'move', prevLocation, prevMovement, prevFerryState, prevCash, newlyPaidOwners, prevOwnerCash
+                    });
+
+                    broadcastStateUpdate(socket.roomCode, room, { type: 'action', logs });
+                    return callback && callback({ success: true });
+                }
+
+                // Normal movement (no ferry crossing) — handle partial moves
+                const movementCost = serverGetPathMovementCost(gs, path);
+                let movePath = path;
+                let actualCost = movementCost;
+
+                if (movementCost > movePlayer.movement) {
+                    const maxSteps = serverGetMaxStepsForMovement(gs, path, movePlayer.movement);
+                    movePath = path.slice(0, maxSteps + 1);
+                    actualCost = serverGetPathMovementCost(gs, movePath);
+                }
+
+                const actualSteps = movePath.length - 1;
+                const destId = movePath[movePath.length - 1];
+
+                // Charge trackage rights if using foreign track
+                if (validation.foreignSegments.length > 0) {
+                    const owners = serverGetForeignTrackOwners(gs, path, actualSteps, movePlayer.color, validation.foreignSegments);
+                    let pendingFee = 0;
+                    for (const oc of owners) {
+                        if (!gs.trackageRightsPaidThisTurn[oc]) pendingFee += 4;
+                    }
+                    if (!serverCheckTrackageStrandRisk(gs, movePath, movePlayer.color, movePlayer.cash - pendingFee)) {
+                        return callback && callback({ success: false, error: "Cannot move here — you'd be stranded on foreign track without enough cash" });
+                    }
+                    const trResult = serverChargeTrackageRights(gs, movePlayer, path, validation.foreignSegments, actualSteps);
+                    if (!trResult.ok) {
+                        return callback && callback({ success: false, error: trResult.error });
+                    }
+                    newlyPaidOwners = trResult.newlyPaidOwners;
+                    if (trResult.logs) logs.push(...trResult.logs);
+                }
+
+                movePlayer.trainLocation = destId;
+                movePlayer.movement -= actualCost;
+                const locationName = getCityAtMilepost(gs, destId) || "milepost";
+                const moveMsg = movePath.length < path.length
+                    ? `Partial move: ${actualSteps} steps (${actualCost}mp) — moved to ${locationName} (${movePlayer.movement}mp left)`
+                    : `Moved to ${locationName} (${actualCost}mp used, ${movePlayer.movement}mp left)`;
+                logs.push(moveMsg);
+                gs.gameLog.push(moveMsg);
+
+                gs.operateHistory.push({
+                    type: 'move', prevLocation, prevMovement, prevFerryState, prevCash, newlyPaidOwners, prevOwnerCash
+                });
+
+                console.log(`Room ${socket.roomCode}: ${movePlayer.name} ${moveMsg}`);
+                broadcastStateUpdate(socket.roomCode, room, { type: 'action', logs });
+                callback && callback({ success: true });
+                break;
+            }
+
+            case 'undoMove': {
+                if (playerIndex !== gs.currentPlayerIndex) {
+                    return callback && callback({ success: false, error: 'Not your turn' });
+                }
+
+                if (gs.operateHistory.length === 0) {
+                    return callback && callback({ success: false, error: 'Nothing to undo' });
+                }
+
+                const undoPlayer = gs.players[playerIndex];
+                const last = gs.operateHistory.pop();
+
+                if (last.type === 'move') {
+                    undoPlayer.trainLocation = last.prevLocation;
+                    undoPlayer.movement = last.prevMovement;
+                    undoPlayer.ferryState = last.prevFerryState;
+                    undoPlayer.cash = last.prevCash;
+
+                    // Reverse trackage rights payments
+                    if (last.newlyPaidOwners && last.newlyPaidOwners.length > 0) {
+                        for (const ownerColor of last.newlyPaidOwners) {
+                            const owner = gs.players.find(p => p.color === ownerColor);
+                            if (owner && last.prevOwnerCash && last.prevOwnerCash[ownerColor] !== undefined) {
+                                owner.cash = last.prevOwnerCash[ownerColor];
+                            }
+                            delete gs.trackageRightsPaidThisTurn[ownerColor];
+                        }
+                        gs.trackageRightsLog = gs.trackageRightsLog.filter(
+                            entry => !last.newlyPaidOwners.some(oc => {
+                                const owner = gs.players.find(p => p.color === oc);
+                                return owner && entry.to === owner.name;
+                            })
+                        );
+                    }
+
+                    const undoMsg = `${undoPlayer.name} undid move`;
+                    gs.gameLog.push(undoMsg);
+                    console.log(`Room ${socket.roomCode}: ${undoMsg}`);
+
+                    broadcastStateUpdate(socket.roomCode, room, {
+                        type: 'action',
+                        logs: [undoMsg]
+                    });
+                } else if (last.type === 'deploy') {
+                    undoPlayer.trainLocation = null;
+                    const undoMsg = `${undoPlayer.name} undid train deployment`;
+                    gs.gameLog.push(undoMsg);
+                    broadcastStateUpdate(socket.roomCode, room, {
+                        type: 'action',
+                        logs: [undoMsg]
+                    });
+                } else if (last.type === 'pickup') {
+                    undoPlayer.loads.splice(undoPlayer.loads.lastIndexOf(last.good), 1);
+                    const undoMsg = `${undoPlayer.name} undid pickup of ${last.good}`;
+                    gs.gameLog.push(undoMsg);
+                    broadcastStateUpdate(socket.roomCode, room, {
+                        type: 'action',
+                        logs: [undoMsg]
+                    });
+                } else if (last.type === 'drop') {
+                    undoPlayer.loads.splice(last.loadIndex, 0, last.good);
+                    const undoMsg = `${undoPlayer.name} undid drop of ${last.good}`;
+                    gs.gameLog.push(undoMsg);
+                    broadcastStateUpdate(socket.roomCode, room, {
+                        type: 'action',
+                        logs: [undoMsg]
                     });
                 }
 

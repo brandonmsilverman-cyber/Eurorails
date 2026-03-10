@@ -5079,6 +5079,18 @@ function setBuildPathMode(mode) {
 }
 
 function undoLastBuild() {
+    // In multiplayer, send undo action to server
+    if (typeof socket !== 'undefined' && myPlayerId) {
+        socket.emit('action', { type: 'undoBuild' }, (res) => {
+            if (res && !res.success) {
+                console.warn('[Client] undoBuild rejected:', res.error);
+                addLog(res.error);
+            }
+        });
+        return;
+    }
+
+    // Local fallback
     if (gameState.buildHistory.length === 0) {
         addLog("Nothing to undo!");
         return;
@@ -5115,6 +5127,18 @@ function undoLastBuild() {
 }
 
 function undoLastOperate() {
+    // In multiplayer, send undo action to server
+    if (typeof socket !== 'undefined' && myPlayerId) {
+        socket.emit('action', { type: 'undoMove' }, (res) => {
+            if (res && !res.success) {
+                console.warn('[Client] undoMove rejected:', res.error);
+                addLog(res.error);
+            }
+        });
+        return;
+    }
+
+    // Local fallback
     if (gameState.operateHistory.length === 0) {
         addLog("Nothing to undo!");
         return;
@@ -5751,6 +5775,21 @@ document.addEventListener("DOMContentLoaded", function() {
                 return;
             }
 
+            // In multiplayer, send path to server for validation and movement
+            if (typeof socket !== 'undefined' && myPlayerId) {
+                socket.emit('action', {
+                    type: 'commitMove',
+                    path: trackResult.path
+                }, (res) => {
+                    if (res && !res.success) {
+                        console.warn('[Client] commitMove rejected:', res.error);
+                        addLog(res.error);
+                    }
+                });
+                return;
+            }
+
+            // Local fallback — direct state mutation for single-player mode
             // Save state before moving (including cash for trackage rights refund on undo)
             const prevLocation = currentPlayer.trainLocation;
             const prevMovement = currentPlayer.movement;
@@ -6681,7 +6720,7 @@ socket.on('gameStart', ({ state }) => {
         milepostPositions[mp.id] = { x: mp.x, y: mp.y };
     }
 
-    // Precompute event zones for server-side derailment/gale checks
+    // Precompute event zones for server-side checks (derailment, snow, fog, gale)
     const eventZones = {};
     for (const evt of EVENT_CARDS) {
         if (evt.type === "derailment" && evt.cities) {
@@ -6695,8 +6734,15 @@ socket.on('gameStart', ({ state }) => {
                 }
             }
             eventZones[evt.id] = Array.from(zone);
-        } else if (evt.type === "gale" && evt.id === 138) {
-            // Gale 138 zone for ferry port derailment check
+        } else if ((evt.type === "snow" || evt.type === "fog") && evt.city) {
+            // Snow/fog zones: city + radius (for half-speed checks)
+            const cityMpId = gameState.cityToMilepost[evt.city];
+            if (cityMpId !== undefined) {
+                const zone = getMilepostsInHexRange(cityMpId, evt.radius);
+                eventZones[evt.id] = Array.from(zone);
+            }
+        } else if (evt.type === "gale" && evt.seaAreas) {
+            // Gale zones: seaAreas + radius (for half-speed and ferry blocking)
             if (typeof getCoastalMilepostsForSeaAreas === 'function') {
                 const coastalStarts = getCoastalMilepostsForSeaAreas(evt.seaAreas);
                 const zone = getMilepostsInHexRangeMultiSource(coastalStarts, evt.radius - 1);
@@ -6759,8 +6805,10 @@ function applyServerState(state) {
     gameState.destroyedRiverTracks = state.destroyedRiverTracks;
     gameState.trackageRightsPaidThisTurn = state.trackageRightsPaidThisTurn;
     gameState.trackageRightsLog = state.trackageRightsLog;
+    gameState.operateHistory = state.operateHistory || [];
+    gameState.buildHistory = state.buildHistory || [];
 
-    // Clear client-only UI state on turn change
+    // Clear client-only UI state on state update
     gameState.selectedMilepost = null;
     gameState.pathPreview = null;
     gameState.pathPreviewCost = null;
@@ -6768,8 +6816,6 @@ function applyServerState(state) {
     gameState.pathPreviewForeignSegments = [];
     gameState.buildPathMode = "cheapest";
     gameState.useTrackageRights = false;
-    gameState.buildHistory = [];
-    gameState.operateHistory = [];
 }
 
 socket.on('stateUpdate', ({ state, uiEvent }) => {
