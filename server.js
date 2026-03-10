@@ -884,13 +884,15 @@ function getUniqueRoomCode() {
 io.on('connection', (socket) => {
     console.log(`Player connected: ${socket.id}`);
 
-    socket.on('createRoom', ({ playerName }, callback) => {
+    socket.on('createRoom', ({ playerName, maxPlayers }, callback) => {
+        const playerCount = Math.min(6, Math.max(1, parseInt(maxPlayers) || 3));
         const roomCode = getUniqueRoomCode();
         const room = {
             players: new Map(),
             hostId: socket.id,
             gameStarted: false,
-            gameState: null
+            gameState: null,
+            maxPlayers: playerCount
         };
         room.players.set(socket.id, { name: playerName, color: null });
         rooms.set(roomCode, room);
@@ -912,7 +914,7 @@ io.on('connection', (socket) => {
         if (room.gameStarted) {
             return callback({ success: false, error: 'Game already in progress' });
         }
-        if (room.players.size >= 6) {
+        if (room.players.size >= room.maxPlayers) {
             return callback({ success: false, error: 'Room is full' });
         }
 
@@ -945,7 +947,7 @@ io.on('connection', (socket) => {
         const room = rooms.get(socket.roomCode);
         if (!room) return;
         if (socket.id !== room.hostId) return;
-        if (room.players.size < 1) return;
+        if (room.players.size < room.maxPlayers) return;
 
         // Check all players have selected colors
         for (const [, p] of room.players) {
@@ -1754,7 +1756,7 @@ function getRoomInfo(roomCode) {
     for (const [id, p] of room.players) {
         players.push({ id, name: p.name, color: p.color, isHost: id === room.hostId });
     }
-    return { roomCode, players, hostId: room.hostId };
+    return { roomCode, players, hostId: room.hostId, maxPlayers: room.maxPlayers };
 }
 
 // --- Start Server ---
