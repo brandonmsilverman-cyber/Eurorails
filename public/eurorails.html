@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Eurorails - European Railroad Board Game (Milepost Edition)</title>
+    <script src="/socket.io/socket.io.js"></script>
     <style>
         * {
             margin: 0;
@@ -848,18 +849,47 @@
 <body>
 
 <div class="setup-screen" id="setupScreen">
-    <div class="setup-dialog">
+    <!-- Lobby: Join or Create -->
+    <div class="setup-dialog" id="lobbyJoinCreate">
         <h1>Eurorails: Railroad Game</h1>
 
         <div class="setup-section">
-            <label>Number of Players:</label>
-            <input type="number" id="playerCount" min="1" max="6" value="2">
+            <label>Your Name:</label>
+            <input type="text" id="lobbyPlayerName" placeholder="Enter your name" value="">
         </div>
 
-        <div id="playerInputs"></div>
+        <div class="setup-buttons" style="flex-direction: column; gap: 10px;">
+            <button onclick="createRoom()" style="padding: 12px 40px; font-size: 16px;">Create Room</button>
+            <div style="text-align: center; color: #888; font-size: 14px;">— or —</div>
+            <div style="display: flex; gap: 10px; align-items: center; justify-content: center;">
+                <input type="text" id="lobbyRoomCode" placeholder="Room Code" maxlength="4" style="width: 120px; text-transform: uppercase; text-align: center; font-size: 18px; letter-spacing: 4px;">
+                <button onclick="joinRoom()" style="padding: 12px 24px; font-size: 16px;">Join</button>
+            </div>
+        </div>
+        <div id="lobbyError" style="color: #ff6666; text-align: center; margin-top: 15px; min-height: 20px;"></div>
+    </div>
+
+    <!-- Lobby: Waiting Room -->
+    <div class="setup-dialog" id="lobbyRoom" style="display: none;">
+        <h1>Eurorails: Railroad Game</h1>
+        <div style="text-align: center; margin-bottom: 20px;">
+            <span style="color: #888;">Room Code:</span>
+            <span id="lobbyRoomCodeDisplay" style="font-size: 28px; font-weight: bold; letter-spacing: 6px; margin-left: 10px;"></span>
+        </div>
+
+        <div class="setup-section">
+            <label>Players:</label>
+            <div id="lobbyPlayerList"></div>
+        </div>
+
+        <div class="setup-section" id="lobbyColorSection">
+            <label>Choose your color:</label>
+            <div id="lobbyColorPicker" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+        </div>
 
         <div class="setup-buttons">
-            <button onclick="startGame()">Start Game</button>
+            <button id="lobbyStartBtn" onclick="lobbyStartGame()" style="display: none; padding: 12px 40px; font-size: 16px;">Start Game</button>
+            <div id="lobbyWaiting" style="color: #888; font-size: 14px;">Waiting for host to start...</div>
         </div>
     </div>
 </div>
@@ -5566,8 +5596,12 @@ function endGame(player) {
 // ============================================================================
 
 document.addEventListener("DOMContentLoaded", function() {
-    document.getElementById("playerCount").addEventListener("input", setupPlayerInputs);
-    setupPlayerInputs();
+    // Old local setup - only wire up if elements exist (not in multiplayer lobby mode)
+    const playerCountEl = document.getElementById("playerCount");
+    if (playerCountEl) {
+        playerCountEl.addEventListener("input", setupPlayerInputs);
+        setupPlayerInputs();
+    }
 
     document.getElementById("gameCanvas")?.addEventListener("click", function(e) {
         if (!gameState.gameStarted) return;
@@ -6383,6 +6417,198 @@ document.querySelector(".map-area")?.addEventListener("wheel", function(e) {
         <button onclick="dismissTurnOverlay()" style="padding: 10px 40px; font-size: 16px;">Ready</button>
     </div>
 </div>
+
+<script>
+// ============================================================================
+// MULTIPLAYER LOBBY
+// ============================================================================
+
+const socket = io();
+let myPlayerId = null;
+let myRoomCode = null;
+let isHost = false;
+
+const LOBBY_COLORS = ["red", "blue", "green", "yellow", "purple", "orange"];
+const COLOR_DISPLAY = {
+    red: "#e74c3c", blue: "#3498db", green: "#2ecc71",
+    yellow: "#f1c40f", purple: "#9b59b6", orange: "#e67e22"
+};
+
+function createRoom() {
+    const name = document.getElementById("lobbyPlayerName").value.trim();
+    if (!name) {
+        document.getElementById("lobbyError").textContent = "Please enter your name.";
+        return;
+    }
+    document.getElementById("lobbyError").textContent = "";
+    socket.emit('createRoom', { playerName: name }, (res) => {
+        if (res.success) {
+            myPlayerId = res.playerId;
+            myRoomCode = res.roomCode;
+            isHost = true;
+            showLobbyRoom();
+        } else {
+            document.getElementById("lobbyError").textContent = res.error;
+        }
+    });
+}
+
+function joinRoom() {
+    const name = document.getElementById("lobbyPlayerName").value.trim();
+    const code = document.getElementById("lobbyRoomCode").value.trim();
+    if (!name) {
+        document.getElementById("lobbyError").textContent = "Please enter your name.";
+        return;
+    }
+    if (!code) {
+        document.getElementById("lobbyError").textContent = "Please enter a room code.";
+        return;
+    }
+    document.getElementById("lobbyError").textContent = "";
+    socket.emit('joinRoom', { roomCode: code, playerName: name }, (res) => {
+        if (res.success) {
+            myPlayerId = res.playerId;
+            myRoomCode = res.roomCode;
+            isHost = false;
+            showLobbyRoom();
+        } else {
+            document.getElementById("lobbyError").textContent = res.error;
+        }
+    });
+}
+
+function showLobbyRoom() {
+    document.getElementById("lobbyJoinCreate").style.display = "none";
+    document.getElementById("lobbyRoom").style.display = "block";
+    document.getElementById("lobbyRoomCodeDisplay").textContent = myRoomCode;
+}
+
+function selectLobbyColor(color) {
+    socket.emit('selectColor', { color });
+}
+
+function renderLobbyRoom(info) {
+    if (!info) return;
+
+    // Player list
+    const listEl = document.getElementById("lobbyPlayerList");
+    listEl.innerHTML = "";
+    const takenColors = new Set();
+    let myColor = null;
+
+    for (const p of info.players) {
+        if (p.color) takenColors.add(p.color);
+        if (p.id === myPlayerId) myColor = p.color;
+
+        const div = document.createElement("div");
+        div.className = "player-setup";
+        div.style.display = "flex";
+        div.style.alignItems = "center";
+        div.style.gap = "10px";
+        div.style.padding = "8px 12px";
+        div.style.marginBottom = "6px";
+
+        const colorDot = p.color
+            ? `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${COLOR_DISPLAY[p.color] || p.color};"></span>`
+            : `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#555;"></span>`;
+
+        div.innerHTML = `${colorDot} <span>${p.name}</span>${p.isHost ? ' <span style="color:#f1c40f;font-size:11px;">(host)</span>' : ''}${p.id === myPlayerId ? ' <span style="color:#888;font-size:11px;">(you)</span>' : ''}`;
+        listEl.appendChild(div);
+    }
+
+    // Color picker
+    const pickerEl = document.getElementById("lobbyColorPicker");
+    pickerEl.innerHTML = "";
+    for (const c of LOBBY_COLORS) {
+        const btn = document.createElement("button");
+        btn.style.width = "40px";
+        btn.style.height = "40px";
+        btn.style.borderRadius = "50%";
+        btn.style.background = COLOR_DISPLAY[c];
+        btn.style.border = myColor === c ? "3px solid #fff" : "3px solid transparent";
+        btn.style.cursor = takenColors.has(c) && myColor !== c ? "not-allowed" : "pointer";
+        btn.style.opacity = takenColors.has(c) && myColor !== c ? "0.3" : "1";
+        btn.disabled = takenColors.has(c) && myColor !== c;
+        btn.onclick = () => selectLobbyColor(c);
+        pickerEl.appendChild(btn);
+    }
+
+    // Host controls
+    const isCurrentHost = info.hostId === myPlayerId;
+    const allHaveColors = info.players.every(p => p.color);
+    document.getElementById("lobbyStartBtn").style.display = isCurrentHost ? "inline-block" : "none";
+    document.getElementById("lobbyStartBtn").disabled = !allHaveColors;
+    document.getElementById("lobbyStartBtn").style.opacity = allHaveColors ? "1" : "0.5";
+    document.getElementById("lobbyWaiting").style.display = isCurrentHost ? "none" : "block";
+}
+
+function lobbyStartGame() {
+    socket.emit('startGame');
+}
+
+// Socket event handlers
+socket.on('roomUpdate', (info) => {
+    renderLobbyRoom(info);
+});
+
+socket.on('gameStart', ({ players }) => {
+    // Wire multiplayer players into the existing startGame flow
+    gameState.players = [];
+    gameState.demandCardDeck = generateDeck();
+
+    for (const p of players) {
+        const demandCards = [];
+        while (demandCards.length < 3 && gameState.demandCardDeck.length > 0) {
+            const card = gameState.demandCardDeck.pop();
+            if (card.type === "demand") {
+                demandCards.push(card);
+            }
+        }
+
+        gameState.players.push({
+            id: p.id,
+            name: p.name,
+            color: p.color,
+            cash: 50,
+            trainType: "Freight",
+            trainLocation: null,
+            demandCards: demandCards,
+            loads: [],
+            movement: 0,
+            ferryState: null,
+            selectedDemands: [null, null, null]
+        });
+    }
+
+    gameState.gameStarted = true;
+    gameState.phase = "initialBuilding";
+    gameState.buildingPhaseCount = 0;
+
+    document.getElementById("setupScreen").classList.add("hidden");
+    document.getElementById("gameContainer").style.display = "flex";
+
+    generateHexGrid();
+    computeCoastDistances();
+    gameState.canvas = document.getElementById("gameCanvas");
+    gameState.ctx = gameState.canvas.getContext("2d");
+
+    drawMap();
+    updateUI();
+
+    addLog("Game started! Initial building phase (2 rounds)");
+
+    const firstPlayer = gameState.players[0];
+    if (firstPlayer && firstPlayer.demandCards.length > 0) {
+        cardAnimationHoldQueue = true;
+        for (const card of firstPlayer.demandCards) {
+            card._animating = true;
+            queueCardAnimation(card, false);
+        }
+        updateUI();
+        flushCardAnimationQueue();
+    }
+});
+</script>
 
 </body>
 </html>
