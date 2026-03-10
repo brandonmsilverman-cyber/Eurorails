@@ -2077,7 +2077,14 @@ function findPath(startId, endId, playerColor, mode) {
             if (!canPlayerBuildFerry(ferryKey, playerColor)) continue;
 
             const alreadyOwned = playerOwnsFerry(ferryKey, playerColor);
-            const realFerryCost = alreadyOwned ? 0 : fc.cost;
+            let realFerryCost = alreadyOwned ? 0 : fc.cost;
+            // Add city entry cost if ferry destination is a city
+            if (!alreadyOwned) {
+                const destMp = gameState.mileposts_by_id[neighborId];
+                if (destMp.city) {
+                    realFerryCost += MAJOR_CITIES.includes(destMp.city.name) ? 5 : 3;
+                }
+            }
             const edgeWeight = mode === "shortest" ? 1 : realFerryCost;
             const newDist = dist[current.id] + edgeWeight;
             const newCostTie = costTie[current.id] + (mode === "shortest" ? realFerryCost : 1);
@@ -2116,6 +2123,11 @@ function findPath(startId, endId, playerColor, mode) {
                 isFerryEdge = true;
                 if (!playerOwnsFerry(ferryKey, playerColor)) {
                     realCost += fc.cost;
+                    // Add city entry cost if ferry destination is a city
+                    const destMp = gameState.mileposts_by_id[path[i + 1]];
+                    if (destMp.city) {
+                        realCost += MAJOR_CITIES.includes(destMp.city.name) ? 5 : 3;
+                    }
                 }
                 break;
             }
