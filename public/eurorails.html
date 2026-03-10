@@ -6361,7 +6361,22 @@ document.addEventListener("DOMContentLoaded", function() {
                         addLog(`${currentPlayer.name} built track for ECU ${buildCost}M (${20 - gameState.buildingThisTurn}M remaining this turn)`);
                     }
                 } else {
-                    addLog("No path found!");
+                    // Check if an active event is likely blocking the path
+                    let blockingEvent = null;
+                    for (const ae of gameState.activeEvents) {
+                        const evt = ae.card;
+                        if (evt.type === "snow" || evt.type === "fog" || evt.type === "gale") {
+                            if (isMilepostInEventZone(evt, end.id) || isMilepostInEventZone(evt, start.id)) {
+                                blockingEvent = evt;
+                                break;
+                            }
+                        }
+                    }
+                    if (blockingEvent) {
+                        addLog(`Cannot build — blocked by active event: ${blockingEvent.title}`);
+                    } else {
+                        addLog("No path found!");
+                    }
                 }
 
                 gameState.selectedMilepost = null;
