@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const { randomUUID } = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
@@ -764,8 +765,8 @@ function serverEndTurn(gs) {
 
 // Broadcast state update to all players in a room
 function broadcastStateUpdate(roomCode, room, uiEvent) {
-    for (const [socketId] of room.players) {
-        const state = getStateForPlayer(room.gameState, socketId);
+    for (const [socketId, p] of room.players) {
+        const state = getStateForPlayer(room.gameState, p.sessionToken);
         io.to(socketId).emit('stateUpdate', { state, uiEvent });
     }
 }
@@ -865,7 +866,7 @@ function getStateForPlayer(gameState, playerId) {
 
 // --- Room Management ---
 
-const rooms = new Map(); // roomCode -> { players: Map<socketId, {name, color}>, hostId, gameStarted, gameState }
+const rooms = new Map(); // roomCode -> { players: Map<socketId, {name, color, sessionToken}>, hostSessionToken, sessionToSocketId: Map, disconnectedPlayers: Map, gameStarted, gameState }
 
 function generateRoomCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars (0/O, 1/I)
@@ -896,21 +897,25 @@ io.on('connection', (socket) => {
     socket.on('createRoom', ({ playerName, maxPlayers, password }, callback) => {
         const playerCount = Math.min(6, Math.max(1, parseInt(maxPlayers) || 3));
         const roomCode = getUniqueRoomCode();
+        const sessionToken = randomUUID();
         const room = {
             players: new Map(),
-            hostId: socket.id,
+            hostSessionToken: sessionToken,
+            sessionToSocketId: new Map(),
+            disconnectedPlayers: new Map(),
             gameStarted: false,
             gameState: null,
             maxPlayers: playerCount,
             password: password || null
         };
-        room.players.set(socket.id, { name: playerName, color: null });
+        room.players.set(socket.id, { name: playerName, color: null, sessionToken });
+        room.sessionToSocketId.set(sessionToken, socket.id);
         rooms.set(roomCode, room);
         socket.join(roomCode);
         socket.roomCode = roomCode;
 
         console.log(`Room ${roomCode} created by ${playerName}${room.password ? ' (password protected)' : ''}`);
-        callback({ success: true, roomCode, playerId: socket.id });
+        callback({ success: true, roomCode, sessionToken });
         io.to(roomCode).emit('roomUpdate', getRoomInfo(roomCode));
         broadcastRoomList();
     });
@@ -932,12 +937,14 @@ io.on('connection', (socket) => {
             return callback({ success: false, error: 'Incorrect password' });
         }
 
-        room.players.set(socket.id, { name: playerName, color: null });
+        const sessionToken = randomUUID();
+        room.players.set(socket.id, { name: playerName, color: null, sessionToken });
+        room.sessionToSocketId.set(sessionToken, socket.id);
         socket.join(code);
         socket.roomCode = code;
 
         console.log(`${playerName} joined room ${code}`);
-        callback({ success: true, roomCode: code, playerId: socket.id });
+        callback({ success: true, roomCode: code, sessionToken });
         io.to(code).emit('roomUpdate', getRoomInfo(code));
         broadcastRoomList();
     });
@@ -952,6 +959,9 @@ io.on('connection', (socket) => {
 
         const player = room.players.get(socket.id);
         console.log(`${player?.name || 'Unknown'} left room ${roomCode}`);
+        if (player) {
+            room.sessionToSocketId.delete(player.sessionToken);
+        }
         room.players.delete(socket.id);
         socket.leave(roomCode);
         socket.roomCode = null;
@@ -960,15 +970,17 @@ io.on('connection', (socket) => {
             rooms.delete(roomCode);
             console.log(`Room ${roomCode} deleted (empty)`);
         } else {
-            if (room.hostId === socket.id) {
-                room.hostId = room.players.keys().next().value;
+            if (player && room.hostSessionToken === player.sessionToken) {
+                // Transfer host to next player
+                const nextPlayer = room.players.values().next().value;
+                room.hostSessionToken = nextPlayer.sessionToken;
             }
             io.to(roomCode).emit('roomUpdate', getRoomInfo(roomCode));
         }
         broadcastRoomList();
     });
 
-    socket.on('selectColor', ({ color }) => {
+    socket.on('selectColor', ({ color }, callback) => {
         const room = rooms.get(socket.roomCode);
         if (!room) return;
 
@@ -982,12 +994,15 @@ io.on('connection', (socket) => {
 
         player.color = color;
         io.to(socket.roomCode).emit('roomUpdate', getRoomInfo(socket.roomCode));
+        if (callback) callback({ success: true });
     });
 
     socket.on('startGame', () => {
         const room = rooms.get(socket.roomCode);
         if (!room) return;
-        if (socket.id !== room.hostId) return;
+        // Host check: look up the socket's sessionToken and compare to hostSessionToken
+        const callerPlayer = room.players.get(socket.id);
+        if (!callerPlayer || callerPlayer.sessionToken !== room.hostSessionToken) return;
         if (room.players.size < room.maxPlayers) return;
 
         // Check all players have selected colors
@@ -997,10 +1012,10 @@ io.on('connection', (socket) => {
 
         room.gameStarted = true;
 
-        // Build player list in join order
+        // Build player list using sessionTokens as ids
         const playerList = [];
-        for (const [id, p] of room.players) {
-            playerList.push({ id, name: p.name, color: p.color });
+        for (const [, p] of room.players) {
+            playerList.push({ id: p.sessionToken, name: p.name, color: p.color });
         }
 
         // Create authoritative game state on server
@@ -1009,9 +1024,9 @@ io.on('connection', (socket) => {
         console.log(`Game started in room ${socket.roomCode} with ${playerList.length} players`);
         console.log(`Deck has ${room.gameState.demandCardDeck.length} cards remaining`);
 
-        // Send each player the game state
-        for (const [socketId] of room.players) {
-            const state = getStateForPlayer(room.gameState, socketId);
+        // Send each player their filtered game state
+        for (const [socketId, p] of room.players) {
+            const state = getStateForPlayer(room.gameState, p.sessionToken);
             io.to(socketId).emit('gameStart', { state });
         }
         broadcastRoomList();
@@ -1040,7 +1055,10 @@ io.on('connection', (socket) => {
         }
 
         const gs = room.gameState;
-        const playerIndex = gs.players.findIndex(p => p.id === socket.id);
+        // Look up the caller's sessionToken from the room's player map, then find in game state
+        const callerEntry = room.players.get(socket.id);
+        const callerSessionToken = callerEntry ? callerEntry.sessionToken : null;
+        const playerIndex = gs.players.findIndex(p => p.id === callerSessionToken);
         if (playerIndex === -1) {
             return callback && callback({ success: false, error: 'Not a player in this game' });
         }
@@ -1775,6 +1793,9 @@ io.on('connection', (socket) => {
 
         const player = room.players.get(socket.id);
         console.log(`${player?.name || 'Unknown'} disconnected from room ${roomCode}`);
+        if (player) {
+            room.sessionToSocketId.delete(player.sessionToken);
+        }
         room.players.delete(socket.id);
 
         if (room.players.size === 0) {
@@ -1782,8 +1803,9 @@ io.on('connection', (socket) => {
             console.log(`Room ${roomCode} deleted (empty)`);
         } else {
             // Transfer host if host left
-            if (room.hostId === socket.id) {
-                room.hostId = room.players.keys().next().value;
+            if (player && room.hostSessionToken === player.sessionToken) {
+                const nextPlayer = room.players.values().next().value;
+                room.hostSessionToken = nextPlayer.sessionToken;
             }
             io.to(roomCode).emit('roomUpdate', getRoomInfo(roomCode));
         }
@@ -1796,19 +1818,26 @@ function getRoomInfo(roomCode) {
     if (!room) return null;
 
     const players = [];
-    for (const [id, p] of room.players) {
-        players.push({ id, name: p.name, color: p.color, isHost: id === room.hostId });
+    for (const [, p] of room.players) {
+        players.push({ id: p.sessionToken, name: p.name, color: p.color, isHost: p.sessionToken === room.hostSessionToken });
     }
-    return { roomCode, players, hostId: room.hostId, maxPlayers: room.maxPlayers, password: room.password || null };
+    return { roomCode, players, hostSessionToken: room.hostSessionToken, maxPlayers: room.maxPlayers, password: room.password || null };
 }
 
 function getRoomList() {
     const list = [];
     for (const [roomCode, room] of rooms) {
-        const host = room.players.get(room.hostId);
+        // Find host by sessionToken
+        let hostName = 'Unknown';
+        for (const [, p] of room.players) {
+            if (p.sessionToken === room.hostSessionToken) {
+                hostName = p.name;
+                break;
+            }
+        }
         list.push({
             roomCode,
-            hostName: host ? host.name : 'Unknown',
+            hostName,
             hasPassword: !!room.password,
             maxPlayers: room.maxPlayers,
             playerCount: room.players.size,
@@ -1824,6 +1853,8 @@ function broadcastRoomList() {
 
 // --- Start Server ---
 
-server.listen(PORT, () => {
+const listener = server.listen(PORT, () => {
     console.log(`Eurorails server running at http://localhost:${PORT}`);
 });
+
+module.exports = listener;

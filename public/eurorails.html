@@ -7025,9 +7025,11 @@ function createRoom() {
     document.getElementById("lobbyError").textContent = "";
     socket.emit('createRoom', { playerName: name, maxPlayers: selectedMaxPlayers, password }, (res) => {
         if (res.success) {
-            myPlayerId = res.playerId;
+            myPlayerId = res.sessionToken;
             myRoomCode = res.roomCode;
             isHost = true;
+            sessionStorage.setItem('sessionToken', res.sessionToken);
+            sessionStorage.setItem('roomCode', res.roomCode);
             showLobbyRoom();
         } else {
             document.getElementById("lobbyError").textContent = res.error;
@@ -7049,9 +7051,11 @@ function joinRoom(roomCode, hasPassword) {
     document.getElementById("lobbyError").textContent = "";
     socket.emit('joinRoom', { roomCode, playerName: name, password }, (res) => {
         if (res.success) {
-            myPlayerId = res.playerId;
+            myPlayerId = res.sessionToken;
             myRoomCode = res.roomCode;
             isHost = false;
+            sessionStorage.setItem('sessionToken', res.sessionToken);
+            sessionStorage.setItem('roomCode', res.roomCode);
             showLobbyRoom();
         } else {
             document.getElementById("lobbyError").textContent = res.error;
@@ -7106,6 +7110,8 @@ function leaveRoom() {
     myRoomCode = null;
     myPlayerId = null;
     isHost = false;
+    sessionStorage.removeItem('sessionToken');
+    sessionStorage.removeItem('roomCode');
     document.getElementById("lobbyRoom").style.display = "none";
     document.getElementById("lobbyJoinCreate").style.display = "block";
     document.getElementById("lobbyError").textContent = "";
@@ -7191,7 +7197,7 @@ function renderLobbyRoom(info) {
     }
 
     // Host controls
-    const isCurrentHost = info.hostId === myPlayerId;
+    const isCurrentHost = info.hostSessionToken === myPlayerId;
     const roomFull = info.players.length >= maxPlayers;
     const allHaveColors = info.players.every(p => p.color);
     const canStart = roomFull && allHaveColors;
