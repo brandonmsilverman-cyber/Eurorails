@@ -293,6 +293,57 @@ function checkWinCondition(gs, player) {
     return connectedCities.length >= 7;
 }
 
+function getGoodsInCirculation(gs, good) {
+    let count = 0;
+    for (const player of gs.players) {
+        for (const load of player.loads) {
+            if (load === good) count++;
+        }
+    }
+    return count;
+}
+
+function isEventBlocking(gs, action, context) {
+    for (const activeEvent of gs.activeEvents) {
+        const evt = activeEvent.card;
+        if (action === "load" || action === "deliver") {
+            // Strike 121: No loading/delivery more than radius mp from coast
+            if (evt.id === 121 && context.milepostId !== undefined && gs.coastDistance) {
+                const d = gs.coastDistance[context.milepostId];
+                if (d !== undefined && d > evt.radius) return true;
+            }
+            // Strike 122: No loading/delivery within radius mp of coast
+            if (evt.id === 122 && context.milepostId !== undefined && gs.coastDistance) {
+                const d = gs.coastDistance[context.milepostId];
+                if (d !== undefined && d <= evt.radius) return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Reverse lookup: milepost ID -> city name (built from cityToMilepost)
+function getCityAtMilepost(gs, milepostId) {
+    if (!gs.cityToMilepost) return null;
+    for (const [cityName, mpId] of Object.entries(gs.cityToMilepost)) {
+        if (mpId === milepostId) return cityName;
+    }
+    return null;
+}
+
+// Draw one card for a player, skipping event cards (events handled separately during turns)
+function serverDrawCardForPlayer(gs, player) {
+    while (gs.demandCardDeck.length > 0) {
+        const card = gs.demandCardDeck.pop();
+        if (card.type === "demand") {
+            player.demandCards.push(card);
+            return card;
+        }
+        // Event cards drawn during replacement are discarded
+    }
+    return null;
+}
+
 // Server-side endTurn: mutates gameState, returns UI hints for clients
 function serverEndTurn(gs) {
     const result = { logs: [], overlay: null, gameOver: false, winner: null };
@@ -602,14 +653,15 @@ io.on('connection', (socket) => {
     });
 
     // Client sends cityToMilepost mapping after generating hex grid
-    socket.on('setCityToMilepost', ({ cityToMilepost, ferryConnections }) => {
+    socket.on('setCityToMilepost', ({ cityToMilepost, ferryConnections, coastDistance }) => {
         const room = rooms.get(socket.roomCode);
         if (!room || !room.gameState) return;
         // Only set once (first client to send it)
         if (!room.gameState.cityToMilepost) {
             room.gameState.cityToMilepost = cityToMilepost;
             room.gameState.ferryConnections = ferryConnections;
-            console.log(`Room ${socket.roomCode}: received cityToMilepost (${Object.keys(cityToMilepost).length} cities)`);
+            room.gameState.coastDistance = coastDistance || {};
+            console.log(`Room ${socket.roomCode}: received cityToMilepost (${Object.keys(cityToMilepost).length} cities), coastDistance (${Object.keys(room.gameState.coastDistance).length} entries)`);
         }
     });
 
@@ -686,6 +738,199 @@ io.on('connection', (socket) => {
                     type: 'action',
                     logs: [upgradeMsg]
                 });
+
+                callback && callback({ success: true });
+                break;
+            }
+
+            case 'pickupGood': {
+                if (playerIndex !== gs.currentPlayerIndex) {
+                    return callback && callback({ success: false, error: 'Not your turn' });
+                }
+
+                const pickupPlayer = gs.players[playerIndex];
+                const good = action.good;
+
+                if (!GOODS[good]) {
+                    return callback && callback({ success: false, error: 'Invalid good' });
+                }
+
+                const maxCapacity = TRAIN_TYPES[pickupPlayer.trainType].capacity;
+                if (pickupPlayer.loads.length >= maxCapacity) {
+                    return callback && callback({ success: false, error: 'Train is at full capacity' });
+                }
+
+                if (isEventBlocking(gs, "load", { milepostId: pickupPlayer.trainLocation })) {
+                    return callback && callback({ success: false, error: 'Strike in effect — cannot pick up goods here' });
+                }
+
+                const goodData = GOODS[good];
+                const inCirculation = getGoodsInCirculation(gs, good);
+                if (inCirculation >= goodData.chips) {
+                    return callback && callback({ success: false, error: `No ${good} available — all ${goodData.chips} chips are in use` });
+                }
+
+                pickupPlayer.loads.push(good);
+                const pickupMsg = `${pickupPlayer.name} picked up ${good}`;
+                gs.gameLog.push(pickupMsg);
+                console.log(`Room ${socket.roomCode}: ${pickupMsg}`);
+
+                broadcastStateUpdate(socket.roomCode, room, {
+                    type: 'action',
+                    logs: [pickupMsg]
+                });
+
+                callback && callback({ success: true });
+                break;
+            }
+
+            case 'dropGood': {
+                if (playerIndex !== gs.currentPlayerIndex) {
+                    return callback && callback({ success: false, error: 'Not your turn' });
+                }
+
+                const dropPlayer = gs.players[playerIndex];
+                const loadIndex = action.loadIndex;
+
+                if (loadIndex < 0 || loadIndex >= dropPlayer.loads.length) {
+                    return callback && callback({ success: false, error: 'Invalid load index' });
+                }
+
+                const droppedGood = dropPlayer.loads[loadIndex];
+                dropPlayer.loads.splice(loadIndex, 1);
+                const dropMsg = `${dropPlayer.name} dropped ${droppedGood}`;
+                gs.gameLog.push(dropMsg);
+                console.log(`Room ${socket.roomCode}: ${dropMsg}`);
+
+                broadcastStateUpdate(socket.roomCode, room, {
+                    type: 'action',
+                    logs: [dropMsg]
+                });
+
+                callback && callback({ success: true });
+                break;
+            }
+
+            case 'deliverGood': {
+                if (playerIndex !== gs.currentPlayerIndex) {
+                    return callback && callback({ success: false, error: 'Not your turn' });
+                }
+
+                const deliverPlayer = gs.players[playerIndex];
+                const { cardIndex, demandIndex } = action;
+                const card = deliverPlayer.demandCards[cardIndex];
+
+                if (!card || !card.demands[demandIndex]) {
+                    return callback && callback({ success: false, error: 'Invalid demand card' });
+                }
+
+                const demand = card.demands[demandIndex];
+                const matchingLoadIndex = deliverPlayer.loads.findIndex(g => g === demand.good);
+                if (matchingLoadIndex === -1) {
+                    return callback && callback({ success: false, error: `No ${demand.good} to deliver` });
+                }
+
+                // Check player is at the correct city
+                const currentCity = getCityAtMilepost(gs, deliverPlayer.trainLocation);
+                if (currentCity !== demand.to) {
+                    return callback && callback({ success: false, error: `Must deliver to ${demand.to}` });
+                }
+
+                if (isEventBlocking(gs, "deliver", { milepostId: deliverPlayer.trainLocation })) {
+                    return callback && callback({ success: false, error: 'Strike in effect — cannot deliver goods here' });
+                }
+
+                // Apply delivery
+                deliverPlayer.loads.splice(matchingLoadIndex, 1);
+                deliverPlayer.cash += demand.payout;
+                const deliverMsg = `${deliverPlayer.name} delivered ${demand.good} to ${demand.to} for ECU ${demand.payout}M`;
+                gs.gameLog.push(deliverMsg);
+                console.log(`Room ${socket.roomCode}: ${deliverMsg}`);
+
+                // Remove fulfilled card, draw replacement
+                deliverPlayer.demandCards.splice(cardIndex, 1);
+                if (deliverPlayer.selectedDemands) {
+                    deliverPlayer.selectedDemands.splice(cardIndex, 1);
+                    deliverPlayer.selectedDemands.push(null);
+                }
+                const newCard = serverDrawCardForPlayer(gs, deliverPlayer);
+
+                broadcastStateUpdate(socket.roomCode, room, {
+                    type: 'delivery',
+                    logs: [deliverMsg],
+                    cardIndex,
+                    newCard
+                });
+
+                callback && callback({ success: true });
+                break;
+            }
+
+            case 'deployTrain': {
+                if (playerIndex !== gs.currentPlayerIndex) {
+                    return callback && callback({ success: false, error: 'Not your turn' });
+                }
+
+                const deployPlayer = gs.players[playerIndex];
+                if (deployPlayer.trainLocation !== null) {
+                    return callback && callback({ success: false, error: 'Train already deployed' });
+                }
+
+                const milepostId = action.milepostId;
+                if (!milepostId) {
+                    return callback && callback({ success: false, error: 'Invalid milepost' });
+                }
+
+                deployPlayer.trainLocation = milepostId;
+                const cityName = getCityAtMilepost(gs, milepostId) || "milepost";
+                const deployMsg = `${deployPlayer.name} deployed train at ${cityName}`;
+                gs.gameLog.push(deployMsg);
+                console.log(`Room ${socket.roomCode}: ${deployMsg}`);
+
+                broadcastStateUpdate(socket.roomCode, room, {
+                    type: 'action',
+                    logs: [deployMsg]
+                });
+
+                callback && callback({ success: true });
+                break;
+            }
+
+            case 'discardHand': {
+                if (playerIndex !== gs.currentPlayerIndex) {
+                    return callback && callback({ success: false, error: 'Not your turn' });
+                }
+
+                const discardPlayer = gs.players[playerIndex];
+                discardPlayer.demandCards = [];
+                discardPlayer.selectedDemands = [null, null, null];
+
+                const discardMsg = `${discardPlayer.name} discarded hand and drew 3 new cards`;
+                gs.gameLog.push(discardMsg);
+                console.log(`Room ${socket.roomCode}: ${discardMsg}`);
+
+                // Draw 3 new demand cards
+                while (discardPlayer.demandCards.length < 3 && gs.demandCardDeck.length > 0) {
+                    serverDrawCardForPlayer(gs, discardPlayer);
+                }
+
+                // Discard hand also ends the turn
+                const turnResult = serverEndTurn(gs);
+                const allLogs = [discardMsg, ...turnResult.logs];
+
+                if (turnResult.gameOver) {
+                    broadcastStateUpdate(socket.roomCode, room, {
+                        type: 'gameOver',
+                        winner: turnResult.winner,
+                        logs: allLogs
+                    });
+                } else {
+                    broadcastStateUpdate(socket.roomCode, room, {
+                        type: 'turnChanged',
+                        overlay: turnResult.overlay,
+                        logs: allLogs
+                    });
+                }
 
                 callback && callback({ success: true });
                 break;

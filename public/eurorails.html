@@ -4646,6 +4646,16 @@ function startGame() {
 }
 
 function deployTrain(milepostId) {
+    if (typeof socket !== 'undefined' && myPlayerId) {
+        socket.emit('action', { type: 'deployTrain', milepostId }, (res) => {
+            if (res && !res.success) {
+                console.warn('[Client] deployTrain rejected:', res.error);
+            }
+        });
+        return;
+    }
+
+    // Local fallback
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     if (currentPlayer.trainLocation === null) {
         gameState.operateHistory.push({ type: "deploy", milepostId });
@@ -4679,6 +4689,17 @@ function getGoodsInCirculation(good) {
 }
 
 function pickupGood(good) {
+    if (typeof socket !== 'undefined' && myPlayerId) {
+        socket.emit('action', { type: 'pickupGood', good }, (res) => {
+            if (res && !res.success) {
+                console.warn('[Client] pickupGood rejected:', res.error);
+                addLog(res.error);
+            }
+        });
+        return;
+    }
+
+    // Local fallback
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     const trainMaxCapacity = TRAIN_TYPES[currentPlayer.trainType].capacity;
 
@@ -4687,13 +4708,11 @@ function pickupGood(good) {
         return;
     }
 
-    // Check if an active strike blocks loading at this location
     if (isEventBlocking("load", { milepostId: currentPlayer.trainLocation })) {
         addLog("Strike in effect — cannot pick up goods here!");
         return;
     }
 
-    // Check supply limit (chips = max in circulation at once)
     const goodData = GOODS[good];
     if (goodData) {
         const inCirculation = getGoodsInCirculation(good);
@@ -4711,6 +4730,17 @@ function pickupGood(good) {
 }
 
 function deliverGood(cardIndex, demandIndex) {
+    if (typeof socket !== 'undefined' && myPlayerId) {
+        socket.emit('action', { type: 'deliverGood', cardIndex, demandIndex }, (res) => {
+            if (res && !res.success) {
+                console.warn('[Client] deliverGood rejected:', res.error);
+                addLog(res.error);
+            }
+        });
+        return;
+    }
+
+    // Local fallback
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     const card = currentPlayer.demandCards[cardIndex];
 
@@ -4737,37 +4767,28 @@ function deliverGood(cardIndex, demandIndex) {
         return;
     }
 
-    // Check if an active strike blocks delivery at this location
     if (isEventBlocking("deliver", { milepostId: currentPlayer.trainLocation })) {
         addLog("Strike in effect — cannot deliver goods here!");
         return;
     }
 
-    // Deliver good — fulfilling one demand replaces the entire card
     currentPlayer.loads.splice(matchingLoadIndex, 1);
     currentPlayer.cash += demand.payout;
     addLog(`${currentPlayer.name} delivered ${demand.good} to ${demand.to} for ECU ${demand.payout}M`);
 
-    // Delivery is irreversible (draws a new card), so clear undo history
     gameState.operateHistory = [];
 
-    // Mark card as discarding so updateUI preserves it visually during animation
     card._discarding = true;
-
-    // Update UI to reflect load/cash changes; card will show as discarding placeholder
     updateUI();
     drawMap();
 
-    // Animate the discard, then draw replacement
     animateCardDiscard(cardIndex, () => {
-        // Remove the fulfilled card and its selection, then draw a replacement
         currentPlayer.demandCards.splice(cardIndex, 1);
         if (currentPlayer.selectedDemands) {
             currentPlayer.selectedDemands.splice(cardIndex, 1);
-            currentPlayer.selectedDemands.push(null); // new card has no selection
+            currentPlayer.selectedDemands.push(null);
         }
 
-        // Hold queue so placeholder renders before animation starts (same pattern as discardHand)
         cardAnimationHoldQueue = true;
         drawCardForPlayer(currentPlayer);
         updateUI();
@@ -4790,6 +4811,17 @@ function toggleDemandSelection(cardIdx, demandIdx) {
 }
 
 function dropGood(loadIndex) {
+    if (typeof socket !== 'undefined' && myPlayerId) {
+        socket.emit('action', { type: 'dropGood', loadIndex }, (res) => {
+            if (res && !res.success) {
+                console.warn('[Client] dropGood rejected:', res.error);
+                addLog(res.error);
+            }
+        });
+        return;
+    }
+
+    // Local fallback
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     if (loadIndex >= 0 && loadIndex < currentPlayer.loads.length) {
         const good = currentPlayer.loads[loadIndex];
@@ -4863,26 +4895,34 @@ function confirmDiscardYes() {
 }
 
 function discardHand() {
+    if (typeof socket !== 'undefined' && myPlayerId) {
+        socket.emit('action', { type: 'discardHand' }, (res) => {
+            if (res && !res.success) {
+                console.warn('[Client] discardHand rejected:', res.error);
+                addLog(res.error);
+            }
+        });
+        return;
+    }
+
+    // Local fallback
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     currentPlayer.demandCards = [];
     currentPlayer.selectedDemands = [null, null, null];
     addLog(`${currentPlayer.name} discarded hand and drew 3 new cards`);
 
-    // Hold queue so all cards batch together, then flush
     cardAnimationHoldQueue = true;
     while (currentPlayer.demandCards.length < 3 && gameState.demandCardDeck.length > 0) {
         drawCardForPlayer(currentPlayer);
     }
 
-    // Render placeholders before animation starts
     updateUI();
     drawMap();
 
-    // End turn after all card animations finish
     if (cardAnimationQueue.length > 0) {
-        cardAnimationDoneCallback = () => endTurn();
+        cardAnimationDoneCallback = () => endTurnLocal();
     } else {
-        endTurn();
+        endTurnLocal();
     }
     flushCardAnimationQueue();
 }
@@ -6616,7 +6656,8 @@ socket.on('gameStart', ({ state }) => {
         cityToMilepost: gameState.cityToMilepost,
         ferryConnections: gameState.ferryConnections.map(fc => ({
             fromId: fc.fromId, toId: fc.toId, cost: fc.cost
-        }))
+        })),
+        coastDistance: gameState.coastDistance
     });
 
     drawMap();
