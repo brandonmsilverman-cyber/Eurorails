@@ -866,6 +866,110 @@ io.on('connection', (socket) => {
                 break;
             }
 
+            case 'commitBuild': {
+                if (playerIndex !== gs.currentPlayerIndex) {
+                    return callback && callback({ success: false, error: 'Not your turn' });
+                }
+
+                // Check strike 123: drawing player cannot build
+                for (const ae of gs.activeEvents) {
+                    if (ae.card.id === 123) {
+                        const drawingPlayer = gs.players[ae.drawingPlayerIndex];
+                        const currentP = gs.players[playerIndex];
+                        if (currentP.color === drawingPlayer.color) {
+                            return callback && callback({ success: false, error: 'Strike in effect — cannot build' });
+                        }
+                    }
+                }
+
+                const { buildPath, buildCost, majorCityCount, ferries } = action;
+                const buildPlayer = gs.players[playerIndex];
+
+                if (!buildPath || buildPath.length < 2) {
+                    return callback && callback({ success: false, error: 'Invalid build path' });
+                }
+                if (typeof buildCost !== 'number' || buildCost < 0) {
+                    return callback && callback({ success: false, error: 'Invalid build cost' });
+                }
+
+                const remainingBudget = 20 - gs.buildingThisTurn;
+                if (buildCost > remainingBudget) {
+                    return callback && callback({ success: false, error: 'Exceeds build budget' });
+                }
+                if (buildCost > buildPlayer.cash) {
+                    return callback && callback({ success: false, error: 'Not enough cash' });
+                }
+                if (gs.majorCitiesThisTurn + (majorCityCount || 0) > 2) {
+                    return callback && callback({ success: false, error: 'Major city limit exceeded' });
+                }
+
+                // Build owned/other edge sets for validation
+                const ownedEdges = new Set();
+                const otherEdges = new Set();
+                for (const t of gs.tracks) {
+                    const fwd = t.from + "|" + t.to;
+                    const rev = t.to + "|" + t.from;
+                    if (t.color === buildPlayer.color) {
+                        ownedEdges.add(fwd);
+                        ownedEdges.add(rev);
+                    } else {
+                        otherEdges.add(fwd);
+                        otherEdges.add(rev);
+                    }
+                }
+
+                // Add track segments
+                let newSegments = 0;
+                const logs = [];
+                for (let i = 0; i < buildPath.length - 1; i++) {
+                    const edgeKey = buildPath[i] + "|" + buildPath[i + 1];
+                    const ferryKey = getFerryKey(buildPath[i], buildPath[i + 1]);
+
+                    // Check if this is a ferry edge
+                    let isFerryEdge = false;
+                    if (ferries && ferries.includes(ferryKey)) {
+                        isFerryEdge = true;
+                        if (!gs.ferryOwnership[ferryKey]) {
+                            gs.ferryOwnership[ferryKey] = [];
+                        }
+                        if (!gs.ferryOwnership[ferryKey].includes(buildPlayer.color)) {
+                            gs.ferryOwnership[ferryKey].push(buildPlayer.color);
+                            newSegments++;
+                        }
+                    }
+                    if (isFerryEdge) continue;
+
+                    if (otherEdges.has(edgeKey)) continue;
+                    if (!ownedEdges.has(edgeKey)) {
+                        gs.tracks.push({
+                            from: buildPath[i],
+                            to: buildPath[i + 1],
+                            color: buildPlayer.color
+                        });
+                        ownedEdges.add(edgeKey);
+                        ownedEdges.add(buildPath[i + 1] + "|" + buildPath[i]);
+                        newSegments++;
+                    }
+                }
+
+                buildPlayer.cash -= buildCost;
+                gs.buildingThisTurn += buildCost;
+                gs.majorCitiesThisTurn += (majorCityCount || 0);
+
+                const buildMsg = `${buildPlayer.name} built track for ECU ${buildCost}M (${20 - gs.buildingThisTurn}M remaining this turn)`;
+                gs.gameLog.push(buildMsg);
+                logs.push(buildMsg);
+                console.log(`Room ${socket.roomCode}: ${buildMsg}`);
+
+                broadcastStateUpdate(socket.roomCode, room, {
+                    type: 'action',
+                    logs
+                });
+
+                callback && callback({ success: true });
+                break;
+            }
+
             case 'deployTrain': {
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });

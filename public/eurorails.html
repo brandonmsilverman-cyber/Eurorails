@@ -5990,8 +5990,35 @@ document.addEventListener("DOMContentLoaded", function() {
 
                     if (gameState.majorCitiesThisTurn + majorCityCount > 2) {
                         addLog("Cannot build more than 2 sections from major cities this turn!");
+                    } else if (typeof socket !== 'undefined' && myPlayerId) {
+                        // Multiplayer: compute ferry keys to claim, send to server
+                        const newFerries = [];
+                        for (let i = 0; i < buildPath.length - 1; i++) {
+                            const ferryKey = getFerryKey(buildPath[i], buildPath[i + 1]);
+                            for (let fc of gameState.ferryConnections) {
+                                if (getFerryKey(fc.fromId, fc.toId) === ferryKey) {
+                                    if (!playerOwnsFerry(ferryKey, currentPlayer.color)) {
+                                        newFerries.push(ferryKey);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+
+                        socket.emit('action', {
+                            type: 'commitBuild',
+                            buildPath,
+                            buildCost,
+                            majorCityCount,
+                            ferries: newFerries
+                        }, (res) => {
+                            if (res && !res.success) {
+                                console.warn('[Client] commitBuild rejected:', res.error);
+                                addLog(res.error);
+                            }
+                        });
                     } else {
-                        // Build track — skip own existing segments, block other players' segments
+                        // Local fallback: build track directly
                         const ownedEdges = new Set();
                         const otherEdges = new Set();
                         for (let t of gameState.tracks) {
@@ -6007,20 +6034,17 @@ document.addEventListener("DOMContentLoaded", function() {
                         }
 
                         let newSegments = 0;
-                        const newFerries = []; // ferry keys claimed this build
-                        // Track cost breakdown for this build
+                        const newFerries = [];
                         const breakdown = { clear: 0, mountain: 0, alpine: 0, river: 0, smallCity: 0, majorCity: 0, ferry: 0 };
                         for (let i = 0; i < buildPath.length - 1; i++) {
                             const edgeKey = buildPath[i] + "|" + buildPath[i + 1];
 
-                            // Check if this edge is a ferry crossing
                             const ferryKey = getFerryKey(buildPath[i], buildPath[i + 1]);
                             let isFerryEdge = false;
                             for (let fc of gameState.ferryConnections) {
                                 if (getFerryKey(fc.fromId, fc.toId) === ferryKey) {
                                     isFerryEdge = true;
                                     if (!playerOwnsFerry(ferryKey, currentPlayer.color)) {
-                                        // Claim this ferry
                                         if (!gameState.ferryOwnership[ferryKey]) {
                                             gameState.ferryOwnership[ferryKey] = [];
                                         }
@@ -6035,7 +6059,7 @@ document.addEventListener("DOMContentLoaded", function() {
                             }
                             if (isFerryEdge) continue;
 
-                            if (otherEdges.has(edgeKey)) continue; // never build on other players' track
+                            if (otherEdges.has(edgeKey)) continue;
                             if (!ownedEdges.has(edgeKey)) {
                                 gameState.tracks.push({
                                     from: buildPath[i],
@@ -6043,7 +6067,6 @@ document.addEventListener("DOMContentLoaded", function() {
                                     color: currentPlayer.color
                                 });
                                 newSegments++;
-                                // Categorize this segment
                                 const destMp = gameState.mileposts_by_id[buildPath[i + 1]];
                                 const srcMp = gameState.mileposts_by_id[buildPath[i]];
                                 if (destMp.city) {
@@ -6071,7 +6094,7 @@ document.addEventListener("DOMContentLoaded", function() {
                             cost: buildCost,
                             majorCities: majorCityCount,
                             breakdown,
-                            ferries: newFerries  // ferry keys claimed this build (for undo)
+                            ferries: newFerries
                         });
 
                         addLog(`${currentPlayer.name} built track for ECU ${buildCost}M (${20 - gameState.buildingThisTurn}M remaining this turn)`);
