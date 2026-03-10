@@ -884,7 +884,11 @@ function getUniqueRoomCode() {
 io.on('connection', (socket) => {
     console.log(`Player connected: ${socket.id}`);
 
-    socket.on('createRoom', ({ playerName, maxPlayers }, callback) => {
+    socket.on('listRooms', (callback) => {
+        callback(getRoomList());
+    });
+
+    socket.on('createRoom', ({ playerName, maxPlayers, password }, callback) => {
         const playerCount = Math.min(6, Math.max(1, parseInt(maxPlayers) || 3));
         const roomCode = getUniqueRoomCode();
         const room = {
@@ -892,19 +896,21 @@ io.on('connection', (socket) => {
             hostId: socket.id,
             gameStarted: false,
             gameState: null,
-            maxPlayers: playerCount
+            maxPlayers: playerCount,
+            password: password || null
         };
         room.players.set(socket.id, { name: playerName, color: null });
         rooms.set(roomCode, room);
         socket.join(roomCode);
         socket.roomCode = roomCode;
 
-        console.log(`Room ${roomCode} created by ${playerName}`);
+        console.log(`Room ${roomCode} created by ${playerName}${room.password ? ' (password protected)' : ''}`);
         callback({ success: true, roomCode, playerId: socket.id });
         io.to(roomCode).emit('roomUpdate', getRoomInfo(roomCode));
+        broadcastRoomList();
     });
 
-    socket.on('joinRoom', ({ roomCode, playerName }, callback) => {
+    socket.on('joinRoom', ({ roomCode, playerName, password }, callback) => {
         const code = roomCode.toUpperCase();
         const room = rooms.get(code);
 
@@ -917,6 +923,9 @@ io.on('connection', (socket) => {
         if (room.players.size >= room.maxPlayers) {
             return callback({ success: false, error: 'Room is full' });
         }
+        if (room.password && room.password !== password) {
+            return callback({ success: false, error: 'Incorrect password' });
+        }
 
         room.players.set(socket.id, { name: playerName, color: null });
         socket.join(code);
@@ -925,6 +934,7 @@ io.on('connection', (socket) => {
         console.log(`${playerName} joined room ${code}`);
         callback({ success: true, roomCode: code, playerId: socket.id });
         io.to(code).emit('roomUpdate', getRoomInfo(code));
+        broadcastRoomList();
     });
 
     socket.on('selectColor', ({ color }) => {
@@ -973,6 +983,7 @@ io.on('connection', (socket) => {
             const state = getStateForPlayer(room.gameState, socketId);
             io.to(socketId).emit('gameStart', { state });
         }
+        broadcastRoomList();
     });
 
     // Client sends cityToMilepost mapping after generating hex grid
@@ -1745,6 +1756,7 @@ io.on('connection', (socket) => {
             }
             io.to(roomCode).emit('roomUpdate', getRoomInfo(roomCode));
         }
+        broadcastRoomList();
     });
 });
 
@@ -1757,6 +1769,26 @@ function getRoomInfo(roomCode) {
         players.push({ id, name: p.name, color: p.color, isHost: id === room.hostId });
     }
     return { roomCode, players, hostId: room.hostId, maxPlayers: room.maxPlayers };
+}
+
+function getRoomList() {
+    const list = [];
+    for (const [roomCode, room] of rooms) {
+        const host = room.players.get(room.hostId);
+        list.push({
+            roomCode,
+            hostName: host ? host.name : 'Unknown',
+            hasPassword: !!room.password,
+            maxPlayers: room.maxPlayers,
+            playerCount: room.players.size,
+            gameStarted: room.gameStarted
+        });
+    }
+    return list;
+}
+
+function broadcastRoomList() {
+    io.emit('roomListUpdate', getRoomList());
 }
 
 // --- Start Server ---

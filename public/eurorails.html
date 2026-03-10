@@ -849,8 +849,8 @@
 <body>
 
 <div class="setup-screen" id="setupScreen">
-    <!-- Lobby: Join or Create -->
-    <div class="setup-dialog" id="lobbyJoinCreate">
+    <!-- Lobby: Main Screen -->
+    <div class="setup-dialog" id="lobbyJoinCreate" style="max-width: 700px; width: 90%;">
         <h1>Eurorails: Railroad Game</h1>
 
         <div class="setup-section">
@@ -858,27 +858,50 @@
             <input type="text" id="lobbyPlayerName" placeholder="Enter your name" value="">
         </div>
 
+        <!-- Current Game Rooms -->
         <div class="setup-section">
-            <label>Number of Players:</label>
-            <div id="lobbyPlayerCountPicker" style="display: flex; gap: 8px; justify-content: center;">
-                <button class="player-count-btn" onclick="selectPlayerCount(1)" style="width: 40px; height: 40px; border-radius: 8px; font-size: 18px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">1</button>
-                <button class="player-count-btn" onclick="selectPlayerCount(2)" style="width: 40px; height: 40px; border-radius: 8px; font-size: 18px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">2</button>
-                <button class="player-count-btn selected" onclick="selectPlayerCount(3)" style="width: 40px; height: 40px; border-radius: 8px; font-size: 18px; font-weight: bold; background: #333; color: #fff; border: 2px solid #3498db; cursor: pointer;">3</button>
-                <button class="player-count-btn" onclick="selectPlayerCount(4)" style="width: 40px; height: 40px; border-radius: 8px; font-size: 18px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">4</button>
-                <button class="player-count-btn" onclick="selectPlayerCount(5)" style="width: 40px; height: 40px; border-radius: 8px; font-size: 18px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">5</button>
-                <button class="player-count-btn" onclick="selectPlayerCount(6)" style="width: 40px; height: 40px; border-radius: 8px; font-size: 18px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">6</button>
+            <label>Current Game Rooms:</label>
+            <div style="border: 1px solid #444; border-radius: 5px; overflow: hidden;">
+                <table id="lobbyRoomTable" style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                    <thead>
+                        <tr style="background: #1a1a1a; text-align: left;">
+                            <th style="padding: 10px 12px; color: #888; font-weight: 600;">Host</th>
+                            <th style="padding: 10px 8px; color: #888; font-weight: 600; text-align: center; width: 30px;" title="Password required">&#128274;</th>
+                            <th style="padding: 10px 12px; color: #888; font-weight: 600; text-align: center;">Players</th>
+                            <th style="padding: 10px 12px; color: #888; font-weight: 600; text-align: center;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lobbyRoomTableBody">
+                        <tr><td colspan="4" style="padding: 20px; text-align: center; color: #666; font-style: italic;">No rooms available</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <div class="setup-buttons" style="flex-direction: column; gap: 10px;">
-            <button onclick="createRoom()" style="padding: 12px 40px; font-size: 16px;">Create Room</button>
-            <div style="text-align: center; color: #888; font-size: 14px;">— or —</div>
-            <div style="display: flex; gap: 10px; align-items: center; justify-content: center;">
-                <input type="text" id="lobbyRoomCode" placeholder="Room Code" maxlength="4" style="width: 120px; text-transform: uppercase; text-align: center; font-size: 18px; letter-spacing: 4px;">
-                <button onclick="joinRoom()" style="padding: 12px 24px; font-size: 16px;">Join</button>
+        <!-- Create Room -->
+        <div class="setup-section" style="border-top: 1px solid #444; padding-top: 20px;">
+            <label>Create a New Room:</label>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="color: #888; font-size: 13px;">Players:</span>
+                    <div id="lobbyPlayerCountPicker" style="display: flex; gap: 4px;">
+                        <button class="player-count-btn" onclick="selectPlayerCount(1)" style="width: 32px; height: 32px; border-radius: 6px; font-size: 15px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">1</button>
+                        <button class="player-count-btn" onclick="selectPlayerCount(2)" style="width: 32px; height: 32px; border-radius: 6px; font-size: 15px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">2</button>
+                        <button class="player-count-btn selected" onclick="selectPlayerCount(3)" style="width: 32px; height: 32px; border-radius: 6px; font-size: 15px; font-weight: bold; background: #333; color: #fff; border: 2px solid #3498db; cursor: pointer;">3</button>
+                        <button class="player-count-btn" onclick="selectPlayerCount(4)" style="width: 32px; height: 32px; border-radius: 6px; font-size: 15px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">4</button>
+                        <button class="player-count-btn" onclick="selectPlayerCount(5)" style="width: 32px; height: 32px; border-radius: 6px; font-size: 15px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">5</button>
+                        <button class="player-count-btn" onclick="selectPlayerCount(6)" style="width: 32px; height: 32px; border-radius: 6px; font-size: 15px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">6</button>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="color: #888; font-size: 13px;">Password:</span>
+                    <input type="text" id="lobbyRoomPassword" placeholder="Optional" style="width: 120px; padding: 6px 10px; margin-bottom: 0; font-size: 14px;">
+                </div>
+                <button onclick="createRoom()" style="padding: 8px 24px; font-size: 15px; margin-left: auto;">Create Room</button>
             </div>
         </div>
-        <div id="lobbyError" style="color: #ff6666; text-align: center; margin-top: 15px; min-height: 20px;"></div>
+
+        <div id="lobbyError" style="color: #ff6666; text-align: center; margin-top: 10px; min-height: 20px;"></div>
     </div>
 
     <!-- Lobby: Waiting Room -->
@@ -6774,8 +6797,9 @@ function createRoom() {
         document.getElementById("lobbyError").textContent = "Please enter your name.";
         return;
     }
+    const password = document.getElementById("lobbyRoomPassword").value.trim() || null;
     document.getElementById("lobbyError").textContent = "";
-    socket.emit('createRoom', { playerName: name, maxPlayers: selectedMaxPlayers }, (res) => {
+    socket.emit('createRoom', { playerName: name, maxPlayers: selectedMaxPlayers, password }, (res) => {
         if (res.success) {
             myPlayerId = res.playerId;
             myRoomCode = res.roomCode;
@@ -6787,19 +6811,19 @@ function createRoom() {
     });
 }
 
-function joinRoom() {
+function joinRoom(roomCode, hasPassword) {
     const name = document.getElementById("lobbyPlayerName").value.trim();
-    const code = document.getElementById("lobbyRoomCode").value.trim();
     if (!name) {
         document.getElementById("lobbyError").textContent = "Please enter your name.";
         return;
     }
-    if (!code) {
-        document.getElementById("lobbyError").textContent = "Please enter a room code.";
-        return;
+    let password = null;
+    if (hasPassword) {
+        password = prompt("Enter room password:");
+        if (password === null) return; // cancelled
     }
     document.getElementById("lobbyError").textContent = "";
-    socket.emit('joinRoom', { roomCode: code, playerName: name }, (res) => {
+    socket.emit('joinRoom', { roomCode, playerName: name, password }, (res) => {
         if (res.success) {
             myPlayerId = res.playerId;
             myRoomCode = res.roomCode;
@@ -6809,6 +6833,40 @@ function joinRoom() {
             document.getElementById("lobbyError").textContent = res.error;
         }
     });
+}
+
+function renderRoomList(roomList) {
+    const tbody = document.getElementById("lobbyRoomTableBody");
+    if (!roomList || roomList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="padding: 20px; text-align: center; color: #666; font-style: italic;">No rooms available</td></tr>';
+        return;
+    }
+    tbody.innerHTML = "";
+    for (const room of roomList) {
+        const tr = document.createElement("tr");
+        const joinable = !room.gameStarted && room.playerCount < room.maxPlayers;
+        tr.style.cursor = joinable ? "pointer" : "default";
+        tr.style.opacity = joinable ? "1" : "0.5";
+        tr.style.borderTop = "1px solid #333";
+        if (joinable) {
+            tr.onmouseenter = () => tr.style.background = "#3a3a3a";
+            tr.onmouseleave = () => tr.style.background = "";
+            tr.onclick = () => joinRoom(room.roomCode, room.hasPassword);
+        }
+        tr.innerHTML = `
+            <td style="padding: 10px 12px;">${escapeHtml(room.hostName)}</td>
+            <td style="padding: 10px 8px; text-align: center;">${room.hasPassword ? '&#128274;' : ''}</td>
+            <td style="padding: 10px 12px; text-align: center;">${room.playerCount}/${room.maxPlayers}</td>
+            <td style="padding: 10px 12px; text-align: center;">${room.gameStarted ? '<span style="color: #e74c3c;">In Progress</span>' : '<span style="color: #2ecc71;">Waiting</span>'}</td>
+        `;
+        tbody.appendChild(tr);
+    }
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
 }
 
 function showLobbyRoom() {
@@ -6915,8 +6973,17 @@ function lobbyStartGame() {
 }
 
 // Socket event handlers
+socket.on('roomListUpdate', (roomList) => {
+    renderRoomList(roomList);
+});
+
 socket.on('roomUpdate', (info) => {
     renderLobbyRoom(info);
+});
+
+// Request initial room list
+socket.emit('listRooms', (roomList) => {
+    renderRoomList(roomList);
 });
 
 socket.on('gameStart', ({ state }) => {
