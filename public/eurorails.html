@@ -3063,7 +3063,13 @@ function drawMap() {
     const worldW = WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX;
     const worldH = WORLD_BOUNDS.maxY - WORLD_BOUNDS.minY;
     const scale = Math.min(width / worldW, height / worldH);
-    const offsetX = (width - worldW * scale) / 2;
+    // Position map so Ireland clears the left panel at zoom=1;
+    // at higher zoom levels, center normally (user scrolls around)
+    const panelRight = 560; // left panel right edge + ocean gap before Ireland
+    const irelandInset = 5 * scale; // Ireland starts ~5 world units from WORLD_BOUNDS.minX
+    const panelClearOffset = Math.max(0, Math.min(panelRight - irelandInset, width - worldW * scale));
+    const centerOffset = (width - worldW * scale) / 2;
+    const offsetX = (gameState.zoom || 1) === 1 ? panelClearOffset : centerOffset;
     const offsetY = (height - worldH * scale) / 2;
 
     function worldToScreen(x, y) {
@@ -5763,7 +5769,11 @@ document.addEventListener("DOMContentLoaded", function() {
         const worldW = WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX;
         const worldH = WORLD_BOUNDS.maxY - WORLD_BOUNDS.minY;
         const scale = Math.min(cssWidth / worldW, cssHeight / worldH);
-        const offsetX = (cssWidth - worldW * scale) / 2;
+        const panelRight = 560;
+        const irelandInset = 5 * scale;
+        const panelClearOffset = Math.max(0, Math.min(panelRight - irelandInset, cssWidth - worldW * scale));
+        const centerOffset = (cssWidth - worldW * scale) / 2;
+        const offsetX = (gameState.zoom || 1) === 1 ? panelClearOffset : centerOffset;
         const offsetY = (cssHeight - worldH * scale) / 2;
 
         const worldX = (mouseX - offsetX) / scale + WORLD_BOUNDS.minX;
@@ -6221,7 +6231,11 @@ document.addEventListener("DOMContentLoaded", function() {
         const worldW = WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX;
         const worldH = WORLD_BOUNDS.maxY - WORLD_BOUNDS.minY;
         const scale = Math.min(cssWidth / worldW, cssHeight / worldH);
-        const offsetX = (cssWidth - worldW * scale) / 2;
+        const panelRight = 560;
+        const irelandInset = 5 * scale;
+        const panelClearOffset = Math.max(0, Math.min(panelRight - irelandInset, cssWidth - worldW * scale));
+        const centerOffset = (cssWidth - worldW * scale) / 2;
+        const offsetX = (gameState.zoom || 1) === 1 ? panelClearOffset : centerOffset;
         const offsetY = (cssHeight - worldH * scale) / 2;
 
         const worldX = (mouseX - offsetX) / scale + WORLD_BOUNDS.minX;
