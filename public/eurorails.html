@@ -4953,8 +4953,15 @@ function showTurnOverlay(playerName, playerColor, phaseLabel) {
     document.getElementById("turnOverlay").classList.add("show");
 }
 
+let deferCardAnimationsUntilReady = false;
+
 function dismissTurnOverlay() {
     document.getElementById("turnOverlay").classList.remove("show");
+    // Flush any card animations that were deferred until the player clicked Ready
+    if (deferCardAnimationsUntilReady) {
+        deferCardAnimationsUntilReady = false;
+        flushCardAnimationQueue();
+    }
 }
 
 // Determine which opponents own foreign track segments being traversed.
@@ -6999,9 +7006,17 @@ socket.on('stateUpdate', ({ state, uiEvent }) => {
     updateUI();
     drawMap();
 
-    // Flush card animations after updateUI has rendered placeholders
+    // Flush card animations after updateUI has rendered placeholders.
+    // If the turn overlay is showing for the current player, defer until they click Ready.
     if (animationTriggered) {
-        flushCardAnimationQueue();
+        const myPlayer = gameState.players.find(p => p.id === myPlayerId);
+        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+        const isMyTurn = myPlayer && currentPlayer && currentPlayer.id === myPlayerId;
+        if (uiEvent?.type === 'turnChanged' && isMyTurn) {
+            deferCardAnimationsUntilReady = true;
+        } else {
+            flushCardAnimationQueue();
+        }
     }
 });
 </script>
