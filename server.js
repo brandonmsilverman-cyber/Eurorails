@@ -1939,6 +1939,26 @@ io.on('connection', (socket) => {
             playerName: player.name,
         });
 
+        // Step 7: Transfer host if host disconnected in-game
+        if (room.hostSessionToken === player.sessionToken && room.players.size > 0) {
+            // Pick the next connected player (from room.players, not disconnectedPlayers)
+            const nextHost = room.players.values().next().value;
+            const oldHostToken = room.hostSessionToken;
+            room.hostSessionToken = nextHost.sessionToken;
+
+            const transferMsg = `Host transferred to ${nextHost.name}`;
+            if (room.gameState) {
+                room.gameState.gameLog.push(transferMsg);
+            }
+            console.log(`Room ${roomCode}: ${transferMsg}`);
+
+            io.to(roomCode).emit('hostTransferred', {
+                oldHostSessionToken: oldHostToken,
+                newHostSessionToken: nextHost.sessionToken,
+                newHostName: nextHost.name,
+            });
+        }
+
         // Start grace period timer
         const graceTimer = setTimeout(() => {
             expirePlayer(roomCode, player.sessionToken);

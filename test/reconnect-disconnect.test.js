@@ -394,16 +394,19 @@ describe('Step 2: Disconnect Handler with Grace Period', () => {
   // -----------------------------------------------------------------------
 
   describe('Edge cases', () => {
-    it('host disconnect in-game preserves player (no host transfer)', async () => {
+    it('host disconnect in-game preserves player and transfers host', async () => {
       const { client: host, res: hostRes } = await makeRoom('Alice');
-      const { client: joiner } = await joinRoom(hostRes.roomCode, 'Bob');
+      const { client: joiner, res: joinRes } = await joinRoom(hostRes.roomCode, 'Bob');
       await startTwoPlayerGame(host, joiner);
 
       const disconnectP = once(joiner, 'playerDisconnected');
+      const transferP = once(joiner, 'hostTransferred');
       host.disconnect();
-      const event = await disconnectP;
+      const [event, transfer] = await Promise.all([disconnectP, transferP]);
 
       assert.equal(event.sessionToken, hostRes.sessionToken);
+      assert.equal(transfer.newHostSessionToken, joinRes.sessionToken,
+        'host should transfer to Bob');
     });
 
     it('multiple disconnects from same player do not cause errors', async () => {
