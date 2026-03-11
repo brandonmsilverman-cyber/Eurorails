@@ -7237,7 +7237,30 @@ socket.emit('listRooms', (roomList) => {
     renderRoomList(roomList);
 });
 
-socket.on('gameStart', ({ state }) => {
+// Attempt to rejoin a game in progress using saved session credentials
+(function attemptRejoin() {
+    const savedToken = sessionStorage.getItem('sessionToken');
+    const savedRoom = sessionStorage.getItem('roomCode');
+    if (!savedToken || !savedRoom) return;
+
+    socket.emit('rejoinGame', { roomCode: savedRoom, sessionToken: savedToken }, (res) => {
+        if (res.success) {
+            myPlayerId = savedToken;
+            myRoomCode = savedRoom;
+            console.log('[Client] Reconnected to game in room', savedRoom);
+            initializeGameView(res.state, true);
+        } else {
+            // Stale session — clear saved credentials
+            console.log('[Client] Rejoin failed:', res.error);
+            sessionStorage.removeItem('sessionToken');
+            sessionStorage.removeItem('roomCode');
+        }
+    });
+})();
+
+// Shared initialization: sets up canvas, hex grid, and enters the game view.
+// Called by both gameStart (fresh game) and rejoinGame (reconnect).
+function initializeGameView(state, isRejoin) {
     // Apply server-authoritative state
     gameState.players = state.players;
     gameState.currentPlayerIndex = state.currentPlayerIndex;
@@ -7257,8 +7280,10 @@ socket.on('gameStart', ({ state }) => {
     gameState.destroyedRiverTracks = state.destroyedRiverTracks;
     gameState.trackageRightsPaidThisTurn = state.trackageRightsPaidThisTurn;
     gameState.trackageRightsLog = state.trackageRightsLog;
+    if (state.operateHistory) gameState.operateHistory = state.operateHistory;
+    if (state.buildHistory) gameState.buildHistory = state.buildHistory;
 
-    console.log('[Client] Received game state from server');
+    console.log(`[Client] ${isRejoin ? 'Rejoined' : 'Received'} game state from server`);
     console.log('[Client] Players:', gameState.players.map(p => p.name + '/' + p.color));
     console.log('[Client] Deck remaining:', state.demandCardDeck, 'cards');
     console.log('[Client] My demand cards:', gameState.players.find(p => p.id === myPlayerId)?.demandCards.length);
@@ -7293,14 +7318,12 @@ socket.on('gameStart', ({ state }) => {
             }
             eventZones[evt.id] = Array.from(zone);
         } else if ((evt.type === "snow" || evt.type === "fog") && evt.city) {
-            // Snow/fog zones: city + radius (for half-speed checks)
             const cityMpId = gameState.cityToMilepost[evt.city];
             if (cityMpId !== undefined) {
                 const zone = getMilepostsInHexRange(cityMpId, evt.radius);
                 eventZones[evt.id] = Array.from(zone);
             }
         } else if (evt.type === "gale" && evt.seaAreas) {
-            // Gale zones: seaAreas + radius (for half-speed and ferry blocking)
             if (typeof getCoastalMilepostsForSeaAreas === 'function') {
                 const coastalStarts = getCoastalMilepostsForSeaAreas(evt.seaAreas);
                 const zone = getMilepostsInHexRangeMultiSource(coastalStarts, evt.radius - 1);
@@ -7322,7 +7345,7 @@ socket.on('gameStart', ({ state }) => {
     drawMap();
     updateUI();
 
-    // Render server log entries to the DOM (already in gameState.gameLog)
+    // Render server log entries to the DOM
     const logDiv = document.getElementById("gameLog");
     if (logDiv) {
         for (const msg of state.gameLog) {
@@ -7331,22 +7354,31 @@ socket.on('gameStart', ({ state }) => {
         logDiv.scrollTop = logDiv.scrollHeight;
     }
 
-    // Only animate initial cards for the first player (it's their turn, overlay will show).
-    // Other players get their animation when it first becomes their turn.
-    const myPlayer = gameState.players.find(p => p.id === myPlayerId);
-    const isFirstPlayer = myPlayer && gameState.players[0] && gameState.players[0].id === myPlayerId;
-    if (isFirstPlayer && myPlayer.demandCards.length > 0) {
+    if (isRejoin) {
+        // On rejoin, skip card deal animations — cards are already dealt
         pendingInitialCardAnimation = false;
-        cardAnimationHoldQueue = true;
-        for (const card of myPlayer.demandCards) {
-            card._animating = true;
-            queueCardAnimation(card, false);
-        }
-        updateUI();
-        flushCardAnimationQueue();
     } else {
-        pendingInitialCardAnimation = true;
+        // Only animate initial cards for the first player (it's their turn, overlay will show).
+        // Other players get their animation when it first becomes their turn.
+        const myPlayer = gameState.players.find(p => p.id === myPlayerId);
+        const isFirstPlayer = myPlayer && gameState.players[0] && gameState.players[0].id === myPlayerId;
+        if (isFirstPlayer && myPlayer.demandCards.length > 0) {
+            pendingInitialCardAnimation = false;
+            cardAnimationHoldQueue = true;
+            for (const card of myPlayer.demandCards) {
+                card._animating = true;
+                queueCardAnimation(card, false);
+            }
+            updateUI();
+            flushCardAnimationQueue();
+        } else {
+            pendingInitialCardAnimation = true;
+        }
     }
+}
+
+socket.on('gameStart', ({ state }) => {
+    initializeGameView(state, false);
 });
 
 // Apply server state update to local gameState
