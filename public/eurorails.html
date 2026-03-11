@@ -589,6 +589,40 @@
             margin-bottom: 20px;
         }
 
+        .reconnect-banner {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: #fff;
+            font-size: 22px;
+        }
+
+        .reconnect-banner.show {
+            display: flex;
+        }
+
+        .reconnect-banner .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: #4a9eff;
+            border-radius: 50%;
+            animation: reconnect-spin 0.8s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes reconnect-spin {
+            to { transform: rotate(360deg); }
+        }
+
         .trackage-modal {
             display: none;
             position: fixed;
@@ -6976,6 +7010,11 @@ document.querySelector(".map-area")?.addEventListener("wheel", function(e) {
     </div>
 </div>
 
+<div class="reconnect-banner" id="reconnectBanner">
+    <div class="spinner"></div>
+    <div>Reconnecting to server...</div>
+</div>
+
 <div class="turn-overlay" id="turnOverlay">
     <div class="turn-overlay-content">
         <h2>Next Turn</h2>
@@ -7237,8 +7276,8 @@ socket.emit('listRooms', (roomList) => {
     renderRoomList(roomList);
 });
 
-// Attempt to rejoin a game in progress using saved session credentials
-(function attemptRejoin() {
+// Auto-rejoin on connect (fires on initial connection AND Socket.IO auto-reconnects)
+socket.on('connect', () => {
     const savedToken = sessionStorage.getItem('sessionToken');
     const savedRoom = sessionStorage.getItem('roomCode');
     if (!savedToken || !savedRoom) return;
@@ -7248,15 +7287,24 @@ socket.emit('listRooms', (roomList) => {
             myPlayerId = savedToken;
             myRoomCode = savedRoom;
             console.log('[Client] Reconnected to game in room', savedRoom);
+            document.getElementById('reconnectBanner').classList.remove('show');
             initializeGameView(res.state, true);
         } else {
             // Stale session — clear saved credentials
             console.log('[Client] Rejoin failed:', res.error);
             sessionStorage.removeItem('sessionToken');
             sessionStorage.removeItem('roomCode');
+            document.getElementById('reconnectBanner').classList.remove('show');
         }
     });
-})();
+});
+
+// Show reconnecting banner when socket drops during an active game
+socket.on('disconnect', () => {
+    if (gameState.gameStarted) {
+        document.getElementById('reconnectBanner').classList.add('show');
+    }
+});
 
 // Shared initialization: sets up canvas, hex grid, and enters the game view.
 // Called by both gameStart (fresh game) and rejoinGame (reconnect).
@@ -7345,9 +7393,10 @@ function initializeGameView(state, isRejoin) {
     drawMap();
     updateUI();
 
-    // Render server log entries to the DOM
+    // Render server log entries to the DOM (clear first to avoid duplicates on repeated reconnects)
     const logDiv = document.getElementById("gameLog");
     if (logDiv) {
+        logDiv.innerHTML = '';
         for (const msg of state.gameLog) {
             logDiv.innerHTML += `<div class="log-entry">${msg}</div>`;
         }
