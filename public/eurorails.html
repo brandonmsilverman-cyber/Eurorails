@@ -623,6 +623,38 @@
             to { transform: rotate(360deg); }
         }
 
+        .error-banner {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(180, 40, 40, 0.95);
+            color: #fff;
+            padding: 16px 24px;
+            border-radius: 8px;
+            z-index: 10000;
+            font-size: 15px;
+            text-align: center;
+            max-width: 420px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        .error-banner.show {
+            display: block;
+        }
+
+        .error-banner button {
+            margin-top: 12px;
+            padding: 8px 24px;
+            font-size: 14px;
+            background: #fff;
+            color: #333;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
         .trackage-modal {
             display: none;
             position: fixed;
@@ -2488,6 +2520,23 @@ function addLog(message) {
     if (logDiv) {
         logDiv.innerHTML += `<div class="log-entry">${message}</div>`;
         logDiv.scrollTop = logDiv.scrollHeight;
+    }
+}
+
+function showErrorBanner(message) {
+    const banner = document.getElementById("errorBanner");
+    const msgEl = document.getElementById("errorBannerMessage");
+    if (banner && msgEl) {
+        msgEl.textContent = message;
+        banner.classList.add("show");
+    }
+}
+
+function handleActionError(actionName, error) {
+    console.warn(`[Client] ${actionName} rejected:`, error);
+    addLog(error);
+    if (error === 'Not a player in this game' || error === 'No active game') {
+        showErrorBanner('Connection to the game was lost. Please refresh to reconnect.');
     }
 }
 
@@ -4865,7 +4914,7 @@ function deployTrain(milepostId) {
     if (typeof socket !== 'undefined' && myPlayerId) {
         socket.emit('action', { type: 'deployTrain', milepostId }, (res) => {
             if (res && !res.success) {
-                console.warn('[Client] deployTrain rejected:', res.error);
+                handleActionError('deployTrain', res.error);
             }
         });
         return;
@@ -4908,8 +4957,7 @@ function pickupGood(good) {
     if (typeof socket !== 'undefined' && myPlayerId) {
         socket.emit('action', { type: 'pickupGood', good }, (res) => {
             if (res && !res.success) {
-                console.warn('[Client] pickupGood rejected:', res.error);
-                addLog(res.error);
+                handleActionError('pickupGood', res.error);
             }
         });
         return;
@@ -4949,8 +4997,7 @@ function deliverGood(cardIndex, demandIndex) {
     if (typeof socket !== 'undefined' && myPlayerId) {
         socket.emit('action', { type: 'deliverGood', cardIndex, demandIndex }, (res) => {
             if (res && !res.success) {
-                console.warn('[Client] deliverGood rejected:', res.error);
-                addLog(res.error);
+                handleActionError('deliverGood', res.error);
             }
         });
         return;
@@ -5032,8 +5079,7 @@ function dropGood(loadIndex) {
     if (typeof socket !== 'undefined' && myPlayerId) {
         socket.emit('action', { type: 'dropGood', loadIndex }, (res) => {
             if (res && !res.success) {
-                console.warn('[Client] dropGood rejected:', res.error);
-                addLog(res.error);
+                handleActionError('dropGood', res.error);
             }
         });
         return;
@@ -5056,8 +5102,7 @@ function upgradeTo(trainType) {
     if (typeof socket !== 'undefined' && myPlayerId) {
         socket.emit('action', { type: 'upgradeTo', trainType }, (res) => {
             if (res && !res.success) {
-                console.warn('[Client] upgradeTo rejected:', res.error);
-                addLog(res.error);
+                handleActionError('upgradeTo', res.error);
             }
         });
         return;
@@ -5116,8 +5161,7 @@ function discardHand() {
     if (typeof socket !== 'undefined' && myPlayerId) {
         socket.emit('action', { type: 'discardHand' }, (res) => {
             if (res && !res.success) {
-                console.warn('[Client] discardHand rejected:', res.error);
-                addLog(res.error);
+                handleActionError('discardHand', res.error);
             }
         });
         return;
@@ -5324,8 +5368,7 @@ function undoLastBuild() {
     if (typeof socket !== 'undefined' && myPlayerId) {
         socket.emit('action', { type: 'undoBuild' }, (res) => {
             if (res && !res.success) {
-                console.warn('[Client] undoBuild rejected:', res.error);
-                addLog(res.error);
+                handleActionError('undoBuild', res.error);
             }
         });
         return;
@@ -5372,8 +5415,7 @@ function undoLastOperate() {
     if (typeof socket !== 'undefined' && myPlayerId) {
         socket.emit('action', { type: 'undoMove' }, (res) => {
             if (res && !res.success) {
-                console.warn('[Client] undoMove rejected:', res.error);
-                addLog(res.error);
+                handleActionError('undoMove', res.error);
             }
         });
         return;
@@ -5433,8 +5475,7 @@ function endOperatePhase() {
         showTrackageModal();
         socket.emit('action', { type: 'endOperatePhase' }, (res) => {
             if (res && !res.success) {
-                console.warn('[Client] endOperatePhase rejected:', res.error);
-                addLog(res.error);
+                handleActionError('endOperatePhase', res.error);
             }
         });
         return;
@@ -5466,7 +5507,7 @@ function endTurn() {
     if (typeof socket !== 'undefined' && myPlayerId) {
         socket.emit('action', { type: 'endTurn' }, (res) => {
             if (res && !res.success) {
-                console.warn('[Client] endTurn rejected:', res.error);
+                handleActionError('endTurn', res.error);
             }
         });
         return;
@@ -6220,8 +6261,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     path: trackResult.path
                 }, (res) => {
                     if (res && !res.success) {
-                        console.warn('[Client] commitMove rejected:', res.error);
-                        addLog(res.error);
+                        handleActionError('commitMove', res.error);
                     }
                 });
                 return;
@@ -6490,8 +6530,7 @@ document.addEventListener("DOMContentLoaded", function() {
                             ferries: newFerries
                         }, (res) => {
                             if (res && !res.success) {
-                                console.warn('[Client] commitBuild rejected:', res.error);
-                                addLog(res.error);
+                                handleActionError('commitBuild', res.error);
                             }
                         });
                     } else {
@@ -7013,6 +7052,11 @@ document.querySelector(".map-area")?.addEventListener("wheel", function(e) {
 <div class="reconnect-banner" id="reconnectBanner">
     <div class="spinner"></div>
     <div>Reconnecting to server...</div>
+</div>
+
+<div class="error-banner" id="errorBanner">
+    <div id="errorBannerMessage"></div>
+    <button onclick="location.reload()">Refresh Page</button>
 </div>
 
 <div class="turn-overlay" id="turnOverlay">
