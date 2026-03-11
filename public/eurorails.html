@@ -6066,52 +6066,6 @@ function initializeGameView(state, isRejoin) {
     gameState.canvas = document.getElementById("gameCanvas");
     gameState.ctx = gameState.canvas.getContext("2d");
 
-    // Send cityToMilepost to server so it can do win condition checks
-    // Precompute milepost positions for server-side flood checks
-    const milepostPositions = {};
-    for (const mp of gameState.mileposts) {
-        milepostPositions[mp.id] = { x: mp.x, y: mp.y };
-    }
-
-    // Precompute event zones for server-side checks (derailment, snow, fog, gale)
-    const eventZones = {};
-    for (const evt of EVENT_CARDS) {
-        if (evt.type === "derailment" && evt.cities) {
-            const zone = new Set();
-            for (const cityName of evt.cities) {
-                const cityMpId = gameState.cityToMilepost[cityName];
-                if (cityMpId !== undefined) {
-                    for (const id of getMilepostsInHexRange(cityMpId, evt.radius)) {
-                        zone.add(id);
-                    }
-                }
-            }
-            eventZones[evt.id] = Array.from(zone);
-        } else if ((evt.type === "snow" || evt.type === "fog") && evt.city) {
-            const cityMpId = gameState.cityToMilepost[evt.city];
-            if (cityMpId !== undefined) {
-                const zone = getMilepostsInHexRange(cityMpId, evt.radius);
-                eventZones[evt.id] = Array.from(zone);
-            }
-        } else if (evt.type === "gale" && evt.seaAreas) {
-            if (typeof getCoastalMilepostsForSeaAreas === 'function') {
-                const coastalStarts = getCoastalMilepostsForSeaAreas(evt.seaAreas);
-                const zone = getMilepostsInHexRangeMultiSource(coastalStarts, evt.radius - 1);
-                eventZones[evt.id] = Array.from(zone);
-            }
-        }
-    }
-
-    socket.emit('setCityToMilepost', {
-        cityToMilepost: gameState.cityToMilepost,
-        ferryConnections: gameState.ferryConnections.map(fc => ({
-            fromId: fc.fromId, toId: fc.toId, cost: fc.cost
-        })),
-        coastDistance: gameState.coastDistance,
-        milepostPositions,
-        eventZones
-    });
-
     drawMap();
     updateUI();
 

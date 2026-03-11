@@ -119,6 +119,14 @@ The multiplayer version is being built in phases. Each phase should keep the gam
   - Other players' `demandCards`: only the count (e.g., `{ hidden: true, count: 3 }`)
 - Card animations remain client-side, triggered by state update diffs
 
+## Solo Mode Plan
+
+The implementation plan for AI solo mode is in `SOLO_MODE_PLAN.md`. Read it before starting any solo mode work.
+
+## Save & Resume Plan
+
+The implementation plan for persistent game saves is in `SAVE_RESUME_PLAN.md`. Read it before starting any save/resume work. This feature is independent of solo mode — no blocking dependencies in either direction.
+
 ## Development Rules
 
 - When working on multiplayer, edit `public/eurorails.html` and `server.js`. Do not modify root `eurorails.html`.

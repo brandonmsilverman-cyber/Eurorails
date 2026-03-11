@@ -24,6 +24,11 @@ const crossesRiver = gl.crossesRiver;
 const getFerryKey = gl.getFerryKey;
 const playerOwnsFerry = gl.playerOwnsFerry;
 const getPlayerOwnedMileposts = gl.getPlayerOwnedMileposts;
+const generateHexGrid = gl.generateHexGrid;
+const computeCoastDistances = gl.computeCoastDistances;
+const getMilepostsInHexRange = gl.getMilepostsInHexRange;
+const getCoastalMilepostsForSeaAreas = gl.getCoastalMilepostsForSeaAreas;
+const getMilepostsInHexRangeMultiSource = gl.getMilepostsInHexRangeMultiSource;
 
 // Redirect root to the game
 app.get('/', (req, res) => {
@@ -383,14 +388,14 @@ function serverApplyEventEffect(gs, eventCard, logs) {
                 }
             }
         }
-    } else if (eventCard.type === "flood" && gs.milepostPositions) {
+    } else if (eventCard.type === "flood" && gs.mileposts_by_id) {
         const river = RIVERS[eventCard.river];
         if (river) {
             const tracksToRemove = [];
             for (let i = 0; i < gs.tracks.length; i++) {
                 const track = gs.tracks[i];
-                const mp1 = gs.milepostPositions[track.from];
-                const mp2 = gs.milepostPositions[track.to];
+                const mp1 = gs.mileposts_by_id[track.from];
+                const mp2 = gs.mileposts_by_id[track.to];
                 if (mp1 && mp2 && crossesRiver(mp1.x, mp1.y, mp2.x, mp2.y, river)) {
                     tracksToRemove.push(i);
                     gs.destroyedRiverTracks.push(track);
@@ -646,6 +651,38 @@ function createGameState(playerList) {
         };
     });
 
+    // Generate hex grid server-side (no longer depends on client sending it)
+    const grid = generateHexGrid();
+    const gridCtx = { mileposts: grid.mileposts, mileposts_by_id: grid.mileposts_by_id };
+    const coastDistance = computeCoastDistances(gridCtx);
+
+    // Precompute event zones for server-side checks (derailment, snow, fog, gale)
+    const eventZones = {};
+    for (const evt of EVENT_CARDS) {
+        if (evt.type === "derailment" && evt.cities) {
+            const zone = new Set();
+            for (const cityName of evt.cities) {
+                const cityMpId = grid.cityToMilepost[cityName];
+                if (cityMpId !== undefined) {
+                    for (const id of getMilepostsInHexRange(gridCtx, cityMpId, evt.radius)) {
+                        zone.add(id);
+                    }
+                }
+            }
+            eventZones[evt.id] = Array.from(zone);
+        } else if ((evt.type === "snow" || evt.type === "fog") && evt.city) {
+            const cityMpId = grid.cityToMilepost[evt.city];
+            if (cityMpId !== undefined) {
+                const zone = getMilepostsInHexRange(gridCtx, cityMpId, evt.radius);
+                eventZones[evt.id] = Array.from(zone);
+            }
+        } else if (evt.type === "gale" && evt.seaAreas) {
+            const coastalStarts = getCoastalMilepostsForSeaAreas(gridCtx, evt.seaAreas);
+            const zone = getMilepostsInHexRangeMultiSource(gridCtx, coastalStarts, evt.radius - 1);
+            eventZones[evt.id] = Array.from(zone);
+        }
+    }
+
     return {
         players,
         currentPlayerIndex: 0,
@@ -667,7 +704,14 @@ function createGameState(playerList) {
         trackageRightsPaidThisTurn: {},
         trackageRightsLog: [],
         operateHistory: [],
-        buildHistory: []
+        buildHistory: [],
+        // Hex grid data (server-generated, no longer from client)
+        mileposts: grid.mileposts,
+        mileposts_by_id: grid.mileposts_by_id,
+        cityToMilepost: grid.cityToMilepost,
+        ferryConnections: grid.ferryConnections,
+        coastDistance,
+        eventZones
     };
 }
 
@@ -882,20 +926,9 @@ io.on('connection', (socket) => {
         broadcastRoomList();
     });
 
-    // Client sends cityToMilepost mapping after generating hex grid
-    socket.on('setCityToMilepost', ({ cityToMilepost, ferryConnections, coastDistance, milepostPositions, eventZones }) => {
-        const room = rooms.get(socket.roomCode);
-        if (!room || !room.gameState) return;
-        // Only set once (first client to send it)
-        if (!room.gameState.cityToMilepost) {
-            room.gameState.cityToMilepost = cityToMilepost;
-            room.gameState.ferryConnections = ferryConnections;
-            room.gameState.coastDistance = coastDistance || {};
-            room.gameState.milepostPositions = milepostPositions || {};
-            room.gameState.eventZones = eventZones || {};
-            console.log(`Room ${socket.roomCode}: received cityToMilepost (${Object.keys(cityToMilepost).length} cities), milepostPositions (${Object.keys(room.gameState.milepostPositions).length}), eventZones (${Object.keys(room.gameState.eventZones).length})`);
-        }
-    });
+    // No-op: server now generates its own hex grid at game start (Step 0.4).
+    // Kept for one release cycle so stale cached clients don't error.
+    socket.on('setCityToMilepost', () => {});
 
     // Game action handler
     socket.on('action', (action, callback) => {
