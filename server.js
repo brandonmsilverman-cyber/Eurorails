@@ -20,6 +20,9 @@ app.get('/', (req, res) => {
 // Serve static files from public/
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Serve shared game logic module (used by both client and server)
+app.use('/shared', express.static(path.join(__dirname, 'shared')));
+
 // --- Game Constants (shared with client) ---
 
 const MAJOR_CITIES = ["Amsterdam", "Berlin", "Essen", "London", "Madrid", "Milano", "Paris", "Vienna"];
