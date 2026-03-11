@@ -787,7 +787,7 @@ function serverEndTurn(gs, depth = 0) {
 // Broadcast state update to all players in a room
 function broadcastStateUpdate(roomCode, room, uiEvent) {
     for (const [socketId, p] of room.players) {
-        const state = getStateForPlayer(room.gameState, p.sessionToken);
+        const state = getStateForPlayer(room.gameState, p.sessionToken, room.disconnectedPlayers);
         io.to(socketId).emit('stateUpdate', { state, uiEvent });
     }
 }
@@ -848,16 +848,18 @@ function createGameState(playerList) {
 
 // Produce a version of gameState safe to send to a specific player.
 // Each player sees their own demand cards in full, but only the count for opponents.
-function getStateForPlayer(gameState, playerId) {
+function getStateForPlayer(gameState, playerId, disconnectedPlayers) {
     return {
         players: gameState.players.map(p => {
+            const connected = disconnectedPlayers ? !disconnectedPlayers.has(p.id) && !p.abandoned : true;
             if (p.id === playerId) {
-                return p; // Full data for yourself
+                return { ...p, connected }; // Full data for yourself
             }
             // Hide demand card contents for other players
             const { demandCards, selectedDemands, ...rest } = p;
             return {
                 ...rest,
+                connected,
                 demandCards: demandCards.map(() => ({ hidden: true })),
                 selectedDemands: [null, null, null]
             };
@@ -1049,7 +1051,7 @@ io.on('connection', (socket) => {
 
         // Send each player their filtered game state
         for (const [socketId, p] of room.players) {
-            const state = getStateForPlayer(room.gameState, p.sessionToken);
+            const state = getStateForPlayer(room.gameState, p.sessionToken, room.disconnectedPlayers);
             io.to(socketId).emit('gameStart', { state });
         }
         broadcastRoomList();
@@ -1108,6 +1110,8 @@ io.on('connection', (socket) => {
                         overlay: result.overlay,
                         logs: result.logs
                     });
+
+                    startTurnTimerIfNeeded(socket.roomCode, room);
                 }
 
                 callback && callback({ success: true });
@@ -1467,6 +1471,8 @@ io.on('connection', (socket) => {
                         drawnEvents: allDrawnEvents,
                         drawnBy
                     });
+
+                    startTurnTimerIfNeeded(socket.roomCode, room);
                 }
 
                 callback && callback({ success: true });
@@ -1871,7 +1877,7 @@ io.on('connection', (socket) => {
         console.log(`Room ${code}: ${reconnectMsg}`);
 
         // Send current state to reconnected player
-        const state = getStateForPlayer(room.gameState, sessionToken);
+        const state = getStateForPlayer(room.gameState, sessionToken, room.disconnectedPlayers);
         callback && callback({ success: true, state });
 
         broadcastRoomList();
@@ -1963,6 +1969,36 @@ io.on('connection', (socket) => {
     });
 });
 
+// Helper: if the new current player is disconnected, start a turn timer for them.
+// Called after any serverEndTurn() to handle the case where the next player is offline.
+function startTurnTimerIfNeeded(roomCode, room) {
+    const gs = room.gameState;
+    if (!gs) return;
+    const newCurrentPlayer = gs.players[gs.currentPlayerIndex];
+    if (!newCurrentPlayer || !room.disconnectedPlayers.has(newCurrentPlayer.id)) return;
+
+    // Only start if there's at least one connected player (avoid pointless cycling)
+    const hasConnectedPlayer = gs.players.some(p =>
+        !p.abandoned && !room.disconnectedPlayers.has(p.id)
+    );
+    if (!hasConnectedPlayer) return;
+
+    // Clear any existing timer for this player to avoid duplicates
+    const existingTimer = room.turnTimers.get(newCurrentPlayer.id);
+    if (existingTimer) {
+        clearTimeout(existingTimer);
+    }
+
+    io.to(roomCode).emit('turnTimerStarted', {
+        playerName: newCurrentPlayer.name,
+        expiresIn: TURN_TIMER_MS,
+    });
+    const turnTimer = setTimeout(() => {
+        expireTurn(roomCode, newCurrentPlayer.id);
+    }, TURN_TIMER_MS);
+    room.turnTimers.set(newCurrentPlayer.id, turnTimer);
+}
+
 // Called when a disconnected current player's turn timer expires
 function expireTurn(roomCode, sessionToken) {
     const room = rooms.get(roomCode);
@@ -1993,22 +2029,7 @@ function expireTurn(roomCode, sessionToken) {
         logs: [...result.logs, msg],
     });
 
-    // If the new current player is also disconnected, start a turn timer for them too
-    // But only if there's at least one connected player (avoid pointless cycling)
-    const hasConnectedPlayer = gs.players.some(p =>
-        !p.abandoned && !room.disconnectedPlayers.has(p.id)
-    );
-    const newCurrentPlayer = gs.players[gs.currentPlayerIndex];
-    if (hasConnectedPlayer && newCurrentPlayer && room.disconnectedPlayers.has(newCurrentPlayer.id)) {
-        io.to(roomCode).emit('turnTimerStarted', {
-            playerName: newCurrentPlayer.name,
-            expiresIn: TURN_TIMER_MS,
-        });
-        const nextTurnTimer = setTimeout(() => {
-            expireTurn(roomCode, newCurrentPlayer.id);
-        }, TURN_TIMER_MS);
-        room.turnTimers.set(newCurrentPlayer.id, nextTurnTimer);
-    }
+    startTurnTimerIfNeeded(roomCode, room);
 }
 
 // Called when a disconnected player's grace period expires without reconnection
@@ -2058,6 +2079,13 @@ function expirePlayer(roomCode, sessionToken) {
         return;
     }
 
+    // Clear any pending turn timer for the abandoned player
+    const turnTimer = room.turnTimers.get(sessionToken);
+    if (turnTimer) {
+        clearTimeout(turnTimer);
+        room.turnTimers.delete(sessionToken);
+    }
+
     // If it's the abandoned player's turn, auto-end it
     if (player && gs.currentPlayerIndex === gs.players.indexOf(player)) {
         const result = serverEndTurn(gs);
@@ -2066,6 +2094,8 @@ function expirePlayer(roomCode, sessionToken) {
             overlay: result.overlay,
             logs: [...result.logs, `${player.name}'s turn was auto-skipped (abandoned)`],
         });
+
+        startTurnTimerIfNeeded(roomCode, room);
     }
 }
 
