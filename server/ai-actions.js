@@ -165,6 +165,13 @@ module.exports = function(deps) {
         const deliverMsg = `${player.name} delivered ${demand.good} to ${demand.to} for ECU ${demand.payout}M`;
         gs.gameLog.push(deliverMsg);
 
+        // Clear AI persisted target (card is about to be replaced)
+        if (player.aiState) {
+            player.aiState.targetCardIndex = null;
+            player.aiState.targetDemandIndex = null;
+            player.aiState.targetSourceCity = null;
+        }
+
         // Remove fulfilled card, draw replacement
         player.demandCards.splice(cardIndex, 1);
         if (player.selectedDemands) {
@@ -333,6 +340,13 @@ module.exports = function(deps) {
         const player = gs.players[playerIndex];
         player.demandCards = [];
         player.selectedDemands = [null, null, null];
+
+        // Clear AI persisted target (entire hand is being replaced)
+        if (player.aiState) {
+            player.aiState.targetCardIndex = null;
+            player.aiState.targetDemandIndex = null;
+            player.aiState.targetSourceCity = null;
+        }
 
         const discardMsg = `${player.name} discarded hand and drew 3 new cards`;
         gs.gameLog.push(discardMsg);

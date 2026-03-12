@@ -753,6 +753,7 @@ function executeAITurn(roomCode, room) {
     if (!plan || plan.length === 0) {
         plan = [{ type: 'endTurn' }];
     }
+    console.log(`Room ${roomCode}: ${player.name} plan (phase=${gs.phase}): [${plan.map(a => a.type).join(', ')}]`);
     executeAIActionSequence(roomCode, room, plan, 0);
 }
 
@@ -765,10 +766,30 @@ function executeAIActionSequence(roomCode, room, plan, stepIndex) {
 
     const action = plan[stepIndex];
     const playerIndex = gs.currentPlayerIndex;
+    const player = gs.players[playerIndex];
+    const actionSummary = action.type === 'commitBuild' ? `commitBuild(cost=${action.buildCost},len=${action.buildPath?.length})`
+        : action.type === 'commitMove' ? `commitMove(len=${action.path?.length})`
+        : action.type === 'deployTrain' ? `deployTrain(${action.milepostId})`
+        : action.type === 'pickupGood' ? `pickupGood(${action.good})`
+        : action.type === 'deliverGood' ? `deliverGood(card=${action.cardIndex},demand=${action.demandIndex})`
+        : action.type;
     const result = executeAIAction(gs, playerIndex, action);
+    if (result.success) {
+        console.log(`Room ${roomCode}: ${player.name} AI action: ${actionSummary}${result.logs ? ' — ' + result.logs[result.logs.length - 1] : ''}`);
+    }
 
     if (!result.success) {
         console.warn(`Room ${roomCode}: AI illegal action ${action.type}: ${result.error}`);
+        // For non-critical actions (pickup/deliver), skip and continue the plan.
+        // The pre-computed plan may have stale assumptions (e.g., partial move).
+        const skippable = ['pickupGood', 'deliverGood'];
+        if (skippable.includes(action.type)) {
+            room.aiTurnTimer = setTimeout(() => {
+                room.aiTurnTimer = null;
+                executeAIActionSequence(roomCode, room, plan, stepIndex + 1);
+            }, AI_ACTION_DELAY_MS);
+            return;
+        }
         const endResult = aiActions.applyEndTurn(gs);
         broadcastStateUpdate(roomCode, room, endResult.uiEvent);
         if (!endResult.uiEvent.gameOver) {
@@ -797,6 +818,8 @@ function executeAIActionSequence(roomCode, room, plan, stepIndex) {
             if (!freshGs) return;
             const freshCtx = buildPathfindingCtx(freshGs);
             const buildPlan = aiEasy.planTurn(freshGs, freshGs.currentPlayerIndex, freshCtx);
+            const bp = freshGs.players[freshGs.currentPlayerIndex];
+            console.log(`Room ${roomCode}: ${bp.name} plan (phase=${freshGs.phase}): [${buildPlan.map(a => a.type).join(', ')}]`);
             executeAIActionSequence(roomCode, room, buildPlan, 0);
         }, AI_ACTION_DELAY_MS);
         return;

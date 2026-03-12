@@ -195,7 +195,7 @@ function getRecoveryPlan(gs, playerIndex, ctx) {
 // Helper: compute the build path for AI given a full findPath result.
 // Walks the path, finds unbuilt segments connecting to owned track,
 // and accumulates segments within budget/cash/reserve constraints.
-function computeBuildActions(gs, playerIndex, ctx, fullPathResult) {
+function computeBuildActions(gs, playerIndex, ctx, fullPathResult, reversed = false) {
     const player = gs.players[playerIndex];
     const fullPath = fullPathResult.path;
 
@@ -317,9 +317,55 @@ function computeBuildActions(gs, playerIndex, ctx, fullPathResult) {
         majorCityCount += majorCities;
     }
 
-    if (buildPath.length < 2 || buildCost === 0) return null;
+    if (buildPath.length < 2 || buildCost === 0) {
+        // Forward walk failed — try reverse (owned track may be at end of path)
+        if (!reversed) {
+            const reversedResult = { path: [...fullPath].reverse(), cost: fullPathResult.cost };
+            return computeBuildActions(gs, playerIndex, ctx, reversedResult, true);
+        }
+        return null;
+    }
 
     return { buildPath, buildCost, majorCityCount, ferries };
+}
+
+// Helper: when the src→dest path doesn't intersect owned track, find a path
+// from the nearest owned milepost to either src or dest and build along it.
+function findConnectorBuild(gs, playerIndex, ctx, srcId, destId) {
+    const player = gs.players[playerIndex];
+    const ownedMileposts = getPlayerOwnedMileposts(ctx, player.color);
+    if (ownedMileposts.size === 0) return null;
+
+    // Find path from owned city mileposts to src or dest, pick cheapest
+    const ownedCities = [];
+    for (const mpId of ownedMileposts) {
+        const mp = ctx.mileposts_by_id[mpId];
+        if (mp && mp.city) ownedCities.push(mpId);
+    }
+    // If no owned cities, use train location or any owned milepost
+    if (ownedCities.length === 0) {
+        if (player.trainLocation && ownedMileposts.has(player.trainLocation)) {
+            ownedCities.push(player.trainLocation);
+        } else {
+            ownedCities.push(ownedMileposts.values().next().value);
+        }
+    }
+
+    let bestPath = null;
+    let bestCost = Infinity;
+    for (const ownedId of ownedCities) {
+        for (const goalId of [srcId, destId]) {
+            if (goalId === undefined || goalId === ownedId) continue;
+            const result = findPath(ctx, ownedId, goalId, player.color, "cheapest");
+            if (result && result.cost > 0 && result.cost < bestCost) {
+                bestCost = result.cost;
+                bestPath = result;
+            }
+        }
+    }
+
+    if (!bestPath) return null;
+    return computeBuildActions(gs, playerIndex, ctx, bestPath);
 }
 
 // Helper: BFS to find all mileposts in the same connected component of owned track.
@@ -448,7 +494,7 @@ function planTurn(gs, playerIndex, ctx) {
                 const majorId = ctx.cityToMilepost[majorCity];
                 if (majorId === undefined) continue;
                 for (const goalId of [srcId, destId]) {
-                    if (goalId === undefined) continue;
+                    if (goalId === undefined || goalId === majorId) continue;
                     const result = findPath(ctx, majorId, goalId, player.color, "cheapest");
                     if (result && result.cost < bestCost) {
                         bestCost = result.cost;
@@ -464,6 +510,10 @@ function planTurn(gs, playerIndex, ctx) {
             const fullPath = findPath(ctx, srcId, destId, player.color, "cheapest");
             if (fullPath) {
                 buildAction = computeBuildActions(gs, playerIndex, ctx, fullPath);
+            }
+            // Fallback: build connector from owned track toward src or dest
+            if (!buildAction) {
+                buildAction = findConnectorBuild(gs, playerIndex, ctx, srcId, destId);
             }
         }
 
@@ -587,13 +637,22 @@ function planTurn(gs, playerIndex, ctx) {
         if (target) {
             const srcId = ctx.cityToMilepost[target.sourceCity];
             const destId = ctx.cityToMilepost[target.destCity];
-            const fullPath = findPath(ctx, srcId, destId, player.color, "cheapest");
+            let buildAction = null;
 
+            // First try: build along the src→dest path
+            const fullPath = findPath(ctx, srcId, destId, player.color, "cheapest");
             if (fullPath) {
-                const buildAction = computeBuildActions(gs, playerIndex, ctx, fullPath);
-                if (buildAction) {
-                    actions.push({ type: 'commitBuild', ...buildAction });
-                }
+                buildAction = computeBuildActions(gs, playerIndex, ctx, fullPath);
+            }
+
+            // Fallback: if src→dest path doesn't connect to owned track,
+            // build a connector from owned track toward src or dest
+            if (!buildAction) {
+                buildAction = findConnectorBuild(gs, playerIndex, ctx, srcId, destId);
+            }
+
+            if (buildAction) {
+                actions.push({ type: 'commitBuild', ...buildAction });
             }
         }
 
