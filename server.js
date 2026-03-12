@@ -30,6 +30,8 @@ const getMilepostsInHexRange = gl.getMilepostsInHexRange;
 const getCoastalMilepostsForSeaAreas = gl.getCoastalMilepostsForSeaAreas;
 const getMilepostsInHexRangeMultiSource = gl.getMilepostsInHexRangeMultiSource;
 
+const LOBBY_COLORS = ["red", "blue", "green", "yellow", "purple", "orange"];
+
 // Redirect root to the game
 app.get('/', (req, res) => {
     res.redirect('/eurorails.html');
@@ -784,6 +786,93 @@ io.on('connection', (socket) => {
 
     socket.on('listRooms', (callback) => {
         callback(getRoomList());
+    });
+
+    socket.on('createSoloGame', ({ playerName, playerColor, aiPlayers }, callback) => {
+        if (!playerName || typeof playerName !== 'string' || !playerName.trim()) {
+            return callback({ success: false, error: 'Player name is required' });
+        }
+        if (!playerColor || !LOBBY_COLORS.includes(playerColor)) {
+            return callback({ success: false, error: 'Invalid player color' });
+        }
+        if (!Array.isArray(aiPlayers) || aiPlayers.length < 1 || aiPlayers.length > 5) {
+            return callback({ success: false, error: 'Must have 1-5 AI opponents' });
+        }
+
+        const validDifficulties = ['easy'];
+        const usedColors = new Set([playerColor]);
+        for (const ai of aiPlayers) {
+            if (!ai.color || !LOBBY_COLORS.includes(ai.color)) {
+                return callback({ success: false, error: 'All AI opponents must have a valid color' });
+            }
+            if (usedColors.has(ai.color)) {
+                return callback({ success: false, error: 'All players must have unique colors' });
+            }
+            usedColors.add(ai.color);
+            if (!validDifficulties.includes(ai.difficulty)) {
+                return callback({ success: false, error: 'Invalid AI difficulty: ' + ai.difficulty });
+            }
+        }
+
+        const roomCode = getUniqueRoomCode();
+        const sessionToken = randomUUID();
+        const totalPlayers = 1 + aiPlayers.length;
+
+        const room = {
+            players: new Map(),
+            hostSessionToken: sessionToken,
+            sessionToSocketId: new Map(),
+            disconnectedPlayers: new Map(),
+            graceTimers: new Map(),
+            turnTimers: new Map(),
+            gameStarted: true,
+            gameState: null,
+            maxPlayers: totalPlayers,
+            password: null,
+            solo: true
+        };
+
+        room.players.set(socket.id, { name: playerName.trim(), color: playerColor, sessionToken });
+        room.sessionToSocketId.set(sessionToken, socket.id);
+
+        // Build player list: human first, then AI players
+        const playerList = [
+            { id: sessionToken, name: playerName.trim(), color: playerColor }
+        ];
+        const aiEntries = [];
+        for (let i = 0; i < aiPlayers.length; i++) {
+            const aiToken = `ai-${randomUUID()}`;
+            const ai = aiPlayers[i];
+            playerList.push({
+                id: aiToken,
+                name: ai.name || `AI ${i + 1}`,
+                color: ai.color,
+                isAI: true,
+                difficulty: ai.difficulty
+            });
+            aiEntries.push({ id: aiToken, name: ai.name || `AI ${i + 1}`, color: ai.color, isAI: true, difficulty: ai.difficulty });
+        }
+
+        room.gameState = createGameState(playerList);
+
+        // Store AI metadata on game state players
+        for (const p of room.gameState.players) {
+            const aiEntry = aiEntries.find(a => a.id === p.id);
+            if (aiEntry) {
+                p.isAI = true;
+                p.difficulty = aiEntry.difficulty;
+            }
+        }
+
+        rooms.set(roomCode, room);
+        socket.join(roomCode);
+        socket.roomCode = roomCode;
+
+        console.log(`Solo game started in room ${roomCode} by ${playerName} with ${aiPlayers.length} AI opponent(s)`);
+
+        const state = getStateForPlayer(room.gameState, sessionToken, room.disconnectedPlayers);
+        callback({ success: true, roomCode, sessionToken, state });
+        // Don't broadcast to room list — solo rooms are private
     });
 
     socket.on('createRoom', ({ playerName, maxPlayers, password }, callback) => {
@@ -1992,6 +2081,9 @@ function getRoomInfo(roomCode) {
 function getRoomList() {
     const list = [];
     for (const [roomCode, room] of rooms) {
+        // Solo rooms are private — don't show in lobby
+        if (room.solo) continue;
+
         // Find host by sessionToken
         let hostName = 'Unknown';
         for (const [, p] of room.players) {

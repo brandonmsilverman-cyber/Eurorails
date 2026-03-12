@@ -911,6 +911,95 @@
             line-height: 1.5;
             color: #ffe0e0;
         }
+
+        /* Solo Mode Setup */
+        .solo-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 20px 0 10px;
+            color: #666;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .solo-divider::before,
+        .solo-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #444;
+        }
+
+        .solo-ai-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: #1a1a1a;
+            border-radius: 5px;
+            margin-bottom: 6px;
+        }
+        .solo-ai-row .ai-label {
+            flex: 1;
+            font-size: 14px;
+        }
+        .solo-ai-row select {
+            padding: 4px 8px;
+            background: #333;
+            border: 1px solid #555;
+            color: #fff;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .solo-ai-color-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+        .solo-ai-color-btn:disabled {
+            opacity: 0.2;
+            cursor: not-allowed;
+        }
+        .solo-ai-color-btn.selected {
+            border-color: #fff;
+        }
+        .solo-add-ai-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 8px;
+            background: transparent;
+            border: 1px dashed #555;
+            color: #888;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: border-color 0.15s, color 0.15s;
+        }
+        .solo-add-ai-btn:hover {
+            border-color: #888;
+            color: #ccc;
+            background: transparent;
+        }
+        .solo-remove-btn {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            line-height: 1;
+        }
+        .solo-remove-btn:hover {
+            color: #e74c3c;
+            background: rgba(231,76,60,0.15);
+        }
     </style>
 </head>
 <body>
@@ -968,6 +1057,12 @@
             </div>
         </div>
 
+        <div class="solo-divider">or</div>
+
+        <div style="text-align: center;">
+            <button onclick="showSoloSetup()" style="padding: 10px 32px; font-size: 15px; background: #2ecc71;">Solo Mode</button>
+        </div>
+
         <div id="lobbyError" style="color: #ff6666; text-align: center; margin-top: 10px; min-height: 20px;"></div>
     </div>
 
@@ -993,6 +1088,34 @@
             <button onclick="leaveRoom()" style="padding: 12px 24px; font-size: 14px; background: #555; border: 1px solid #666;">Back</button>
             <button id="lobbyStartBtn" onclick="lobbyStartGame()" style="display: none; padding: 12px 40px; font-size: 16px;">Start Game</button>
             <div id="lobbyWaiting" style="color: #888; font-size: 14px;">Waiting for host to start...</div>
+        </div>
+    </div>
+
+    <!-- Solo Mode Setup -->
+    <div class="setup-dialog" id="lobbySoloSetup" style="display: none; max-width: 600px; width: 90%;">
+        <h1>Solo Mode</h1>
+
+        <div class="setup-section">
+            <label>Your Name:</label>
+            <input type="text" id="soloPlayerName" placeholder="Enter your name" value="" autocomplete="off">
+        </div>
+
+        <div class="setup-section">
+            <label>Your Color:</label>
+            <div id="soloPlayerColorPicker" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+        </div>
+
+        <div class="setup-section">
+            <label>AI Opponents:</label>
+            <div id="soloAIList"></div>
+            <button id="soloAddAIBtn" class="solo-add-ai-btn" onclick="soloAddAI()" style="margin-top: 6px;">+ Add AI Opponent</button>
+        </div>
+
+        <div id="soloError" style="color: #ff6666; text-align: center; margin-top: 10px; min-height: 20px;"></div>
+
+        <div class="setup-buttons" style="gap: 10px;">
+            <button onclick="leaveSoloSetup()" style="padding: 12px 24px; font-size: 14px; background: #555; border: 1px solid #666;">Back</button>
+            <button id="soloStartBtn" onclick="startSoloGame()" style="padding: 12px 40px; font-size: 16px; background: #2ecc71;">Start Solo Game</button>
         </div>
     </div>
 </div>
@@ -5982,6 +6105,201 @@ function renderLobbyRoom(info) {
 
 function lobbyStartGame() {
     socket.emit('startGame');
+}
+
+// ============================================================================
+// SOLO MODE SETUP
+// ============================================================================
+
+const AI_DIFFICULTIES = ['easy'];
+const AI_DIFFICULTY_LABELS = { easy: 'Easy' };
+
+let soloPlayerColor = null;
+let soloAIPlayers = []; // [{ difficulty: 'easy', color: null }, ...]
+
+function showSoloSetup() {
+    const nameInput = document.getElementById("lobbyPlayerName");
+    const soloNameInput = document.getElementById("soloPlayerName");
+    soloNameInput.value = nameInput.value;
+
+    soloPlayerColor = null;
+    soloAIPlayers = [{ difficulty: 'easy', color: null }];
+
+    document.getElementById("lobbyJoinCreate").style.display = "none";
+    document.getElementById("lobbySoloSetup").style.display = "block";
+    renderSoloSetup();
+}
+
+function leaveSoloSetup() {
+    document.getElementById("lobbySoloSetup").style.display = "none";
+    document.getElementById("lobbyJoinCreate").style.display = "block";
+    // Sync name back
+    const soloName = document.getElementById("soloPlayerName").value;
+    if (soloName) document.getElementById("lobbyPlayerName").value = soloName;
+    document.getElementById("soloError").textContent = "";
+}
+
+function soloAddAI() {
+    if (soloAIPlayers.length >= 5) return;
+    soloAIPlayers.push({ difficulty: 'easy', color: null });
+    renderSoloSetup();
+}
+
+function soloRemoveAI(index) {
+    if (soloAIPlayers.length <= 1) return;
+    soloAIPlayers.splice(index, 1);
+    renderSoloSetup();
+}
+
+function soloSetAIDifficulty(index, difficulty) {
+    soloAIPlayers[index].difficulty = difficulty;
+    renderSoloSetup();
+}
+
+function soloSetAIColor(index, color) {
+    soloAIPlayers[index].color = color;
+    renderSoloSetup();
+}
+
+function soloSelectPlayerColor(color) {
+    soloPlayerColor = color;
+    // Clear any AI that had this color
+    for (const ai of soloAIPlayers) {
+        if (ai.color === color) ai.color = null;
+    }
+    renderSoloSetup();
+}
+
+function getSoloUsedColors() {
+    const used = new Set();
+    if (soloPlayerColor) used.add(soloPlayerColor);
+    for (const ai of soloAIPlayers) {
+        if (ai.color) used.add(ai.color);
+    }
+    return used;
+}
+
+function renderSoloSetup() {
+    const usedColors = getSoloUsedColors();
+
+    // Player color picker
+    const pickerEl = document.getElementById("soloPlayerColorPicker");
+    pickerEl.innerHTML = "";
+    for (const c of LOBBY_COLORS) {
+        const btn = document.createElement("button");
+        btn.style.width = "40px";
+        btn.style.height = "40px";
+        btn.style.borderRadius = "50%";
+        btn.style.background = COLOR_DISPLAY[c];
+        const isMine = soloPlayerColor === c;
+        const takenByAI = !isMine && usedColors.has(c);
+        btn.style.border = isMine ? "3px solid #fff" : "3px solid transparent";
+        btn.style.cursor = takenByAI ? "not-allowed" : "pointer";
+        btn.style.opacity = takenByAI ? "0.3" : "1";
+        btn.disabled = takenByAI;
+        btn.onclick = () => soloSelectPlayerColor(c);
+        pickerEl.appendChild(btn);
+    }
+
+    // AI list
+    const listEl = document.getElementById("soloAIList");
+    listEl.innerHTML = "";
+    for (let i = 0; i < soloAIPlayers.length; i++) {
+        const ai = soloAIPlayers[i];
+        const row = document.createElement("div");
+        row.className = "solo-ai-row";
+
+        // AI label
+        const label = document.createElement("span");
+        label.className = "ai-label";
+        label.textContent = `AI ${i + 1}`;
+        row.appendChild(label);
+
+        // Difficulty select
+        const select = document.createElement("select");
+        for (const diff of AI_DIFFICULTIES) {
+            const opt = document.createElement("option");
+            opt.value = diff;
+            opt.textContent = AI_DIFFICULTY_LABELS[diff];
+            if (ai.difficulty === diff) opt.selected = true;
+            select.appendChild(opt);
+        }
+        select.onchange = () => soloSetAIDifficulty(i, select.value);
+        row.appendChild(select);
+
+        // Color buttons
+        for (const c of LOBBY_COLORS) {
+            const btn = document.createElement("button");
+            btn.className = "solo-ai-color-btn";
+            btn.style.background = COLOR_DISPLAY[c];
+            const isMine = ai.color === c;
+            const takenByOther = !isMine && usedColors.has(c);
+            if (isMine) btn.classList.add("selected");
+            btn.disabled = takenByOther;
+            btn.onclick = () => soloSetAIColor(i, c);
+            row.appendChild(btn);
+        }
+
+        // Remove button (only if more than 1 AI)
+        if (soloAIPlayers.length > 1) {
+            const removeBtn = document.createElement("button");
+            removeBtn.className = "solo-remove-btn";
+            removeBtn.textContent = "\u00d7";
+            removeBtn.title = "Remove AI";
+            removeBtn.onclick = () => soloRemoveAI(i);
+            row.appendChild(removeBtn);
+        }
+
+        listEl.appendChild(row);
+    }
+
+    // Add AI button visibility
+    document.getElementById("soloAddAIBtn").style.display = soloAIPlayers.length >= 5 ? "none" : "flex";
+
+    // Start button state
+    const allAIHaveColors = soloAIPlayers.every(ai => ai.color);
+    const canStart = soloPlayerColor && allAIHaveColors;
+    document.getElementById("soloStartBtn").disabled = !canStart;
+    document.getElementById("soloStartBtn").style.opacity = canStart ? "1" : "0.5";
+}
+
+function startSoloGame() {
+    const name = document.getElementById("soloPlayerName").value.trim();
+    if (!name) {
+        document.getElementById("soloError").textContent = "Please enter your name.";
+        return;
+    }
+    if (!soloPlayerColor) {
+        document.getElementById("soloError").textContent = "Please choose your color.";
+        return;
+    }
+    const allAIHaveColors = soloAIPlayers.every(ai => ai.color);
+    if (!allAIHaveColors) {
+        document.getElementById("soloError").textContent = "All AI opponents must have a color.";
+        return;
+    }
+
+    document.getElementById("soloError").textContent = "";
+    socket.emit('createSoloGame', {
+        playerName: name,
+        playerColor: soloPlayerColor,
+        aiPlayers: soloAIPlayers.map((ai, i) => ({
+            name: `AI ${i + 1} (${AI_DIFFICULTY_LABELS[ai.difficulty]})`,
+            difficulty: ai.difficulty,
+            color: ai.color
+        }))
+    }, (res) => {
+        if (res.success) {
+            myPlayerId = res.sessionToken;
+            myRoomCode = res.roomCode;
+            isHost = true;
+            sessionStorage.setItem('sessionToken', res.sessionToken);
+            sessionStorage.setItem('roomCode', res.roomCode);
+            initializeGameView(res.state, false);
+        } else {
+            document.getElementById("soloError").textContent = res.error;
+        }
+    });
 }
 
 // Socket event handlers
