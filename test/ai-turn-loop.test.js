@@ -22,6 +22,7 @@ const assert = require('node:assert/strict');
 const ClientIO = require('socket.io-client');
 
 let serverInstance;
+let rooms;
 let PORT;
 
 // ---------------------------------------------------------------------------
@@ -34,7 +35,7 @@ before(async () => {
     process.env.TURN_TIMER_MS = '60000';
     process.env.AI_ACTION_DELAY_MS = '100'; // fast AI for tests
     delete require.cache[require.resolve('../server')];
-    serverInstance = require('../server');
+    ({ listener: serverInstance, rooms } = require('../server'));
 
     await new Promise((resolve) => {
         if (serverInstance.listening) {

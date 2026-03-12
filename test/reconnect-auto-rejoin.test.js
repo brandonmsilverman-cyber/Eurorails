@@ -33,7 +33,7 @@ before(async () => {
   process.env.DISCONNECT_GRACE_MS = '10000';
   process.env.TURN_TIMER_MS = '10000';
   delete require.cache[require.resolve('../server')];
-  serverInstance = require('../server');
+  ({ listener: serverInstance } = require('../server'));
 
   await new Promise((resolve) => {
     if (serverInstance.listening) {

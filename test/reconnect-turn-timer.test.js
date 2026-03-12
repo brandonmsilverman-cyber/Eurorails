@@ -31,7 +31,7 @@ before(async () => {
   // Short turn timer for testing (300ms instead of 90s)
   process.env.TURN_TIMER_MS = '300';
   delete require.cache[require.resolve('../server')];
-  serverInstance = require('../server');
+  ({ listener: serverInstance } = require('../server'));
 
   await new Promise((resolve) => {
     if (serverInstance.listening) {

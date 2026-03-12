@@ -33,6 +33,10 @@ const getMilepostsInHexRangeMultiSource = gl.getMilepostsInHexRangeMultiSource;
 const findPath = gl.findPath;
 const findPathOnTrack = gl.findPathOnTrack;
 
+// --- AI Action Handlers (extracted for AI reuse) ---
+// Initialized after helper functions are defined (see below).
+let aiActions = null;
+
 const LOBBY_COLORS = ["red", "blue", "green", "yellow", "purple", "orange"];
 
 // Redirect root to the game
@@ -627,6 +631,22 @@ function broadcastStateUpdate(roomCode, room, uiEvent) {
     }
 }
 
+// --- Initialize AI Action Handlers ---
+// All helper functions are now defined, so we can initialize the extracted actions module.
+aiActions = require('./server/ai-actions')({
+    serverEndTurn,
+    serverDrawCardForPlayer,
+    getCityAtMilepost,
+    isEventBlocking,
+    getGoodsInCirculation,
+    serverValidatePath,
+    serverGetPathMovementCost,
+    serverGetMaxStepsForMovement,
+    serverGetForeignTrackOwners,
+    serverChargeTrackageRights,
+    serverCheckTrackageStrandRisk
+});
+
 // --- AI Turn Loop (Phase 2) ---
 
 // Build pathfinding context from game state (used by AI in Phase 3)
@@ -685,21 +705,10 @@ function executeAITurn(roomCode, room) {
     // Phase 2: AI simply ends their turn
     console.log(`Room ${roomCode}: AI ${player.name} ends turn (Phase 2 placeholder)`);
 
-    const result = serverEndTurn(gs);
+    const result = aiActions.applyEndTurn(gs);
+    broadcastStateUpdate(roomCode, room, result.uiEvent);
 
-    if (result.gameOver) {
-        broadcastStateUpdate(roomCode, room, {
-            type: 'gameOver',
-            winner: result.winner,
-            logs: result.logs
-        });
-    } else {
-        broadcastStateUpdate(roomCode, room, {
-            type: 'turnChanged',
-            overlay: result.overlay,
-            logs: result.logs
-        });
-
+    if (!result.uiEvent.gameOver) {
         // Check if next player is also AI (cascading AI turns)
         maybeScheduleAITurn(roomCode, room);
         // Start timer for disconnected human players
@@ -1120,31 +1129,16 @@ io.on('connection', (socket) => {
 
         switch (action.type) {
             case 'endTurn': {
-                // Validate: must be current player's turn
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });
                 }
-
                 console.log(`Room ${socket.roomCode}: ${gs.players[playerIndex].name} ends turn`);
-                const result = serverEndTurn(gs);
-
-                if (result.gameOver) {
-                    broadcastStateUpdate(socket.roomCode, room, {
-                        type: 'gameOver',
-                        winner: result.winner,
-                        logs: result.logs
-                    });
-                } else {
-                    broadcastStateUpdate(socket.roomCode, room, {
-                        type: 'turnChanged',
-                        overlay: result.overlay,
-                        logs: result.logs
-                    });
-
+                const endTurnResult = aiActions.applyEndTurn(gs);
+                broadcastStateUpdate(socket.roomCode, room, endTurnResult.uiEvent);
+                if (!endTurnResult.uiEvent.gameOver) {
                     maybeScheduleAITurn(socket.roomCode, room);
                     startTurnTimerIfNeeded(socket.roomCode, room);
                 }
-
                 callback && callback({ success: true });
                 break;
             }
@@ -1153,35 +1147,12 @@ io.on('connection', (socket) => {
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });
                 }
-
-                const trainType = action.trainType;
-                if (!TRAIN_TYPES[trainType]) {
-                    return callback && callback({ success: false, error: 'Invalid train type' });
+                const upgradeResult = aiActions.applyUpgradeTo(gs, playerIndex, { trainType: action.trainType });
+                if (!upgradeResult.success) {
+                    return callback && callback({ success: false, error: upgradeResult.error });
                 }
-
-                const upgradePlayer = gs.players[playerIndex];
-                const upgradeCost = 20;
-
-                if (upgradePlayer.cash < upgradeCost) {
-                    return callback && callback({ success: false, error: 'Not enough cash' });
-                }
-                if (gs.buildingThisTurn > 0) {
-                    return callback && callback({ success: false, error: 'Already built track this turn' });
-                }
-
-                upgradePlayer.cash -= upgradeCost;
-                upgradePlayer.trainType = trainType;
-                gs.buildingThisTurn = 20;
-
-                const upgradeMsg = `${upgradePlayer.name} upgraded train to ${trainType} (ECU 20M)`;
-                gs.gameLog.push(upgradeMsg);
-                console.log(`Room ${socket.roomCode}: ${upgradeMsg}`);
-
-                broadcastStateUpdate(socket.roomCode, room, {
-                    type: 'action',
-                    logs: [upgradeMsg]
-                });
-
+                console.log(`Room ${socket.roomCode}: ${upgradeResult.logs[0]}`);
+                broadcastStateUpdate(socket.roomCode, room, upgradeResult.uiEvent);
                 callback && callback({ success: true });
                 break;
             }
@@ -1190,40 +1161,12 @@ io.on('connection', (socket) => {
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });
                 }
-
-                const pickupPlayer = gs.players[playerIndex];
-                const good = action.good;
-
-                if (!GOODS[good]) {
-                    return callback && callback({ success: false, error: 'Invalid good' });
+                const pickupResult = aiActions.applyPickupGood(gs, playerIndex, { good: action.good });
+                if (!pickupResult.success) {
+                    return callback && callback({ success: false, error: pickupResult.error });
                 }
-
-                const maxCapacity = TRAIN_TYPES[pickupPlayer.trainType].capacity;
-                if (pickupPlayer.loads.length >= maxCapacity) {
-                    return callback && callback({ success: false, error: 'Train is at full capacity' });
-                }
-
-                if (isEventBlocking(gs, "load", { milepostId: pickupPlayer.trainLocation })) {
-                    return callback && callback({ success: false, error: 'Strike in effect — cannot pick up goods here' });
-                }
-
-                const goodData = GOODS[good];
-                const inCirculation = getGoodsInCirculation(gs, good);
-                if (inCirculation >= goodData.chips) {
-                    return callback && callback({ success: false, error: `No ${good} available — all ${goodData.chips} chips are in use` });
-                }
-
-                pickupPlayer.loads.push(good);
-                gs.operateHistory.push({ type: 'pickup', good });
-                const pickupMsg = `${pickupPlayer.name} picked up ${good}`;
-                gs.gameLog.push(pickupMsg);
-                console.log(`Room ${socket.roomCode}: ${pickupMsg}`);
-
-                broadcastStateUpdate(socket.roomCode, room, {
-                    type: 'action',
-                    logs: [pickupMsg]
-                });
-
+                console.log(`Room ${socket.roomCode}: ${pickupResult.logs[0]}`);
+                broadcastStateUpdate(socket.roomCode, room, pickupResult.uiEvent);
                 callback && callback({ success: true });
                 break;
             }
@@ -1232,26 +1175,12 @@ io.on('connection', (socket) => {
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });
                 }
-
-                const dropPlayer = gs.players[playerIndex];
-                const loadIndex = action.loadIndex;
-
-                if (loadIndex < 0 || loadIndex >= dropPlayer.loads.length) {
-                    return callback && callback({ success: false, error: 'Invalid load index' });
+                const dropResult = aiActions.applyDropGood(gs, playerIndex, { loadIndex: action.loadIndex });
+                if (!dropResult.success) {
+                    return callback && callback({ success: false, error: dropResult.error });
                 }
-
-                const droppedGood = dropPlayer.loads[loadIndex];
-                dropPlayer.loads.splice(loadIndex, 1);
-                gs.operateHistory.push({ type: 'drop', good: droppedGood, loadIndex });
-                const dropMsg = `${dropPlayer.name} dropped ${droppedGood}`;
-                gs.gameLog.push(dropMsg);
-                console.log(`Room ${socket.roomCode}: ${dropMsg}`);
-
-                broadcastStateUpdate(socket.roomCode, room, {
-                    type: 'action',
-                    logs: [dropMsg]
-                });
-
+                console.log(`Room ${socket.roomCode}: ${dropResult.logs[0]}`);
+                broadcastStateUpdate(socket.roomCode, room, dropResult.uiEvent);
                 callback && callback({ success: true });
                 break;
             }
@@ -1260,60 +1189,12 @@ io.on('connection', (socket) => {
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });
                 }
-
-                const deliverPlayer = gs.players[playerIndex];
-                const { cardIndex, demandIndex } = action;
-                const card = deliverPlayer.demandCards[cardIndex];
-
-                if (!card || !card.demands[demandIndex]) {
-                    return callback && callback({ success: false, error: 'Invalid demand card' });
+                const deliverResult = aiActions.applyDeliverGood(gs, playerIndex, { cardIndex: action.cardIndex, demandIndex: action.demandIndex });
+                if (!deliverResult.success) {
+                    return callback && callback({ success: false, error: deliverResult.error });
                 }
-
-                const demand = card.demands[demandIndex];
-                const matchingLoadIndex = deliverPlayer.loads.findIndex(g => g === demand.good);
-                if (matchingLoadIndex === -1) {
-                    return callback && callback({ success: false, error: `No ${demand.good} to deliver` });
-                }
-
-                // Check player is at the correct city
-                const currentCity = getCityAtMilepost(gs, deliverPlayer.trainLocation);
-                if (currentCity !== demand.to) {
-                    return callback && callback({ success: false, error: `Must deliver to ${demand.to}` });
-                }
-
-                if (isEventBlocking(gs, "deliver", { milepostId: deliverPlayer.trainLocation })) {
-                    return callback && callback({ success: false, error: 'Strike in effect — cannot deliver goods here' });
-                }
-
-                // Apply delivery — clear operate history (delivery commits the turn's moves)
-                gs.operateHistory = [];
-                deliverPlayer.loads.splice(matchingLoadIndex, 1);
-                deliverPlayer.cash += demand.payout;
-                const deliverMsg = `${deliverPlayer.name} delivered ${demand.good} to ${demand.to} for ECU ${demand.payout}M`;
-                gs.gameLog.push(deliverMsg);
-                console.log(`Room ${socket.roomCode}: ${deliverMsg}`);
-
-                // Remove fulfilled card, draw replacement
-                deliverPlayer.demandCards.splice(cardIndex, 1);
-                if (deliverPlayer.selectedDemands) {
-                    deliverPlayer.selectedDemands.splice(cardIndex, 1);
-                    deliverPlayer.selectedDemands.push(null);
-                }
-                const drawResult = serverDrawCardForPlayer(gs, deliverPlayer, []);
-                const allDeliverLogs = [deliverMsg, ...drawResult.logs];
-
-                broadcastStateUpdate(socket.roomCode, room, {
-                    type: 'delivery',
-                    logs: allDeliverLogs,
-                    cardIndex,
-                    newCard: drawResult.card,
-                    drawnEvents: drawResult.drawnEvents,
-                    drawnBy: { name: deliverPlayer.name, color: deliverPlayer.color },
-                    deliveryGood: demand.good,
-                    deliveryTo: demand.to,
-                    deliveryPayout: demand.payout
-                });
-
+                console.log(`Room ${socket.roomCode}: ${deliverResult.logs[0]}`);
+                broadcastStateUpdate(socket.roomCode, room, deliverResult.uiEvent);
                 callback && callback({ success: true });
                 break;
             }
@@ -1322,110 +1203,17 @@ io.on('connection', (socket) => {
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });
                 }
-
-                // Check strike 123: drawing player cannot build
-                for (const ae of gs.activeEvents) {
-                    if (ae.card.id === 123) {
-                        const drawingPlayer = gs.players[ae.drawingPlayerIndex];
-                        const currentP = gs.players[playerIndex];
-                        if (currentP.color === drawingPlayer.color) {
-                            return callback && callback({ success: false, error: 'Strike in effect — cannot build' });
-                        }
-                    }
-                }
-
-                const { buildPath, buildCost, majorCityCount, ferries } = action;
-                const buildPlayer = gs.players[playerIndex];
-
-                if (!buildPath || buildPath.length < 2) {
-                    return callback && callback({ success: false, error: 'Invalid build path' });
-                }
-                if (typeof buildCost !== 'number' || buildCost < 0) {
-                    return callback && callback({ success: false, error: 'Invalid build cost' });
-                }
-
-                const remainingBudget = 20 - gs.buildingThisTurn;
-                if (buildCost > remainingBudget) {
-                    return callback && callback({ success: false, error: 'Exceeds build budget' });
-                }
-                if (buildCost > buildPlayer.cash) {
-                    return callback && callback({ success: false, error: 'Not enough cash' });
-                }
-                if (gs.majorCitiesThisTurn + (majorCityCount || 0) > 2) {
-                    return callback && callback({ success: false, error: 'Major city limit exceeded' });
-                }
-
-                // Build owned/other edge sets for validation
-                const ownedEdges = new Set();
-                const otherEdges = new Set();
-                for (const t of gs.tracks) {
-                    const fwd = t.from + "|" + t.to;
-                    const rev = t.to + "|" + t.from;
-                    if (t.color === buildPlayer.color) {
-                        ownedEdges.add(fwd);
-                        ownedEdges.add(rev);
-                    } else {
-                        otherEdges.add(fwd);
-                        otherEdges.add(rev);
-                    }
-                }
-
-                // Add track segments
-                let newSegments = 0;
-                const logs = [];
-                for (let i = 0; i < buildPath.length - 1; i++) {
-                    const edgeKey = buildPath[i] + "|" + buildPath[i + 1];
-                    const ferryKey = getFerryKey(buildPath[i], buildPath[i + 1]);
-
-                    // Check if this is a ferry edge
-                    let isFerryEdge = false;
-                    if (ferries && ferries.includes(ferryKey)) {
-                        isFerryEdge = true;
-                        if (!gs.ferryOwnership[ferryKey]) {
-                            gs.ferryOwnership[ferryKey] = [];
-                        }
-                        if (!gs.ferryOwnership[ferryKey].includes(buildPlayer.color)) {
-                            gs.ferryOwnership[ferryKey].push(buildPlayer.color);
-                            newSegments++;
-                        }
-                    }
-                    if (isFerryEdge) continue;
-
-                    if (otherEdges.has(edgeKey)) continue;
-                    if (!ownedEdges.has(edgeKey)) {
-                        gs.tracks.push({
-                            from: buildPath[i],
-                            to: buildPath[i + 1],
-                            color: buildPlayer.color
-                        });
-                        ownedEdges.add(edgeKey);
-                        ownedEdges.add(buildPath[i + 1] + "|" + buildPath[i]);
-                        newSegments++;
-                    }
-                }
-
-                buildPlayer.cash -= buildCost;
-                gs.buildingThisTurn += buildCost;
-                gs.majorCitiesThisTurn += (majorCityCount || 0);
-
-                // Record build for undo
-                gs.buildHistory.push({
-                    segments: newSegments,
-                    cost: buildCost,
-                    majorCities: majorCityCount || 0,
-                    ferries: ferries ? ferries.filter(fk => gs.ferryOwnership[fk] && gs.ferryOwnership[fk].includes(buildPlayer.color)) : []
+                const buildResult = aiActions.applyCommitBuild(gs, playerIndex, {
+                    buildPath: action.buildPath,
+                    buildCost: action.buildCost,
+                    majorCityCount: action.majorCityCount,
+                    ferries: action.ferries
                 });
-
-                const buildMsg = `${buildPlayer.name} built track for ECU ${buildCost}M (${20 - gs.buildingThisTurn}M remaining this turn)`;
-                gs.gameLog.push(buildMsg);
-                logs.push(buildMsg);
-                console.log(`Room ${socket.roomCode}: ${buildMsg}`);
-
-                broadcastStateUpdate(socket.roomCode, room, {
-                    type: 'action',
-                    logs
-                });
-
+                if (!buildResult.success) {
+                    return callback && callback({ success: false, error: buildResult.error });
+                }
+                console.log(`Room ${socket.roomCode}: ${buildResult.logs[0]}`);
+                broadcastStateUpdate(socket.roomCode, room, buildResult.uiEvent);
                 callback && callback({ success: true });
                 break;
             }
@@ -1434,29 +1222,12 @@ io.on('connection', (socket) => {
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });
                 }
-
-                const deployPlayer = gs.players[playerIndex];
-                if (deployPlayer.trainLocation !== null) {
-                    return callback && callback({ success: false, error: 'Train already deployed' });
+                const deployResult = aiActions.applyDeployTrain(gs, playerIndex, { milepostId: action.milepostId });
+                if (!deployResult.success) {
+                    return callback && callback({ success: false, error: deployResult.error });
                 }
-
-                const milepostId = action.milepostId;
-                if (!milepostId) {
-                    return callback && callback({ success: false, error: 'Invalid milepost' });
-                }
-
-                deployPlayer.trainLocation = milepostId;
-                gs.operateHistory.push({ type: 'deploy' });
-                const cityName = getCityAtMilepost(gs, milepostId) || "milepost";
-                const deployMsg = `${deployPlayer.name} deployed train at ${cityName}`;
-                gs.gameLog.push(deployMsg);
-                console.log(`Room ${socket.roomCode}: ${deployMsg}`);
-
-                broadcastStateUpdate(socket.roomCode, room, {
-                    type: 'action',
-                    logs: [deployMsg]
-                });
-
+                console.log(`Room ${socket.roomCode}: ${deployResult.logs[0]}`);
+                broadcastStateUpdate(socket.roomCode, room, deployResult.uiEvent);
                 callback && callback({ success: true });
                 break;
             }
@@ -1465,48 +1236,13 @@ io.on('connection', (socket) => {
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });
                 }
-
-                const discardPlayer = gs.players[playerIndex];
-                discardPlayer.demandCards = [];
-                discardPlayer.selectedDemands = [null, null, null];
-
-                const discardMsg = `${discardPlayer.name} discarded hand and drew 3 new cards`;
-                gs.gameLog.push(discardMsg);
-                console.log(`Room ${socket.roomCode}: ${discardMsg}`);
-
-                // Draw 3 new demand cards (processing events along the way)
-                const drawLogs = [];
-                const allDrawnEvents = [];
-                while (discardPlayer.demandCards.length < 3 && gs.demandCardDeck.length > 0) {
-                    serverDrawCardForPlayer(gs, discardPlayer, drawLogs, allDrawnEvents);
-                }
-
-                // Discard hand also ends the turn
-                const turnResult = serverEndTurn(gs);
-                const allLogs = [discardMsg, ...drawLogs, ...turnResult.logs];
-
-                const drawnBy = { name: discardPlayer.name, color: discardPlayer.color };
-                if (turnResult.gameOver) {
-                    broadcastStateUpdate(socket.roomCode, room, {
-                        type: 'gameOver',
-                        winner: turnResult.winner,
-                        logs: allLogs,
-                        drawnEvents: allDrawnEvents,
-                        drawnBy
-                    });
-                } else {
-                    broadcastStateUpdate(socket.roomCode, room, {
-                        type: 'turnChanged',
-                        overlay: turnResult.overlay,
-                        logs: allLogs,
-                        drawnEvents: allDrawnEvents,
-                        drawnBy
-                    });
-
+                console.log(`Room ${socket.roomCode}: ${gs.players[playerIndex].name} discarded hand`);
+                const discardResult = aiActions.applyDiscardHand(gs, playerIndex);
+                broadcastStateUpdate(socket.roomCode, room, discardResult.uiEvent);
+                if (!discardResult.uiEvent.gameOver) {
                     maybeScheduleAITurn(socket.roomCode, room);
                     startTurnTimerIfNeeded(socket.roomCode, room);
                 }
-
                 callback && callback({ success: true });
                 break;
             }
@@ -1515,27 +1251,12 @@ io.on('connection', (socket) => {
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });
                 }
-                if (gs.phase !== 'operate') {
-                    return callback && callback({ success: false, error: 'Not in operate phase' });
+                const endOpResult = aiActions.applyEndOperatePhase(gs, playerIndex);
+                if (!endOpResult.success) {
+                    return callback && callback({ success: false, error: endOpResult.error });
                 }
-
-                gs.phase = 'build';
-                gs.buildingThisTurn = 0;
-                gs.majorCitiesThisTurn = 0;
-                gs.buildHistory = [];
-                gs.operateHistory = [];
-                gs.trackageRightsPaidThisTurn = {};
-                gs.trackageRightsLog = [];
-
-                const phaseMsg = `${gs.players[playerIndex].name} moved to Build Phase`;
-                gs.gameLog.push(phaseMsg);
-                console.log(`Room ${socket.roomCode}: ${phaseMsg}`);
-
-                broadcastStateUpdate(socket.roomCode, room, {
-                    type: 'action',
-                    logs: [phaseMsg]
-                });
-
+                console.log(`Room ${socket.roomCode}: ${endOpResult.logs[0]}`);
+                broadcastStateUpdate(socket.roomCode, room, endOpResult.uiEvent);
                 callback && callback({ success: true });
                 break;
             }
@@ -1544,46 +1265,12 @@ io.on('connection', (socket) => {
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });
                 }
-
-                if (gs.buildHistory.length === 0) {
-                    return callback && callback({ success: false, error: 'Nothing to undo' });
+                const undoBuildResult = aiActions.applyUndoBuild(gs, playerIndex);
+                if (!undoBuildResult.success) {
+                    return callback && callback({ success: false, error: undoBuildResult.error });
                 }
-
-                const undoBuildPlayer = gs.players[playerIndex];
-                const lastBuild = gs.buildHistory.pop();
-
-                // Remove track segments (excluding ferry segments)
-                const trackSegs = lastBuild.segments - (lastBuild.ferries ? lastBuild.ferries.length : 0);
-                for (let i = 0; i < trackSegs; i++) {
-                    gs.tracks.pop();
-                }
-
-                // Remove ferry ownership
-                if (lastBuild.ferries) {
-                    for (const ferryKey of lastBuild.ferries) {
-                        const owners = gs.ferryOwnership[ferryKey];
-                        if (owners) {
-                            const idx = owners.lastIndexOf(undoBuildPlayer.color);
-                            if (idx !== -1) owners.splice(idx, 1);
-                            if (owners.length === 0) delete gs.ferryOwnership[ferryKey];
-                        }
-                    }
-                }
-
-                // Refund cost
-                undoBuildPlayer.cash += lastBuild.cost;
-                gs.buildingThisTurn -= lastBuild.cost;
-                gs.majorCitiesThisTurn -= lastBuild.majorCities;
-
-                const undoBuildMsg = `${undoBuildPlayer.name} undid last build (refunded ECU ${lastBuild.cost}M)`;
-                gs.gameLog.push(undoBuildMsg);
-                console.log(`Room ${socket.roomCode}: ${undoBuildMsg}`);
-
-                broadcastStateUpdate(socket.roomCode, room, {
-                    type: 'action',
-                    logs: [undoBuildMsg]
-                });
-
+                console.log(`Room ${socket.roomCode}: ${undoBuildResult.logs[0]}`);
+                broadcastStateUpdate(socket.roomCode, room, undoBuildResult.uiEvent);
                 callback && callback({ success: true });
                 break;
             }
@@ -1592,177 +1279,12 @@ io.on('connection', (socket) => {
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });
                 }
-                if (gs.phase !== 'operate') {
-                    return callback && callback({ success: false, error: 'Not in operate phase' });
+                const moveResult = aiActions.applyCommitMove(gs, playerIndex, { path: action.path });
+                if (!moveResult.success) {
+                    return callback && callback({ success: false, error: moveResult.error });
                 }
-
-                const movePlayer = gs.players[playerIndex];
-                if (movePlayer.trainLocation === null) {
-                    return callback && callback({ success: false, error: 'Train not deployed' });
-                }
-                if (movePlayer.ferryState) {
-                    return callback && callback({ success: false, error: 'Waiting for ferry' });
-                }
-                if (movePlayer.movement <= 0) {
-                    return callback && callback({ success: false, error: 'No movement remaining' });
-                }
-
-                const { path } = action;
-                if (!path || !Array.isArray(path) || path.length < 2) {
-                    return callback && callback({ success: false, error: 'Invalid path' });
-                }
-                if (path[0] !== movePlayer.trainLocation) {
-                    return callback && callback({ success: false, error: 'Path does not start at train location' });
-                }
-
-                // Validate path connectivity
-                const validation = serverValidatePath(gs, path, movePlayer.color);
-                if (!validation.valid) {
-                    return callback && callback({ success: false, error: validation.error });
-                }
-
-                // Save state for undo
-                const prevLocation = movePlayer.trainLocation;
-                const prevMovement = movePlayer.movement;
-                const prevFerryState = movePlayer.ferryState ? JSON.parse(JSON.stringify(movePlayer.ferryState)) : null;
-                const prevCash = movePlayer.cash;
-                const prevOwnerCash = {};
-                for (const p of gs.players) {
-                    if (p.color !== movePlayer.color) prevOwnerCash[p.color] = p.cash;
-                }
-
-                const logs = [];
-                let newlyPaidOwners = [];
-
-                // Handle ferry crossings
-                if (validation.ferryCrossings.length > 0) {
-                    const ferryIdx = validation.ferryCrossings[0];
-                    const portMilepostId = path[ferryIdx];
-                    const destPortId = path[ferryIdx + 1];
-
-                    if (portMilepostId !== movePlayer.trainLocation) {
-                        // Need to move to port first
-                        const stepsToPort = ferryIdx;
-                        const pathToPort = path.slice(0, stepsToPort + 1);
-                        const costToPort = serverGetPathMovementCost(gs, pathToPort);
-
-                        if (costToPort > movePlayer.movement) {
-                            // Partial move toward ferry port
-                            const maxSteps = serverGetMaxStepsForMovement(gs, path, movePlayer.movement);
-                            const partialPath = path.slice(0, maxSteps + 1);
-                            const partialDestId = path[maxSteps];
-
-                            // Check and charge trackage rights for partial path
-                            if (validation.foreignSegments.length > 0) {
-                                const owners = serverGetForeignTrackOwners(gs, path, maxSteps, movePlayer.color, validation.foreignSegments);
-                                let pendingFee = 0;
-                                for (const oc of owners) {
-                                    if (!gs.trackageRightsPaidThisTurn[oc]) pendingFee += 4;
-                                }
-                                if (!serverCheckTrackageStrandRisk(gs, partialPath, movePlayer.color, movePlayer.cash - pendingFee)) {
-                                    return callback && callback({ success: false, error: "Cannot move here — you'd be stranded on foreign track without enough cash" });
-                                }
-                                const trResult = serverChargeTrackageRights(gs, movePlayer, path, validation.foreignSegments, maxSteps);
-                                if (!trResult.ok) {
-                                    return callback && callback({ success: false, error: trResult.error });
-                                }
-                                newlyPaidOwners = trResult.newlyPaidOwners;
-                                if (trResult.logs) logs.push(...trResult.logs);
-                            }
-
-                            movePlayer.trainLocation = partialDestId;
-                            movePlayer.movement = 0;
-                            const partialCost = serverGetPathMovementCost(gs, partialPath);
-                            const cityName = getCityAtMilepost(gs, partialDestId) || "milepost";
-                            const moveMsg = `Partial move toward ferry: moved ${maxSteps} steps (${partialCost}mp) to ${cityName}`;
-                            logs.push(moveMsg);
-                            gs.gameLog.push(moveMsg);
-
-                            gs.operateHistory.push({
-                                type: 'move', prevLocation, prevMovement, prevFerryState, prevCash, newlyPaidOwners, prevOwnerCash
-                            });
-
-                            broadcastStateUpdate(socket.roomCode, room, { type: 'action', logs });
-                            return callback && callback({ success: true });
-                        }
-
-                        // Can reach port — charge trackage rights for path to port
-                        if (validation.foreignSegments.length > 0) {
-                            const trResult = serverChargeTrackageRights(gs, movePlayer, path, validation.foreignSegments, stepsToPort);
-                            if (!trResult.ok) {
-                                return callback && callback({ success: false, error: trResult.error });
-                            }
-                            newlyPaidOwners = trResult.newlyPaidOwners;
-                            if (trResult.logs) logs.push(...trResult.logs);
-                        }
-
-                        movePlayer.trainLocation = portMilepostId;
-                        movePlayer.movement -= costToPort;
-                    }
-
-                    // Set ferry state
-                    movePlayer.ferryState = { destPortId };
-                    movePlayer.movement = 0;
-                    const portCity = getCityAtMilepost(gs, portMilepostId) || "ferry port";
-                    const ferryMsg = `Arrived at ${portCity}. Waiting for ferry. Turn ends.`;
-                    logs.push(ferryMsg);
-                    gs.gameLog.push(ferryMsg);
-
-                    gs.operateHistory.push({
-                        type: 'move', prevLocation, prevMovement, prevFerryState, prevCash, newlyPaidOwners, prevOwnerCash
-                    });
-
-                    broadcastStateUpdate(socket.roomCode, room, { type: 'action', logs });
-                    return callback && callback({ success: true });
-                }
-
-                // Normal movement (no ferry crossing) — handle partial moves
-                const movementCost = serverGetPathMovementCost(gs, path);
-                let movePath = path;
-                let actualCost = movementCost;
-
-                if (movementCost > movePlayer.movement) {
-                    const maxSteps = serverGetMaxStepsForMovement(gs, path, movePlayer.movement);
-                    movePath = path.slice(0, maxSteps + 1);
-                    actualCost = serverGetPathMovementCost(gs, movePath);
-                }
-
-                const actualSteps = movePath.length - 1;
-                const destId = movePath[movePath.length - 1];
-
-                // Charge trackage rights if using foreign track
-                if (validation.foreignSegments.length > 0) {
-                    const owners = serverGetForeignTrackOwners(gs, path, actualSteps, movePlayer.color, validation.foreignSegments);
-                    let pendingFee = 0;
-                    for (const oc of owners) {
-                        if (!gs.trackageRightsPaidThisTurn[oc]) pendingFee += 4;
-                    }
-                    if (!serverCheckTrackageStrandRisk(gs, movePath, movePlayer.color, movePlayer.cash - pendingFee)) {
-                        return callback && callback({ success: false, error: "Cannot move here — you'd be stranded on foreign track without enough cash" });
-                    }
-                    const trResult = serverChargeTrackageRights(gs, movePlayer, path, validation.foreignSegments, actualSteps);
-                    if (!trResult.ok) {
-                        return callback && callback({ success: false, error: trResult.error });
-                    }
-                    newlyPaidOwners = trResult.newlyPaidOwners;
-                    if (trResult.logs) logs.push(...trResult.logs);
-                }
-
-                movePlayer.trainLocation = destId;
-                movePlayer.movement -= actualCost;
-                const locationName = getCityAtMilepost(gs, destId) || "milepost";
-                const moveMsg = movePath.length < path.length
-                    ? `Partial move: ${actualSteps} steps (${actualCost}mp) — moved to ${locationName} (${movePlayer.movement}mp left)`
-                    : `Moved to ${locationName} (${actualCost}mp used, ${movePlayer.movement}mp left)`;
-                logs.push(moveMsg);
-                gs.gameLog.push(moveMsg);
-
-                gs.operateHistory.push({
-                    type: 'move', prevLocation, prevMovement, prevFerryState, prevCash, newlyPaidOwners, prevOwnerCash
-                });
-
-                console.log(`Room ${socket.roomCode}: ${movePlayer.name} ${moveMsg}`);
-                broadcastStateUpdate(socket.roomCode, room, { type: 'action', logs });
+                console.log(`Room ${socket.roomCode}: ${gs.players[playerIndex].name} ${moveResult.logs[moveResult.logs.length - 1]}`);
+                broadcastStateUpdate(socket.roomCode, room, moveResult.uiEvent);
                 callback && callback({ success: true });
                 break;
             }
@@ -1771,71 +1293,12 @@ io.on('connection', (socket) => {
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });
                 }
-
-                if (gs.operateHistory.length === 0) {
-                    return callback && callback({ success: false, error: 'Nothing to undo' });
+                const undoMoveResult = aiActions.applyUndoMove(gs, playerIndex);
+                if (!undoMoveResult.success) {
+                    return callback && callback({ success: false, error: undoMoveResult.error });
                 }
-
-                const undoPlayer = gs.players[playerIndex];
-                const last = gs.operateHistory.pop();
-
-                if (last.type === 'move') {
-                    undoPlayer.trainLocation = last.prevLocation;
-                    undoPlayer.movement = last.prevMovement;
-                    undoPlayer.ferryState = last.prevFerryState;
-                    undoPlayer.cash = last.prevCash;
-
-                    // Reverse trackage rights payments
-                    if (last.newlyPaidOwners && last.newlyPaidOwners.length > 0) {
-                        for (const ownerColor of last.newlyPaidOwners) {
-                            const owner = gs.players.find(p => p.color === ownerColor);
-                            if (owner && last.prevOwnerCash && last.prevOwnerCash[ownerColor] !== undefined) {
-                                owner.cash = last.prevOwnerCash[ownerColor];
-                            }
-                            delete gs.trackageRightsPaidThisTurn[ownerColor];
-                        }
-                        gs.trackageRightsLog = gs.trackageRightsLog.filter(
-                            entry => !last.newlyPaidOwners.some(oc => {
-                                const owner = gs.players.find(p => p.color === oc);
-                                return owner && entry.to === owner.name;
-                            })
-                        );
-                    }
-
-                    const undoMsg = `${undoPlayer.name} undid move`;
-                    gs.gameLog.push(undoMsg);
-                    console.log(`Room ${socket.roomCode}: ${undoMsg}`);
-
-                    broadcastStateUpdate(socket.roomCode, room, {
-                        type: 'action',
-                        logs: [undoMsg]
-                    });
-                } else if (last.type === 'deploy') {
-                    undoPlayer.trainLocation = null;
-                    const undoMsg = `${undoPlayer.name} undid train deployment`;
-                    gs.gameLog.push(undoMsg);
-                    broadcastStateUpdate(socket.roomCode, room, {
-                        type: 'action',
-                        logs: [undoMsg]
-                    });
-                } else if (last.type === 'pickup') {
-                    undoPlayer.loads.splice(undoPlayer.loads.lastIndexOf(last.good), 1);
-                    const undoMsg = `${undoPlayer.name} undid pickup of ${last.good}`;
-                    gs.gameLog.push(undoMsg);
-                    broadcastStateUpdate(socket.roomCode, room, {
-                        type: 'action',
-                        logs: [undoMsg]
-                    });
-                } else if (last.type === 'drop') {
-                    undoPlayer.loads.splice(last.loadIndex, 0, last.good);
-                    const undoMsg = `${undoPlayer.name} undid drop of ${last.good}`;
-                    gs.gameLog.push(undoMsg);
-                    broadcastStateUpdate(socket.roomCode, room, {
-                        type: 'action',
-                        logs: [undoMsg]
-                    });
-                }
-
+                console.log(`Room ${socket.roomCode}: ${undoMoveResult.logs[0]}`);
+                broadcastStateUpdate(socket.roomCode, room, undoMoveResult.uiEvent);
                 callback && callback({ success: true });
                 break;
             }
@@ -2211,4 +1674,4 @@ const listener = server.listen(PORT, () => {
     console.log(`Eurorails server running at http://localhost:${PORT}`);
 });
 
-module.exports = listener;
+module.exports = { listener, rooms };

@@ -22,7 +22,7 @@ before(async () => {
   // Use a short grace period for testing (500ms instead of 5 minutes)
   process.env.DISCONNECT_GRACE_MS = '500';
   delete require.cache[require.resolve('../server')];
-  serverInstance = require('../server');
+  ({ listener: serverInstance } = require('../server'));
 
   await new Promise((resolve) => {
     if (serverInstance.listening) {

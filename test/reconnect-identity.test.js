@@ -27,7 +27,7 @@ before(async () => {
   process.env.PORT = '0';
   // Clear cache so we get a fresh server
   delete require.cache[require.resolve('../server')];
-  serverInstance = require('../server');
+  ({ listener: serverInstance } = require('../server'));
 
   // If server.listen(0) was used, .address() gives the actual port
   await new Promise((resolve) => {
