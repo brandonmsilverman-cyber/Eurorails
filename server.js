@@ -953,6 +953,11 @@ io.on('connection', (socket) => {
             if (aiEntry) {
                 p.isAI = true;
                 p.difficulty = aiEntry.difficulty;
+                p.aiState = {
+                    targetCardIndex: null,
+                    targetDemandIndex: null,
+                    targetSourceCity: null
+                };
             }
         }
 
