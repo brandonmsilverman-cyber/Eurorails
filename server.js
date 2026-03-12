@@ -11,6 +11,7 @@ const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 const DISCONNECT_GRACE_MS = parseInt(process.env.DISCONNECT_GRACE_MS) || 300000; // 5 minutes
 const TURN_TIMER_MS = parseInt(process.env.TURN_TIMER_MS) || 90000; // 90 seconds
+const AI_ACTION_DELAY_MS = parseInt(process.env.AI_ACTION_DELAY_MS) || 1500; // delay between AI actions so human can watch
 
 // --- Shared Game Logic Module ---
 const gl = require('./shared/game-logic');
@@ -29,6 +30,8 @@ const computeCoastDistances = gl.computeCoastDistances;
 const getMilepostsInHexRange = gl.getMilepostsInHexRange;
 const getCoastalMilepostsForSeaAreas = gl.getCoastalMilepostsForSeaAreas;
 const getMilepostsInHexRangeMultiSource = gl.getMilepostsInHexRangeMultiSource;
+const findPath = gl.findPath;
+const findPathOnTrack = gl.findPathOnTrack;
 
 const LOBBY_COLORS = ["red", "blue", "green", "yellow", "purple", "orange"];
 
@@ -624,6 +627,86 @@ function broadcastStateUpdate(roomCode, room, uiEvent) {
     }
 }
 
+// --- AI Turn Loop (Phase 2) ---
+
+// Build pathfinding context from game state (used by AI in Phase 3)
+function buildPathfindingCtx(gs) {
+    return {
+        mileposts: gs.mileposts,
+        mileposts_by_id: gs.mileposts_by_id,
+        cityToMilepost: gs.cityToMilepost,
+        ferryConnections: gs.ferryConnections,
+        ferryOwnership: gs.ferryOwnership,
+        tracks: gs.tracks,
+        activeEvents: gs.activeEvents,
+        players: gs.players
+    };
+}
+
+// Schedule an AI turn if the current player is AI.
+// Called after any turn advancement.
+function maybeScheduleAITurn(roomCode, room) {
+    const gs = room.gameState;
+    if (!gs) return;
+    const player = gs.players[gs.currentPlayerIndex];
+    if (!player || !player.isAI) return;
+
+    // Don't run AI turns if no human players are connected to watch
+    const hasConnectedHuman = Array.from(room.players.values()).some(p => {
+        const gsPlayer = gs.players.find(gp => gp.id === p.sessionToken);
+        return gsPlayer && !gsPlayer.isAI;
+    });
+    if (!hasConnectedHuman) return;
+
+    // Cancel any existing AI timer for this room
+    if (room.aiTurnTimer) {
+        clearTimeout(room.aiTurnTimer);
+    }
+
+    room.aiTurnTimer = setTimeout(() => {
+        room.aiTurnTimer = null;
+        executeAITurn(roomCode, room);
+    }, AI_ACTION_DELAY_MS);
+}
+
+// Execute an AI player's turn.
+// Phase 2: AI simply ends their turn.
+// Phase 3 will add actual strategy (building, moving, picking up, delivering).
+function executeAITurn(roomCode, room) {
+    // Verify room still exists and game is active
+    if (!rooms.has(roomCode)) return;
+    const gs = room.gameState;
+    if (!gs) return;
+
+    const playerIndex = gs.currentPlayerIndex;
+    const player = gs.players[playerIndex];
+    if (!player || !player.isAI) return;
+
+    // Phase 2: AI simply ends their turn
+    console.log(`Room ${roomCode}: AI ${player.name} ends turn (Phase 2 placeholder)`);
+
+    const result = serverEndTurn(gs);
+
+    if (result.gameOver) {
+        broadcastStateUpdate(roomCode, room, {
+            type: 'gameOver',
+            winner: result.winner,
+            logs: result.logs
+        });
+    } else {
+        broadcastStateUpdate(roomCode, room, {
+            type: 'turnChanged',
+            overlay: result.overlay,
+            logs: result.logs
+        });
+
+        // Check if next player is also AI (cascading AI turns)
+        maybeScheduleAITurn(roomCode, room);
+        // Start timer for disconnected human players
+        startTurnTimerIfNeeded(roomCode, room);
+    }
+}
+
 // --- Game State Initialization ---
 
 function createGameState(playerList) {
@@ -1058,6 +1141,7 @@ io.on('connection', (socket) => {
                         logs: result.logs
                     });
 
+                    maybeScheduleAITurn(socket.roomCode, room);
                     startTurnTimerIfNeeded(socket.roomCode, room);
                 }
 
@@ -1419,6 +1503,7 @@ io.on('connection', (socket) => {
                         drawnBy
                     });
 
+                    maybeScheduleAITurn(socket.roomCode, room);
                     startTurnTimerIfNeeded(socket.roomCode, room);
                 }
 
@@ -1827,6 +1912,9 @@ io.on('connection', (socket) => {
         const state = getStateForPlayer(room.gameState, sessionToken, room.disconnectedPlayers);
         callback && callback({ success: true, state });
 
+        // Resume AI turns if it's an AI player's turn (AI pauses when no human is connected)
+        maybeScheduleAITurn(code, room);
+
         broadcastRoomList();
     });
 
@@ -1942,7 +2030,10 @@ function startTurnTimerIfNeeded(roomCode, room) {
     const gs = room.gameState;
     if (!gs) return;
     const newCurrentPlayer = gs.players[gs.currentPlayerIndex];
-    if (!newCurrentPlayer || !room.disconnectedPlayers.has(newCurrentPlayer.id)) return;
+    if (!newCurrentPlayer) return;
+    // AI players don't need turn timers — they play automatically
+    if (newCurrentPlayer.isAI) return;
+    if (!room.disconnectedPlayers.has(newCurrentPlayer.id)) return;
 
     // Only start if there's at least one connected player (avoid pointless cycling)
     const hasConnectedPlayer = gs.players.some(p =>
@@ -1996,6 +2087,7 @@ function expireTurn(roomCode, sessionToken) {
         logs: [...result.logs, msg],
     });
 
+    maybeScheduleAITurn(roomCode, room);
     startTurnTimerIfNeeded(roomCode, room);
 }
 
@@ -2040,6 +2132,10 @@ function expirePlayer(roomCode, sessionToken) {
         for (const timer of room.turnTimers.values()) {
             clearTimeout(timer);
         }
+        if (room.aiTurnTimer) {
+            clearTimeout(room.aiTurnTimer);
+            room.aiTurnTimer = null;
+        }
         rooms.delete(roomCode);
         console.log(`Room ${roomCode} deleted (all players abandoned)`);
         broadcastRoomList();
@@ -2062,6 +2158,7 @@ function expirePlayer(roomCode, sessionToken) {
             logs: [...result.logs, `${player.name}'s turn was auto-skipped (abandoned)`],
         });
 
+        maybeScheduleAITurn(roomCode, room);
         startTurnTimerIfNeeded(roomCode, room);
     }
 }
