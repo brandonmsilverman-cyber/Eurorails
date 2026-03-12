@@ -36,6 +36,7 @@ const findPathOnTrack = gl.findPathOnTrack;
 // --- AI Action Handlers (extracted for AI reuse) ---
 // Initialized after helper functions are defined (see below).
 let aiActions = null;
+const aiEasy = require('./server/ai-easy');
 
 const LOBBY_COLORS = ["red", "blue", "green", "yellow", "purple", "orange"];
 
@@ -647,9 +648,9 @@ aiActions = require('./server/ai-actions')({
     serverCheckTrackageStrandRisk
 });
 
-// --- AI Turn Loop (Phase 2) ---
+// --- AI Turn Loop ---
 
-// Build pathfinding context from game state (used by AI in Phase 3)
+// Build pathfinding context from game state (used by AI strategy)
 function buildPathfindingCtx(gs) {
     return {
         mileposts: gs.mileposts,
@@ -689,31 +690,122 @@ function maybeScheduleAITurn(roomCode, room) {
     }, AI_ACTION_DELAY_MS);
 }
 
-// Execute an AI player's turn.
-// Phase 2: AI simply ends their turn.
-// Phase 3 will add actual strategy (building, moving, picking up, delivering).
+// Dispatch a single AI action to the appropriate handler.
+// Returns { success, error?, logs?, uiEvent? }
+function executeAIAction(gs, playerIndex, action) {
+    switch (action.type) {
+        case 'endTurn':
+            return aiActions.applyEndTurn(gs);
+        case 'commitBuild':
+            return aiActions.applyCommitBuild(gs, playerIndex, {
+                buildPath: action.buildPath,
+                buildCost: action.buildCost,
+                majorCityCount: action.majorCityCount,
+                ferries: action.ferries
+            });
+        case 'deployTrain':
+            return aiActions.applyDeployTrain(gs, playerIndex, {
+                milepostId: action.milepostId
+            });
+        case 'commitMove':
+            return aiActions.applyCommitMove(gs, playerIndex, {
+                path: action.path
+            });
+        case 'pickupGood':
+            return aiActions.applyPickupGood(gs, playerIndex, {
+                good: action.good
+            });
+        case 'deliverGood':
+            return aiActions.applyDeliverGood(gs, playerIndex, {
+                cardIndex: action.cardIndex,
+                demandIndex: action.demandIndex
+            });
+        case 'upgradeTo':
+            return aiActions.applyUpgradeTo(gs, playerIndex, {
+                trainType: action.trainType
+            });
+        case 'discardHand':
+            return aiActions.applyDiscardHand(gs, playerIndex);
+        case 'endOperatePhase':
+            return aiActions.applyEndOperatePhase(gs, playerIndex);
+        default:
+            return { success: false, error: `Unknown AI action type: ${action.type}` };
+    }
+}
+
+// Execute an AI player's turn by computing a plan and running it step by step.
 function executeAITurn(roomCode, room) {
-    // Verify room still exists and game is active
     if (!rooms.has(roomCode)) return;
     const gs = room.gameState;
     if (!gs) return;
-
     const playerIndex = gs.currentPlayerIndex;
     const player = gs.players[playerIndex];
     if (!player || !player.isAI) return;
 
-    // Phase 2: AI simply ends their turn
-    console.log(`Room ${roomCode}: AI ${player.name} ends turn (Phase 2 placeholder)`);
+    let plan;
+    try {
+        const ctx = buildPathfindingCtx(gs);
+        plan = aiEasy.planTurn(gs, playerIndex, ctx);
+    } catch (err) {
+        console.warn(`Room ${roomCode}: AI planTurn error: ${err.message}`);
+        plan = [{ type: 'endTurn' }];
+    }
+    if (!plan || plan.length === 0) {
+        plan = [{ type: 'endTurn' }];
+    }
+    executeAIActionSequence(roomCode, room, plan, 0);
+}
 
-    const result = aiActions.applyEndTurn(gs);
+// Execute a sequence of AI actions with delays between each step.
+function executeAIActionSequence(roomCode, room, plan, stepIndex) {
+    if (!rooms.has(roomCode)) return;
+    const gs = room.gameState;
+    if (!gs) return;
+    if (stepIndex >= plan.length) return;
+
+    const action = plan[stepIndex];
+    const playerIndex = gs.currentPlayerIndex;
+    const result = executeAIAction(gs, playerIndex, action);
+
+    if (!result.success) {
+        console.warn(`Room ${roomCode}: AI illegal action ${action.type}: ${result.error}`);
+        const endResult = aiActions.applyEndTurn(gs);
+        broadcastStateUpdate(roomCode, room, endResult.uiEvent);
+        if (!endResult.uiEvent.gameOver) {
+            maybeScheduleAITurn(roomCode, room);
+            startTurnTimerIfNeeded(roomCode, room);
+        }
+        return;
+    }
+
     broadcastStateUpdate(roomCode, room, result.uiEvent);
 
-    if (!result.uiEvent.gameOver) {
-        // Check if next player is also AI (cascading AI turns)
+    if (action.type === 'endTurn' || action.type === 'discardHand') {
+        if (result.uiEvent?.gameOver) return;
         maybeScheduleAITurn(roomCode, room);
-        // Start timer for disconnected human players
         startTurnTimerIfNeeded(roomCode, room);
+        return;
     }
+
+    // After endOperatePhase, the game transitions to build phase.
+    // Re-plan for the new phase instead of continuing the old plan.
+    if (action.type === 'endOperatePhase') {
+        room.aiTurnTimer = setTimeout(() => {
+            room.aiTurnTimer = null;
+            if (!rooms.has(roomCode)) return;
+            const freshGs = room.gameState;
+            if (!freshGs) return;
+            const freshCtx = buildPathfindingCtx(freshGs);
+            const buildPlan = aiEasy.planTurn(freshGs, freshGs.currentPlayerIndex, freshCtx);
+            executeAIActionSequence(roomCode, room, buildPlan, 0);
+        }, AI_ACTION_DELAY_MS);
+        return;
+    }
+
+    room.aiTurnTimer = setTimeout(() => {
+        room.aiTurnTimer = null;
+        executeAIActionSequence(roomCode, room, plan, stepIndex + 1);
+    }, AI_ACTION_DELAY_MS);
 }
 
 // --- Game State Initialization ---

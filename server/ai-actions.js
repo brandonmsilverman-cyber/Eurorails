@@ -4,7 +4,9 @@
 // No socket references, no broadcasting — just game state mutation + validation.
 
 const gl = require('../shared/game-logic');
+const CITIES = gl.CITIES;
 const GOODS = gl.GOODS;
+const MAJOR_CITIES = gl.MAJOR_CITIES;
 const TRAIN_TYPES = gl.TRAIN_TYPES;
 const getFerryKey = gl.getFerryKey;
 const playerOwnsFerry = gl.playerOwnsFerry;
@@ -75,6 +77,17 @@ module.exports = function(deps) {
         }
 
         const player = gs.players[playerIndex];
+
+        // Validate player is at a city that produces this good
+        const cityName = getCityAtMilepost(gs, player.trainLocation);
+        if (!cityName) {
+            return { success: false, error: 'Not at a city — cannot pick up goods' };
+        }
+        const cityData = CITIES[cityName];
+        if (!cityData || !cityData.goods || !cityData.goods.includes(good)) {
+            return { success: false, error: `${cityName} does not produce ${good}` };
+        }
+
         const maxCapacity = TRAIN_TYPES[player.trainType].capacity;
         if (player.loads.length >= maxCapacity) {
             return { success: false, error: 'Train is at full capacity' };
@@ -213,16 +226,27 @@ module.exports = function(deps) {
         // Build owned/other edge sets for validation
         const ownedEdges = new Set();
         const otherEdges = new Set();
+        const ownedMileposts = new Set();
         for (const t of gs.tracks) {
             const fwd = t.from + "|" + t.to;
             const rev = t.to + "|" + t.from;
             if (t.color === player.color) {
                 ownedEdges.add(fwd);
                 ownedEdges.add(rev);
+                ownedMileposts.add(t.from);
+                ownedMileposts.add(t.to);
             } else {
                 otherEdges.add(fwd);
                 otherEdges.add(rev);
             }
+        }
+
+        // Build must start from owned track or a major city
+        const startMp = gs.mileposts_by_id ? gs.mileposts_by_id[buildPath[0]] : null;
+        const startsFromOwned = ownedMileposts.has(buildPath[0]);
+        const startsFromMajorCity = startMp && startMp.city && MAJOR_CITIES.includes(startMp.city.name);
+        if (!startsFromOwned && !startsFromMajorCity) {
+            return { success: false, error: 'Build must start from owned track or a major city' };
         }
 
         // Add track segments

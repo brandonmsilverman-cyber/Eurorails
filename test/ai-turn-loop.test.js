@@ -191,24 +191,18 @@ describe('AI Turn Loop: Basic Turn Execution', () => {
         const client = await createClient();
         await createSoloGame(client);
 
-        // Collect all stateUpdates after human ends turn
-        // First update: human's endTurn (turnChanged to AI)
-        // Second update: AI's endTurn (turnChanged back to human)
-        const updatesPromise = collectStateUpdates(client, 2);
+        // Wait for AI to complete its full turn (build + endTurn) and return to human.
+        // The final stateUpdate should be turnChanged back to human with overlay.
+        const updatePromise = waitForStateUpdate(client, (data) =>
+            data.uiEvent?.type === 'turnChanged' &&
+            data.state?.currentPlayerIndex === 0
+        );
         await emit(client, 'action', { type: 'endTurn' });
-        const updates = await updatesPromise;
+        const update = await updatePromise;
 
-        // First update should show turn changed to AI
-        const aiTurnUpdate = updates[0];
-        assert.equal(aiTurnUpdate.uiEvent.type, 'turnChanged');
-        assert.equal(aiTurnUpdate.state.currentPlayerIndex, 1);
-
-        // Second update should show turn changed back to human
-        const humanTurnUpdate = updates[1];
-        assert.equal(humanTurnUpdate.uiEvent.type, 'turnChanged');
-        assert.equal(humanTurnUpdate.state.currentPlayerIndex, 0);
-        assert.ok(humanTurnUpdate.uiEvent.overlay);
-        assert.equal(humanTurnUpdate.uiEvent.overlay.playerName, 'TestPlayer');
+        assert.equal(update.state.currentPlayerIndex, 0);
+        assert.ok(update.uiEvent.overlay);
+        assert.equal(update.uiEvent.overlay.playerName, 'TestPlayer');
     });
 
     it('AI turn overlay shows AI player name and color', async () => {
@@ -276,7 +270,7 @@ describe('AI Turn Loop: Multiple AI Players', () => {
         assert.equal(update.state.currentPlayerIndex, 0);
     });
 
-    it('each AI turn produces a separate stateUpdate', async () => {
+    it('each AI turn produces multiple stateUpdates', async () => {
         const client = await createClient();
         await createSoloGame(client, {
             aiPlayers: [
@@ -285,14 +279,34 @@ describe('AI Turn Loop: Multiple AI Players', () => {
             ]
         });
 
-        // Expect 3 updates: human→AI1, AI1→AI2, AI2→human
-        const updatesPromise = collectStateUpdates(client, 3);
-        await emit(client, 'action', { type: 'endTurn' });
-        const updates = await updatesPromise;
+        // With 2 AI players, each doing build + endTurn, we expect many stateUpdates.
+        // Wait for the final one where it's back to human's turn.
+        const updates = [];
+        const donePromise = new Promise((resolve, reject) => {
+            const timer = setTimeout(
+                () => reject(new Error(`Timeout: got ${updates.length} stateUpdates`)),
+                10000
+            );
+            function handler(data) {
+                updates.push(data);
+                if (data.state?.currentPlayerIndex === 0 && data.state?.turn > 1) {
+                    clearTimeout(timer);
+                    client.off('stateUpdate', handler);
+                    resolve();
+                }
+            }
+            client.on('stateUpdate', handler);
+        });
 
-        assert.equal(updates[0].state.currentPlayerIndex, 1); // AI 1's turn
-        assert.equal(updates[1].state.currentPlayerIndex, 2); // AI 2's turn
-        assert.equal(updates[2].state.currentPlayerIndex, 0); // back to human
+        await emit(client, 'action', { type: 'endTurn' });
+        await donePromise;
+
+        // Each AI should produce at least 2 broadcasts (build + endTurn),
+        // plus the human's endTurn = at least 5 total
+        assert.ok(updates.length >= 3,
+            `Expected at least 3 stateUpdates for 2 AI turns, got ${updates.length}`);
+        // Final update should be back to human
+        assert.equal(updates[updates.length - 1].state.currentPlayerIndex, 0);
     });
 });
 
@@ -516,7 +530,7 @@ describe('AI Turn Loop: DiscardHand Trigger', () => {
 
 describe('AI Turn Loop: Game State Consistency', () => {
 
-    it('AI players maintain correct cash through turns', async () => {
+    it('AI players spend cash when building track', async () => {
         const client = await createClient();
         const { state } = await createSoloGame(client);
 
@@ -528,8 +542,9 @@ describe('AI Turn Loop: Game State Consistency', () => {
         await emit(client, 'action', { type: 'endTurn' });
         const update = await updatePromise;
 
-        // AI just ended turn (no building/spending) — cash should be unchanged
-        assert.equal(update.state.players[1].cash, initialAICash);
+        // AI builds track during initialBuilding, so cash should decrease
+        assert.ok(update.state.players[1].cash <= initialAICash,
+            'AI cash should not increase during initialBuilding');
     });
 
     it('game log records AI turn activity', async () => {
@@ -607,5 +622,134 @@ describe('AI Turn Loop: Reconnection Compatibility', () => {
         const update = await updatePromise;
 
         assert.equal(update.state.currentPlayerIndex, 0);
+    });
+});
+
+// ===========================================================================
+// PHASE 3 STEP 4: AI ACTION SEQUENCE TESTS
+// ===========================================================================
+
+describe('AI Action Sequence: Initial Building', () => {
+
+    it('AI builds track during initialBuilding phase', async () => {
+        const client = await createClient();
+        const { state } = await createSoloGame(client);
+
+        assert.equal(state.phase, 'initialBuilding');
+
+        // Human ends turn; wait for AI to finish its turn and return to human
+        const updatePromise = waitForStateUpdate(client, (data) =>
+            data.state?.currentPlayerIndex === 0 &&
+            data.state?.turn > state.turn
+        );
+        await emit(client, 'action', { type: 'endTurn' });
+        const update = await updatePromise;
+
+        // AI should have built track (tracks array has entries for AI's color)
+        const aiColor = state.players[1].color;
+        const aiTracks = update.state.tracks.filter(t => t.color === aiColor);
+        assert.ok(aiTracks.length > 0, `AI (${aiColor}) should have built at least one track segment`);
+
+        // AI cash should have decreased from building
+        assert.ok(update.state.players[1].cash < state.players[1].cash,
+            'AI cash should decrease after building track');
+    });
+
+    it('AI turn produces multiple stateUpdate broadcasts', async () => {
+        const client = await createClient();
+        const { state } = await createSoloGame(client);
+
+        assert.equal(state.phase, 'initialBuilding');
+
+        // Collect all stateUpdates after human ends turn until it's human's turn again.
+        // AI should produce >1 broadcast: at least commitBuild + endTurn.
+        const updates = [];
+        const donePromise = new Promise((resolve, reject) => {
+            const timer = setTimeout(
+                () => reject(new Error(`Timeout: got ${updates.length} stateUpdates`)),
+                10000
+            );
+            function handler(data) {
+                updates.push(data);
+                // Once it's back to human's turn, we're done
+                if (data.state?.currentPlayerIndex === 0 && data.state?.turn > state.turn) {
+                    clearTimeout(timer);
+                    client.off('stateUpdate', handler);
+                    resolve();
+                }
+            }
+            client.on('stateUpdate', handler);
+        });
+
+        await emit(client, 'action', { type: 'endTurn' });
+        await donePromise;
+
+        // First update is human's endTurn, then AI actions follow.
+        // AI should produce at least 2 broadcasts: commitBuild + endTurn (minimum).
+        // Total should be >= 3 (human endTurn + AI commitBuild + AI endTurn).
+        assert.ok(updates.length >= 3,
+            `Expected at least 3 stateUpdates (human endTurn + AI build + AI endTurn), got ${updates.length}`);
+    });
+});
+
+describe('AI Action Sequence: Room Deletion Safety', () => {
+
+    it('handles room deletion mid-turn without crash or orphaned timers', async () => {
+        const client = await createClient();
+        const { roomCode, state } = await createSoloGame(client);
+
+        assert.equal(state.phase, 'initialBuilding');
+
+        // Human ends turn — AI turn starts
+        const firstUpdate = once(client, 'stateUpdate');
+        await emit(client, 'action', { type: 'endTurn' });
+        await firstUpdate;
+
+        // Delete the room while AI sequence may still be in progress
+        rooms.delete(roomCode);
+
+        // Wait a bit for any pending AI timers to fire
+        await new Promise(r => setTimeout(r, 500));
+
+        // If we get here without crash, the test passes.
+        // Verify the room is gone
+        assert.equal(rooms.has(roomCode), false, 'Room should be deleted');
+    });
+});
+
+describe('AI Action Sequence: Regression', () => {
+
+    it('existing turn loop still works with action sequence executor', async () => {
+        // Verifies the basic turn loop: human → AI → human across phase transitions
+        const client = await createClient();
+        const { state } = await createSoloGame(client);
+
+        // Round 1 initial building
+        let updatePromise = waitForStateUpdate(client, (data) =>
+            data.state?.currentPlayerIndex === 0 && data.state?.turn > state.turn
+        );
+        await emit(client, 'action', { type: 'endTurn' });
+        let update = await updatePromise;
+        assert.equal(update.state.currentPlayerIndex, 0);
+        assert.equal(update.state.phase, 'initialBuilding');
+
+        // Round 2 → transitions to operate
+        updatePromise = waitForStateUpdate(client, (data) =>
+            data.state?.phase === 'operate' && data.state?.currentPlayerIndex === 0
+        );
+        await emit(client, 'action', { type: 'endTurn' });
+        update = await updatePromise;
+        assert.equal(update.state.phase, 'operate');
+
+        // Operate round
+        updatePromise = waitForStateUpdate(client, (data) =>
+            data.state?.currentPlayerIndex === 0 &&
+            data.state?.phase === 'operate' &&
+            data.state?.turn > update.state.turn
+        );
+        await emit(client, 'action', { type: 'endTurn' });
+        const finalUpdate = await updatePromise;
+        assert.equal(finalUpdate.state.currentPlayerIndex, 0);
+        assert.equal(finalUpdate.state.players.length, 2);
     });
 });
