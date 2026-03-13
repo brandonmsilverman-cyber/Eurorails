@@ -41,7 +41,7 @@ Two causes:
 
 ## Commit Sequence
 
-### Commit 1: Persistent demand card rendering
+### Commit 1: Persistent demand card rendering — ✅ COMPLETE (`5bc2093`)
 
 **The core change.** Makes demand cards always visible for the local player regardless of whose turn it is.
 
@@ -66,7 +66,7 @@ Two causes:
 
 ---
 
-### Commit 2: Persistent train card rendering
+### Commit 2: Persistent train card rendering — ✅ COMPLETE (`a603e2d`)
 
 **Same pattern as Commit 1, applied to the train card overlay.**
 

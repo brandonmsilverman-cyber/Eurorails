@@ -75,11 +75,19 @@ Independent of solo mode — no blocking dependencies in either direction.
 
 ---
 
+## Persistent Player UI Overhaul
+
+Demand cards, train card, and selection highlights should persist for each player regardless of whose turn it is, giving players time to plan between turns. Replacement cards after discard should appear immediately. Full plan in [`PERSISTENT_PLAYER_UI_PLAN.md`](PERSISTENT_PLAYER_UI_PLAN.md).
+
+- [ ] **Persistent demand card rendering** — Always show the local player's demand cards, not the current turn player's
+- [ ] **Persistent train card rendering** — Always show the local player's train card (type, speed, location, cargo)
+- [ ] **Fix demand card highlight persistence** — Highlights randomly disappear between turns or select the wrong card due to `currentPlayer` vs `myPlayer` mismatch and fragile snapshot comparison
+- [ ] **Immediate card animation at game start + after discard** — Show dealt/replacement cards right away instead of deferring until the player's next turn
+
 ## Bug Fixes
 
-- [ ] **Demand card highlights randomly disappear between turns** — Persistent route highlighting on demand card rows vanishes unpredictably when turns change; sometimes selects the wrong card automatically
 - [ ] **Cheapest route ignores trackage rights fees** — The "cheapest route" pathfinding option doesn't factor in the 4M per-opponent trackage rights cost, forcing players to mentally calculate whether foreign track is actually cheaper
-- [ ] **Cards not visible during other players' turns** — Players can't see their own demand cards while waiting at game start or during other players' turns
+- [ ] **Ferry crossing doesn't stop movement at entry milepost** — During operate phase, a player moving from one milepost east of Manchester to Antwerpen was able to pass straight through the Dover-Calais ferry without stopping at the ferry entry point. Ferries should consume the remainder of a turn's movement when entered, requiring the player to continue on the next turn.
 - [ ] **Alps region lacks clear milepost paths** — No clear traversal route through the Alps (unlike the physical board), making Italy builds disproportionately expensive and unattractive
 
 ## Completed

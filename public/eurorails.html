@@ -6530,7 +6530,7 @@ function applyServerState(state) {
     // Preserve client-only selectedDemands for local player across state updates
     const myPlayer = gameState.players.find(p => p.id === myPlayerId);
     const savedSelectedDemands = myPlayer?.selectedDemands ? [...myPlayer.selectedDemands] : null;
-    const savedCardSnapshot = myPlayer?.demandCards ? JSON.stringify(myPlayer.demandCards.map(c => c.hidden ? null : c.demands)) : null;
+    const savedCardSnapshot = myPlayer?.demandCards ? JSON.stringify(myPlayer.demandCards.map(c => c.hidden ? null : c.demands.map(d => [d.good, d.to, d.payout]))) : null;
 
     gameState.players = state.players;
 
@@ -6538,7 +6538,7 @@ function applyServerState(state) {
     if (savedSelectedDemands) {
         const updatedMyPlayer = gameState.players.find(p => p.id === myPlayerId);
         if (updatedMyPlayer) {
-            const newCardSnapshot = updatedMyPlayer.demandCards ? JSON.stringify(updatedMyPlayer.demandCards.map(c => c.hidden ? null : c.demands)) : null;
+            const newCardSnapshot = updatedMyPlayer.demandCards ? JSON.stringify(updatedMyPlayer.demandCards.map(c => c.hidden ? null : c.demands.map(d => [d.good, d.to, d.payout]))) : null;
             if (newCardSnapshot === savedCardSnapshot) {
                 updatedMyPlayer.selectedDemands = savedSelectedDemands;
             }
@@ -6610,8 +6610,11 @@ socket.on('stateUpdate', ({ state, uiEvent }) => {
     }
 
     // For delivery, pre-adjust selectedDemands before applying state (since cards will change)
+    // Only adjust if the LOCAL player delivered — other players' deliveries don't affect our cards
     let deliverySelectedDemands = null;
-    if (uiEvent?.type === 'delivery' && uiEvent.cardIndex != null) {
+    const isLocalDelivery = uiEvent?.type === 'delivery' && uiEvent.cardIndex != null &&
+        gameState.players[gameState.currentPlayerIndex]?.id === myPlayerId;
+    if (isLocalDelivery) {
         const prePlayer = gameState.players.find(p => p.id === myPlayerId);
         if (prePlayer?.selectedDemands) {
             deliverySelectedDemands = [...prePlayer.selectedDemands];

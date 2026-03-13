@@ -901,3 +901,78 @@ describe('Persistent Demand Cards: Cards visible during other player\'s turn', (
         assert.equal(result.success, false);
     });
 });
+
+// ===========================================================================
+// COMMIT 3: DEMAND CARD HIGHLIGHT PERSISTENCE
+// ===========================================================================
+
+describe('Demand Card Highlights: Selections survive state updates', () => {
+
+    it('card identity (good/to/payout) is stable across state updates within a turn', async () => {
+        const client = await createClient();
+        const { state } = await createSoloGame(client);
+
+        // Capture the card fingerprints at game start
+        const humanCards = state.players[0].demandCards;
+        const fingerprint = JSON.stringify(
+            humanCards.map(c => c.demands.map(d => [d.good, d.to, d.payout]))
+        );
+
+        // End turn, wait for full round back to human
+        const updatePromise = waitForStateUpdate(client, (data) =>
+            data.state?.currentPlayerIndex === 0 && data.state?.turn > state.turn
+        );
+        await emit(client, 'action', { type: 'endTurn' });
+        const update = await updatePromise;
+
+        // Cards should have identical identity fingerprints (no deliveries happened)
+        const updatedCards = update.state.players[0].demandCards;
+        const newFingerprint = JSON.stringify(
+            updatedCards.map(c => c.demands.map(d => [d.good, d.to, d.payout]))
+        );
+        assert.equal(newFingerprint, fingerprint,
+            'Card identity fingerprints should be stable when no cards are replaced');
+    });
+
+    it('card identity stable across multiple turn transitions', async () => {
+        const client = await createClient();
+        const { state } = await createSoloGame(client);
+
+        const fingerprint = JSON.stringify(
+            state.players[0].demandCards.map(c => c.demands.map(d => [d.good, d.to, d.payout]))
+        );
+
+        // Go through 3 full rounds
+        let currentTurn = state.turn;
+        for (let i = 0; i < 3; i++) {
+            const t = currentTurn;
+            const updatePromise = waitForStateUpdate(client, (data) =>
+                data.state?.currentPlayerIndex === 0 && data.state?.turn > t
+            );
+            await emit(client, 'action', { type: 'endTurn' });
+            const update = await updatePromise;
+            currentTurn = update.state.turn;
+
+            const newFingerprint = JSON.stringify(
+                update.state.players[0].demandCards.map(c => c.demands.map(d => [d.good, d.to, d.payout]))
+            );
+            assert.equal(newFingerprint, fingerprint,
+                `Card fingerprints should be stable after round ${i + 1}`);
+        }
+    });
+
+    it('card data includes all fields needed for stable fingerprinting', async () => {
+        const client = await createClient();
+        const { state } = await createSoloGame(client);
+
+        // Verify each demand has the fields used in the fingerprint
+        for (const card of state.players[0].demandCards) {
+            assert.ok(Array.isArray(card.demands), 'Card should have demands array');
+            for (const demand of card.demands) {
+                assert.ok(demand.good !== undefined, 'Demand should have good field');
+                assert.ok(demand.to !== undefined, 'Demand should have to field');
+                assert.ok(demand.payout !== undefined, 'Demand should have payout field');
+            }
+        }
+    });
+});
