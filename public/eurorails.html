@@ -138,6 +138,39 @@
             display: block;
         }
 
+        .zoom-controls {
+            position: fixed;
+            bottom: 16px;
+            left: 16px;
+            z-index: 20;
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .zoom-btn {
+            width: 32px;
+            height: 32px;
+            font-size: 18px;
+            font-weight: bold;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background: #333;
+            color: #eee;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+        .zoom-btn:hover:not(:disabled) {
+            background: #444;
+        }
+        .zoom-btn:disabled {
+            background: #222;
+            color: #555;
+            cursor: not-allowed;
+        }
+
         #leftPanelStack {
             position: fixed;
             top: 6px;
@@ -1123,6 +1156,10 @@
 <div class="container" style="display: none;" id="gameContainer">
     <div class="map-area">
         <canvas id="gameCanvas"></canvas>
+    </div>
+    <div class="zoom-controls" id="zoomControls">
+        <button class="zoom-btn" id="zoomInBtn" title="Zoom in">+</button>
+        <button class="zoom-btn" id="zoomOutBtn" title="Zoom out">&minus;</button>
     </div>
     <div id="leftPanelStack">
         <div id="legendOverlay"></div>
@@ -3695,6 +3732,8 @@ function startGame() {
 
     drawMap();
     updateUI();
+    document.getElementById("zoomControls").style.display = "flex";
+    updateZoomButtons();
 
     addLog("Game started! Initial building phase (2 rounds)");
 
@@ -5761,6 +5800,7 @@ function zoomMap(factor) {
     drawMap();
     mapArea.scrollLeft = centerX * ratio - mapArea.clientWidth / 2;
     mapArea.scrollTop = centerY * ratio - mapArea.clientHeight / 2;
+    updateZoomButtons();
 }
 
 // Click-and-drag to pan the map
@@ -5828,7 +5868,24 @@ document.querySelector(".map-area")?.addEventListener("wheel", function(e) {
     drawMap();
     mapArea.scrollLeft = mouseX * ratio - (e.clientX - mapArea.getBoundingClientRect().left);
     mapArea.scrollTop = mouseY * ratio - (e.clientY - mapArea.getBoundingClientRect().top);
+    updateZoomButtons();
 }, { passive: false });
+
+// Zoom buttons
+function updateZoomButtons() {
+    const zoomInBtn = document.getElementById("zoomInBtn");
+    const zoomOutBtn = document.getElementById("zoomOutBtn");
+    if (!zoomInBtn || !zoomOutBtn) return;
+    zoomInBtn.disabled = gameState.zoom >= 4;
+    zoomOutBtn.disabled = gameState.zoom <= 1;
+}
+
+document.getElementById("zoomInBtn")?.addEventListener("click", function() {
+    zoomMap(1.1);
+});
+document.getElementById("zoomOutBtn")?.addEventListener("click", function() {
+    zoomMap(0.9);
+});
 </script>
 
 <div class="trackage-modal" id="trackageModal" onclick="dismissTrackageModal()">
@@ -6386,6 +6443,8 @@ function initializeGameView(state, isRejoin) {
 
     drawMap();
     updateUI();
+    document.getElementById("zoomControls").style.display = "flex";
+    updateZoomButtons();
 
     // Render server log entries to the DOM (clear first to avoid duplicates on repeated reconnects)
     const logDiv = document.getElementById("gameLog");
