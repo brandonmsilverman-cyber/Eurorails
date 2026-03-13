@@ -1,4 +1,5 @@
 [
+  {"message": "Shrink pickup button to match deliver button format", "date": "Mar 13, 2026"},
   {"message": "Improve pickup goods visibility with demand-matching highlights and larger buttons", "date": "Mar 13, 2026"},
   {"message": "Add ECU balance and phase/waiting indicator to train card", "date": "Mar 13, 2026"},
   {"message": "Prominent cash display, phase badges, and movement progress bar", "date": "Mar 13, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Add manual zoom in/out buttons to bottom-left of map", "date": "Mar 12, 2026"},
   {"message": "Fix lobby player colors to match rail line colors", "date": "Mar 12, 2026"},
   {"message": "Fix 5 AI paralysis bugs: stale targets, skippable actions, path walking", "date": "Mar 12, 2026"},
-  {"message": "Fix AI discontinuous track building and stuck deploy loop", "date": "Mar 12, 2026"},
-  {"message": "Phase 3 Steps 2-3: Add aiState and implement Easy AI core strategy module", "date": "Mar 11, 2026"}
+  {"message": "Fix AI discontinuous track building and stuck deploy loop", "date": "Mar 12, 2026"}
 ]

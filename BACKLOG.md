@@ -11,16 +11,6 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 - [ ] **AI: Hard difficulty** — Intelligent human-level play: opportunistic route batching, payout/cost build scoring with network awareness, situational upgrades, active hand evaluation, deliberate ferry investment
 - [ ] **AI: Brutal difficulty** — Near-optimal play: systematic multi-delivery planning, expected-value build calculations over future hands, optimal upgrade timing, EV-based discard decisions, full landmass access modeling for ferries
 
-### Recommended Build Sequence
-
-The AI strategy engine is the bulk of the work (~70%+ of effort). Build incrementally by difficulty tier so the full loop is functional at each step:
-
-1. **Lobby + AI player infrastructure** — Solo Mode button, AI setup screen (count/difficulty/color), private room creation, AI player slots in game state
-2. **AI turn loop** — Server detects AI turns, executes actions with small delays so the human can watch, skips turn timer for AI, handles event cards
-3. **Easy difficulty first** — Get a complete but simple AI: one demand at a time, no optimization. This proves the turn loop works end-to-end.
-4. **Hard difficulty** — Plays like a competent human: route batching, build ROI scoring, situational upgrades, active hand evaluation, deliberate ferry decisions
-5. **Brutal difficulty last** — Near-optimal play: EV-based decisions across all five strategic dimensions. This tier alone could be as complex as all others combined.
-
 ## AI Players in Multiplayer
 
 Allow the host to fill empty multiplayer slots with AI opponents so games can start without a full human lobby. The AI engine already exists — this is mostly lobby wiring and turn routing. Full plan in [`AI_MULTIPLAYER_PLAN.md`](AI_MULTIPLAYER_PLAN.md).
@@ -44,13 +34,14 @@ Allow the host to fill empty multiplayer slots with AI opponents so games can st
 
 ## UI / Visual
 
-- [ ] **Highlight demand-matching goods at pickup** — When at a city picking up goods, visually highlight any "available at city" options in the actions panel that match a good on the currently selected (highlighted) row of an active demand card
-- [ ] **More prominent goods pickup UI** — Make the option to pick up goods more visible and easier to interact with when stopped at a city
-- [ ] **In-game tutorial** — Guided walkthrough teaching players the basic functions: building track, operating trains, picking up and dropping off goods, using ferries, renting opponent railroads (trackage rights), etc. Uses highlight overlays on existing UI elements to direct attention. Includes a tutorial toggle option in the game room prior to game start.
+- [x] **Highlight demand-matching goods at pickup** — When at a city picking up goods, visually highlight any "available at city" options in the actions panel that match a good on the currently selected (highlighted) row of an active demand card
+- [x] **More prominent goods pickup UI** — Make the option to pick up goods more visible and easier to interact with when stopped at a city
+- [ ] **In-game tutorial** — Guided walkthrough teaching players the basic functions: building track, operating trains, picking up and dropping off goods, using ferries, renting opponent railroads (trackage rights), etc. 
 - [ ] **Overhaul demand card row hover effect** — When hovering a demand card row, highlight origin and destination cities simultaneously on the map using distinct colors (e.g. one color for origin cities, another for the destination)
 - [ ] **Event modal text should list all effects** — The persistent event banner at the top of the screen doesn't always describe every impact of the event (e.g. missing that rail building is disallowed in the affected area). Update event descriptions to fully enumerate all gameplay effects
-- [ ] **Prominent cash display** — Show current ECU balance next to player name or on train card so it's always visible without digging into the sidebar
-- [ ] **Better turn phase and movement limit indicators** — Clearer visual feedback for what phase you're in and how much movement remains
+- [x] **Prominent cash display** — Show current ECU balance next to player name or on train card so it's always visible without digging into the sidebar
+- [x] **Better turn phase and movement limit indicators** — Clearer visual feedback for what phase you're in and how much movement remains
+- [x] **Shrink pickup button to match deliver button** — Resize the goods pickup button so it uses the same compact format as the deliver button for visual consistency
 - [ ] **Improved trackage rights payment animation** — Replace falling coins with a more polished visual for trackage rights transfers
 - [ ] **Toggle to hide city production info** — Option to declutter the board by hiding goods-produced-at-city labels
 - [ ] **Basic gameplay instructions dropdown** — Quick-reference panel (like the existing map legend) explaining core mechanics
@@ -75,19 +66,9 @@ Independent of solo mode — no blocking dependencies in either direction.
 
 ---
 
-## Persistent Player UI Overhaul
-
-Demand cards, train card, and selection highlights should persist for each player regardless of whose turn it is, giving players time to plan between turns. Replacement cards after discard should appear immediately. Full plan in [`PERSISTENT_PLAYER_UI_PLAN.md`](PERSISTENT_PLAYER_UI_PLAN.md).
-
-- [ ] **Persistent demand card rendering** — Always show the local player's demand cards, not the current turn player's
-- [ ] **Persistent train card rendering** — Always show the local player's train card (type, speed, location, cargo)
-- [ ] **Fix demand card highlight persistence** — Highlights randomly disappear between turns or select the wrong card due to `currentPlayer` vs `myPlayer` mismatch and fragile snapshot comparison
-- [ ] **Immediate card animation at game start + after discard** — Show dealt/replacement cards right away instead of deferring until the player's next turn
-
 ## Bug Fixes
 
 - [ ] **Cheapest route ignores trackage rights fees** — The "cheapest route" pathfinding option doesn't factor in the 4M per-opponent trackage rights cost, forcing players to mentally calculate whether foreign track is actually cheaper
-- [ ] **Ferry crossing doesn't stop movement at entry milepost** — During operate phase, a player moving from one milepost east of Manchester to Antwerpen was able to pass straight through the Dover-Calais ferry without stopping at the ferry entry point. Ferries should consume the remainder of a turn's movement when entered, requiring the player to continue on the next turn.
 - [ ] **Alps region lacks clear milepost paths** — No clear traversal route through the Alps (unlike the physical board), making Italy builds disproportionately expensive and unattractive
 
 ## Completed
@@ -112,3 +93,5 @@ Demand cards, train card, and selection highlights should persist for each playe
 - [x] Solo Mode: AI turn loop
 - [x] Solo Mode: AI Easy difficulty
 - [x] Derailment event load drop fix
+- [x] Persistent Player UI Overhaul (demand cards, train card, highlight persistence, immediate card animations)
+- [x] Ferry crossing doesn't stop movement at entry milepost

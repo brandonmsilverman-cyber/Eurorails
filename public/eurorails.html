@@ -4825,7 +4825,7 @@ function updateUI() {
                     return `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; padding:4px 6px; border-radius:3px; ${rowStyle}">
                         <span>${GOODS_ICONS[g] || "?"} ${g}${supplyNote}${matchLabel}</span>
-                        <button onclick="pickupGood('${g}')" style="padding:5px 12px; font-size:12px; font-weight:bold; background:${btnBg}; color:#fff; border:none; border-radius:3px; cursor:pointer;${canPickThis ? '' : ' opacity:0.5;'}" ${canPickThis ? "" : "disabled"}>Pick Up</button>
+                        <button onclick="pickupGood('${g}')" style="padding:2px 8px; font-size:10px; background:${btnBg};${canPickThis ? '' : ' opacity:0.5;'}" ${canPickThis ? "" : "disabled"}>Pick Up</button>
                     </div>`;
                 }).join("")}
             </div>`;
