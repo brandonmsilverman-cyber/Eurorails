@@ -5414,7 +5414,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 const start = gameState.selectedMilepost;
                 const end = nearest;
 
-                let pathResult = findPath(start.id, end.id, currentPlayer.color, gameState.buildPathMode);
+                let pathResult = findPath(start.id, end.id, currentPlayer.color, gameState.buildPathMode, gameState.useForeignTrackInBuild);
 
                 // If start and end are direct neighbors and the player doesn't already
                 // own the direct edge, force the direct path. This prevents the pathfinder
@@ -5432,32 +5432,139 @@ document.addEventListener("DOMContentLoaded", function() {
                     );
                     if (!directOwned && !directBlocked) {
                         const directCost = getMileppostCost(start, end);
-                        pathResult = { path: [start.id, end.id], cost: directCost };
+                        pathResult = { path: [start.id, end.id], cost: directCost, foreignSegments: [] };
                     }
                 }
 
                 if (pathResult) {
+                    const foreignSegments = pathResult.foreignSegments || [];
+                    const foreignSet = new Set(foreignSegments);
+
+                    // Build network milepost set — all mileposts on the player's network
+                    const networkMileposts = new Set();
+                    for (let t of gameState.tracks) {
+                        if (t.color === currentPlayer.color) {
+                            networkMileposts.add(t.from);
+                            networkMileposts.add(t.to);
+                        }
+                    }
+                    // Also add ferry port mileposts for owned ferries
+                    for (let fc of gameState.ferryConnections) {
+                        const fk = getFerryKey(fc.fromId, fc.toId);
+                        if (playerOwnsFerry(fk, currentPlayer.color)) {
+                            networkMileposts.add(fc.fromId);
+                            networkMileposts.add(fc.toId);
+                        }
+                    }
+                    // Starting milepost is on the network (canBuildFromMilepost ensures this)
+                    networkMileposts.add(pathResult.path[0]);
+
+                    // Walk path: skip foreign segments, only build segments connected to network.
+                    // Foreign segments are skipped (opponent already built them).
+                    // Server-side applyCommitBuild also skips otherEdges, so sending the
+                    // full path is safe — but we filter here for correct cost/cutoff.
+                    let buildPath = [];
+                    let buildCost = 0;
+                    const ownedCheck = new Set();
+                    for (let t of gameState.tracks) {
+                        if (t.color === currentPlayer.color) {
+                            ownedCheck.add(t.from + "|" + t.to);
+                            ownedCheck.add(t.to + "|" + t.from);
+                        }
+                    }
+
+                    let lastBuildableIdx = 0; // track how far along the path we can build
+                    for (let i = 0; i < pathResult.path.length - 1; i++) {
+                        const fromId = pathResult.path[i];
+                        const toId = pathResult.path[i + 1];
+                        const edgeKey = fromId + "|" + toId;
+
+                        // Foreign segments: skip (not buildable), but they connect through
+                        // to the next milepost for network purposes during movement
+                        if (foreignSet.has(i)) {
+                            continue;
+                        }
+
+                        // Owned segments: already built, skip cost but extend network
+                        if (ownedCheck.has(edgeKey)) {
+                            networkMileposts.add(toId);
+                            lastBuildableIdx = i + 1;
+                            continue;
+                        }
+
+                        // New construction: only build if 'from' is on the network
+                        if (!networkMileposts.has(fromId)) {
+                            // Disconnected from network — can't build this or anything after
+                            continue;
+                        }
+
+                        // Compute segment cost
+                        const ferryKey = getFerryKey(fromId, toId);
+                        let segCost = 0;
+                        let isFerry = false;
+                        for (let fc of gameState.ferryConnections) {
+                            if (getFerryKey(fc.fromId, fc.toId) === ferryKey) {
+                                isFerry = true;
+                                segCost = playerOwnsFerry(ferryKey, currentPlayer.color) ? 0 : fc.cost;
+                                break;
+                            }
+                        }
+                        if (!isFerry) {
+                            const mp1 = gameState.mileposts_by_id[fromId];
+                            const mp2 = gameState.mileposts_by_id[toId];
+                            segCost = getMileppostCost(mp1, mp2);
+                        }
+
+                        buildCost += segCost;
+                        networkMileposts.add(toId);
+                        lastBuildableIdx = i + 1;
+                    }
+
+                    // Determine the buildable portion of the path (up to the last buildable segment)
+                    // Include all path nodes up to lastBuildableIdx so the server can validate connectivity
+                    buildPath = pathResult.path.slice(0, lastBuildableIdx + 1);
+
+                    // Nothing to build: all segments are foreign or already owned
+                    if (buildPath.length < 2 || (buildCost === 0 && foreignSegments.length > 0)) {
+                        // Check if there are actually no new segments (vs. a 0-cost path through owned track)
+                        let hasNewSegment = false;
+                        for (let i = 0; i < buildPath.length - 1; i++) {
+                            const ek = buildPath[i] + "|" + buildPath[i + 1];
+                            if (!ownedCheck.has(ek) && !foreignSet.has(i)) {
+                                hasNewSegment = true;
+                                break;
+                            }
+                        }
+                        if (!hasNewSegment) {
+                            addLog("No new track to build — route uses only existing or foreign track");
+                            gameState.selectedMilepost = null;
+                            gameState.pathPreview = null;
+                            gameState.pathPreviewCost = null;
+                            gameState.pathPreviewCutoff = null;
+                            gameState.pathPreviewForeignSegments = [];
+                            updateUI();
+                            drawMap();
+                            return;
+                        }
+                    }
+
                     // Check budget and truncate path if needed for partial build
                     const remainingBudget = 20 - gameState.buildingThisTurn;
                     const maxAffordable = Math.min(remainingBudget, currentPlayer.cash);
-                    let buildPath = pathResult.path;
-                    let buildCost = pathResult.cost;
 
                     if (buildCost > maxAffordable) {
                         // Truncate path to what we can afford
-                        const ownedCheck = new Set();
-                        for (let t of gameState.tracks) {
-                            if (t.color === currentPlayer.color) {
-                                ownedCheck.add(t.from + "|" + t.to);
-                                ownedCheck.add(t.to + "|" + t.from);
-                            }
-                        }
                         let accCost = 0;
                         let cutoffIdx = 0;
-                        for (let i = 0; i < pathResult.path.length - 1; i++) {
-                            const fromId = pathResult.path[i];
-                            const toId = pathResult.path[i + 1];
+                        for (let i = 0; i < buildPath.length - 1; i++) {
+                            const fromId = buildPath[i];
+                            const toId = buildPath[i + 1];
                             const edgeKey = fromId + "|" + toId;
+                            // Skip foreign segments (no build cost)
+                            if (foreignSet.has(i)) {
+                                cutoffIdx = i + 1;
+                                continue;
+                            }
                             if (ownedCheck.has(edgeKey)) {
                                 cutoffIdx = i + 1;
                                 continue;
@@ -5491,9 +5598,9 @@ document.addEventListener("DOMContentLoaded", function() {
                             drawMap();
                             return;
                         }
-                        buildPath = pathResult.path.slice(0, cutoffIdx + 1);
+                        buildPath = buildPath.slice(0, cutoffIdx + 1);
                         buildCost = accCost;
-                        addLog(`Partial build: can only afford ${cutoffIdx} of ${pathResult.path.length - 1} segments`);
+                        addLog(`Partial build: can only afford ${cutoffIdx} of ${buildPath.length - 1} segments`);
                     }
 
                     // Check major city limit (2 per turn max)
@@ -5729,13 +5836,56 @@ document.addEventListener("DOMContentLoaded", function() {
                         gameState.pathPreviewForeignSegments = [];
                     } else {
                         gameState.pathPreviewForeignSegments = pathResult.foreignSegments || [];
+                        const foreignSet = new Set(pathResult.foreignSegments || []);
                         const remainingBudget = 20 - gameState.buildingThisTurn;
                         const maxAffordable = Math.min(remainingBudget, currentPlayer.cash);
-                        const isFullyValid = pathResult.cost <= maxAffordable;
                         gameState.pathPreview = pathResult.path;
                         gameState.pathPreviewCost = pathResult.cost;
 
-                        if (isFullyValid) {
+                        // Check if there's anything buildable (not just affordable)
+                        // With foreign track on, a path could be cost 0 but have nothing to build
+                        let hasBuildableSegment = false;
+                        if (foreignSet.size > 0) {
+                            const ownedEdgesCheck = new Set();
+                            for (let t of gameState.tracks) {
+                                if (t.color === currentPlayer.color) {
+                                    ownedEdgesCheck.add(t.from + "|" + t.to);
+                                    ownedEdgesCheck.add(t.to + "|" + t.from);
+                                }
+                            }
+                            // Build network set for connectivity check
+                            const netMps = new Set();
+                            for (let t of gameState.tracks) {
+                                if (t.color === currentPlayer.color) {
+                                    netMps.add(t.from);
+                                    netMps.add(t.to);
+                                }
+                            }
+                            netMps.add(pathResult.path[0]);
+                            for (let i = 0; i < pathResult.path.length - 1; i++) {
+                                const fromId = pathResult.path[i];
+                                const toId = pathResult.path[i + 1];
+                                const edgeKey = fromId + "|" + toId;
+                                if (foreignSet.has(i)) continue;
+                                if (ownedEdgesCheck.has(edgeKey)) {
+                                    netMps.add(toId);
+                                    continue;
+                                }
+                                if (netMps.has(fromId)) {
+                                    hasBuildableSegment = true;
+                                    netMps.add(toId);
+                                }
+                            }
+                        } else {
+                            hasBuildableSegment = true; // no foreign segments, normal behavior
+                        }
+
+                        if (!hasBuildableSegment) {
+                            // Nothing to build — show path preview but mark invalid
+                            gameState.hoverValid = false;
+                            gameState.pathPreviewValid = false;
+                            gameState.pathPreviewCutoff = null;
+                        } else if (pathResult.cost <= maxAffordable) {
                             gameState.hoverValid = true;
                             gameState.pathPreviewValid = true;
                             gameState.pathPreviewCutoff = null;
@@ -5750,13 +5900,15 @@ document.addEventListener("DOMContentLoaded", function() {
                             }
                             let accCost = 0;
                             let cutoffIdx = 0;
-                            const foreignSet = new Set(pathResult.foreignSegments || []);
                             for (let i = 0; i < pathResult.path.length - 1; i++) {
                                 const fromId = pathResult.path[i];
                                 const toId = pathResult.path[i + 1];
                                 const edgeKey = fromId + "|" + toId;
-                                // Foreign edges: stop buildable cutoff at first foreign gap
-                                if (foreignSet.has(i)) break;
+                                // Foreign edges: skip (no build cost)
+                                if (foreignSet.has(i)) {
+                                    cutoffIdx = i + 1;
+                                    continue;
+                                }
                                 // Check if this segment is already owned (free)
                                 if (ownedEdges.has(edgeKey)) {
                                     cutoffIdx = i + 1;
@@ -6712,8 +6864,8 @@ function applyServerState(state) {
     gameState.pathPreviewCost = null;
     gameState.pathPreviewCutoff = null;
     gameState.pathPreviewForeignSegments = [];
-    gameState.buildPathMode = "cheapest";
-    gameState.useForeignTrackInBuild = false;
+    // Preserve build preferences (buildPathMode, useForeignTrackInBuild) within
+    // the same build phase — only reset on phase transitions (handled in endTurn/endBuildPhase)
     gameState.useTrackageRights = false;
 }
 
