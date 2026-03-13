@@ -3912,13 +3912,13 @@ function deliverGood(cardIndex, demandIndex) {
 }
 
 function toggleDemandSelection(cardIdx, demandIdx) {
-    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-    if (!currentPlayer.selectedDemands) currentPlayer.selectedDemands = [null, null, null];
+    const myPlayer = (myPlayerId && gameState.players.find(p => p.id === myPlayerId)) || gameState.players[gameState.currentPlayerIndex];
+    if (!myPlayer.selectedDemands) myPlayer.selectedDemands = [null, null, null];
     // Toggle: if already selected, deselect; otherwise select (swapping any previous selection on this card)
-    if (currentPlayer.selectedDemands[cardIdx] === demandIdx) {
-        currentPlayer.selectedDemands[cardIdx] = null;
+    if (myPlayer.selectedDemands[cardIdx] === demandIdx) {
+        myPlayer.selectedDemands[cardIdx] = null;
     } else {
-        currentPlayer.selectedDemands[cardIdx] = demandIdx;
+        myPlayer.selectedDemands[cardIdx] = demandIdx;
     }
     updateUI();
     drawMap();
@@ -4522,12 +4522,15 @@ function updateUI() {
     // Positioning is handled in drawMap() alongside legends/demand cards
 
     // Update demand cards display (rendered as overlay cards on the map)
+    // Always show the local player's own demand cards, regardless of whose turn it is
+    const myPlayer = (myPlayerId && gameState.players.find(p => p.id === myPlayerId)) || currentPlayer;
+    const isMyTurnForCards = !myPlayerId || (currentPlayer && currentPlayer.id === myPlayerId);
     const demandOverlay = document.getElementById("demandCardsOverlay");
-    const currentCity = getPlayerCity(currentPlayer);
-    const hasVisibleCards = currentPlayer.demandCards.length > 0 && !currentPlayer.demandCards[0].hidden;
+    const currentCity = getPlayerCity(myPlayer);
+    const hasVisibleCards = myPlayer.demandCards.length > 0 && !myPlayer.demandCards[0].hidden;
     if (hasVisibleCards) {
-        const pColor = COLOR_MAP[currentPlayer.color] || "#6a9ad0";
-        const cardsHtml = currentPlayer.demandCards.map((card, cardIdx) => {
+        const pColor = COLOR_MAP[myPlayer.color] || "#6a9ad0";
+        const cardsHtml = myPlayer.demandCards.map((card, cardIdx) => {
             // Show empty placeholder for cards still being animated
             if (card._animating) {
                 return `<div class="demand-card-overlay placeholder" data-card-idx="${cardIdx}"></div>`;
@@ -4541,11 +4544,11 @@ function updateUI() {
                 </div>`;
             }
 
-            const hasDeliverable = card.demands.some(d =>
-                gameState.phase === "operate" && currentCity === d.to && currentPlayer.loads.includes(d.good));
+            const hasDeliverable = isMyTurnForCards && card.demands.some(d =>
+                gameState.phase === "operate" && currentCity === d.to && myPlayer.loads.includes(d.good));
 
-            const selectedIdx = (currentPlayer.selectedDemands && currentPlayer.selectedDemands[cardIdx] != null)
-                ? currentPlayer.selectedDemands[cardIdx] : -1;
+            const selectedIdx = (myPlayer.selectedDemands && myPlayer.selectedDemands[cardIdx] != null)
+                ? myPlayer.selectedDemands[cardIdx] : -1;
 
             const demandsHtml = card.demands.map((demand, dIdx) => {
                 const allSources = GOODS[demand.good] ? GOODS[demand.good].sources : [demand.from];
@@ -4554,10 +4557,11 @@ function updateUI() {
                            onmouseleave="clearHighlight()">${c}</span>`
                 ).join(", ");
 
-                const canDeliver = gameState.phase === "operate" &&
+                const canDeliver = isMyTurnForCards &&
+                                   gameState.phase === "operate" &&
                                    currentCity === demand.to &&
-                                   currentPlayer.loads.includes(demand.good) &&
-                                   !isEventBlocking("deliver", { milepostId: currentPlayer.trainLocation });
+                                   myPlayer.loads.includes(demand.good) &&
+                                   !isEventBlocking("deliver", { milepostId: myPlayer.trainLocation });
                 const deliverBtn = canDeliver
                     ? `<button class="deliver-btn" onclick="event.stopPropagation(); deliverGood(${cardIdx}, ${dIdx})">💰 Deliver ECU ${demand.payout}M</button>`
                     : "";

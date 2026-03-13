@@ -753,3 +753,151 @@ describe('AI Action Sequence: Regression', () => {
         assert.equal(finalUpdate.state.players.length, 2);
     });
 });
+
+// ===========================================================================
+// PERSISTENT DEMAND CARD RENDERING (Commit 1)
+// ===========================================================================
+
+describe('Persistent Demand Cards: Cards visible during other player\'s turn', () => {
+
+    it('human player cards are full (non-hidden) during AI turn', async () => {
+        const client = await createClient();
+        await createSoloGame(client);
+
+        // Collect the first stateUpdate after ending turn — this fires while
+        // it's the AI's turn (currentPlayerIndex === 1)
+        const aiTurnUpdate = await new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('Timeout')), 5000);
+            function handler(data) {
+                // Look for an update where it's the AI's turn
+                if (data.state?.currentPlayerIndex === 1) {
+                    clearTimeout(timer);
+                    client.off('stateUpdate', handler);
+                    resolve(data);
+                }
+            }
+            client.on('stateUpdate', handler);
+            emit(client, 'action', { type: 'endTurn' });
+        });
+
+        // Even though it's the AI's turn, the human's cards should be fully visible
+        const humanPlayer = aiTurnUpdate.state.players[0];
+        assert.equal(humanPlayer.demandCards.length, 3);
+        for (const card of humanPlayer.demandCards) {
+            assert.equal(card.hidden, undefined, 'Human cards should not be hidden during AI turn');
+            assert.ok(Array.isArray(card.demands), 'Card should have demands array');
+            assert.equal(card.demands.length, 3, 'Each card should have 3 demands');
+        }
+    });
+
+    it('human player cards persist across multiple turn transitions', async () => {
+        const client = await createClient();
+        const { state } = await createSoloGame(client);
+
+        // Capture the initial cards
+        const initialCards = state.players[0].demandCards;
+        assert.equal(initialCards.length, 3);
+
+        // End turn, wait for full round (human → AI → human)
+        let updatePromise = waitForStateUpdate(client, (data) =>
+            data.state?.currentPlayerIndex === 0 && data.state?.turn > state.turn
+        );
+        await emit(client, 'action', { type: 'endTurn' });
+        let update = await updatePromise;
+
+        // Cards should still be present and non-hidden
+        const humanAfterRound1 = update.state.players[0];
+        assert.equal(humanAfterRound1.demandCards.length, 3);
+        for (const card of humanAfterRound1.demandCards) {
+            assert.equal(card.hidden, undefined);
+            assert.ok(Array.isArray(card.demands));
+        }
+
+        // Do another full round
+        updatePromise = waitForStateUpdate(client, (data) =>
+            data.state?.currentPlayerIndex === 0 && data.state?.turn > update.state.turn
+        );
+        await emit(client, 'action', { type: 'endTurn' });
+        const update2 = await updatePromise;
+
+        const humanAfterRound2 = update2.state.players[0];
+        assert.equal(humanAfterRound2.demandCards.length, 3);
+        for (const card of humanAfterRound2.demandCards) {
+            assert.equal(card.hidden, undefined);
+            assert.ok(Array.isArray(card.demands));
+        }
+    });
+
+    it('AI cards remain hidden from human across all turns', async () => {
+        const client = await createClient();
+        const { state } = await createSoloGame(client);
+
+        // Collect ALL stateUpdates through a full round and verify AI cards
+        // are hidden in every single one
+        const updates = [];
+        const donePromise = new Promise((resolve, reject) => {
+            const timer = setTimeout(
+                () => reject(new Error(`Timeout: got ${updates.length} stateUpdates`)),
+                5000
+            );
+            function handler(data) {
+                updates.push(data);
+                if (data.state?.currentPlayerIndex === 0 && data.state?.turn > state.turn) {
+                    clearTimeout(timer);
+                    client.off('stateUpdate', handler);
+                    resolve();
+                }
+            }
+            client.on('stateUpdate', handler);
+        });
+
+        await emit(client, 'action', { type: 'endTurn' });
+        await donePromise;
+
+        // Every update should have AI cards hidden
+        for (const upd of updates) {
+            const aiPlayer = upd.state.players[1];
+            assert.equal(aiPlayer.demandCards.length, 3);
+            for (const card of aiPlayer.demandCards) {
+                assert.equal(card.hidden, true, 'AI cards should always be hidden from human');
+            }
+        }
+    });
+
+    it('delivery action rejected when not your turn', async () => {
+        const client = await createClient();
+        await createSoloGame(client);
+
+        // Advance to operate phase
+        let updatePromise = waitForStateUpdate(client, (data) =>
+            data.state?.currentPlayerIndex === 0 && data.state?.turn > 1
+        );
+        await emit(client, 'action', { type: 'endTurn' });
+        await updatePromise;
+
+        updatePromise = waitForStateUpdate(client, (data) =>
+            data.state?.phase === 'operate' && data.state?.currentPlayerIndex === 0
+        );
+        await emit(client, 'action', { type: 'endTurn' });
+        await updatePromise;
+
+        // End turn so it's the AI's turn, then try to deliver
+        const aiTurnPromise = new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('Timeout')), 5000);
+            function handler(data) {
+                if (data.state?.currentPlayerIndex === 1) {
+                    clearTimeout(timer);
+                    client.off('stateUpdate', handler);
+                    resolve(data);
+                }
+            }
+            client.on('stateUpdate', handler);
+        });
+        emit(client, 'action', { type: 'endTurn' });
+        await aiTurnPromise;
+
+        // Try to deliver while it's not our turn — should fail
+        const result = await emit(client, 'action', { type: 'deliverGood', cardIdx: 0, demandIdx: 0 });
+        assert.equal(result.success, false);
+    });
+});
