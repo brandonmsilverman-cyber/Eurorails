@@ -4,6 +4,8 @@
   "description": "Eurorails - Online multiplayer European railroad board game",
   "main": "server.js",
   "scripts": {
+    "prebuild": "node scripts/generate-commits.js",
+    "build": "echo 'Build complete'",
     "start": "node server.js",
     "test": "node --test 'test/**/*.test.js'"
   },

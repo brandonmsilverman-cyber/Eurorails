@@ -1,0 +1,42 @@
+[
+  {
+    "message": "Various lobby screen improvements",
+    "date": "Mar 13, 2026"
+  },
+  {
+    "message": "Fix derailment/gale events to randomly drop loads and zero movement budget",
+    "date": "Mar 13, 2026"
+  },
+  {
+    "message": "Add 15% long-route demand cards and backlog discard pile reshuffle",
+    "date": "Mar 12, 2026"
+  },
+  {
+    "message": "Add manual zoom in/out buttons to bottom-left of map",
+    "date": "Mar 12, 2026"
+  },
+  {
+    "message": "Fix lobby player colors to match rail line colors",
+    "date": "Mar 12, 2026"
+  },
+  {
+    "message": "Fix 5 AI paralysis bugs: stale targets, skippable actions, path walking",
+    "date": "Mar 12, 2026"
+  },
+  {
+    "message": "Fix AI discontinuous track building and stuck deploy loop",
+    "date": "Mar 12, 2026"
+  },
+  {
+    "message": "Phase 3 Steps 2-3: Add aiState and implement Easy AI core strategy module",
+    "date": "Mar 11, 2026"
+  },
+  {
+    "message": "Phase 3 Step 1: Extract action handlers into server/ai-actions.js",
+    "date": "Mar 11, 2026"
+  },
+  {
+    "message": "Add solo mode Phase 2: AI turn loop with placeholder actions",
+    "date": "Mar 11, 2026"
+  }
+]

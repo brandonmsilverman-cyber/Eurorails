@@ -41,9 +41,14 @@ const aiEasy = require('./server/ai-easy');
 
 const LOBBY_COLORS = ["red", "blue", "green", "yellow", "purple", "orange"];
 
-// Recent commits API
+// Recent commits API — reads pre-generated file, falls back to live git log
 const { execFile } = require('child_process');
+const COMMITS_FILE = path.join(__dirname, 'data', 'commits.json');
 app.get('/api/commits', (req, res) => {
+    try {
+        const commits = JSON.parse(fs.readFileSync(COMMITS_FILE, 'utf8'));
+        if (commits.length) return res.json(commits);
+    } catch (e) { /* file missing — fall back to git */ }
     execFile('git', ['log', '--format=%s||%ai', '-10'], { cwd: __dirname }, (err, stdout) => {
         if (err) return res.json([]);
         const commits = stdout.trim().split('\n').filter(Boolean).map(line => {
