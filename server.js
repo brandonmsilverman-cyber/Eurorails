@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 const { randomUUID } = require('crypto');
 
 const app = express();
@@ -39,6 +40,60 @@ let aiActions = null;
 const aiEasy = require('./server/ai-easy');
 
 const LOBBY_COLORS = ["red", "blue", "green", "yellow", "purple", "orange"];
+
+// Recent commits API
+const { execFile } = require('child_process');
+app.get('/api/commits', (req, res) => {
+    execFile('git', ['log', '--format=%s||%ai', '-10'], { cwd: __dirname }, (err, stdout) => {
+        if (err) return res.json([]);
+        const commits = stdout.trim().split('\n').filter(Boolean).map(line => {
+            const [message, rawDate] = line.split('||');
+            const d = new Date(rawDate);
+            const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            return { message, date };
+        });
+        res.json(commits);
+    });
+});
+
+// --- Game Stats Persistence ---
+const STATS_FILE = path.join(__dirname, 'data', 'game-stats.json');
+let gameStats = [];
+try {
+    gameStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
+} catch (e) { /* file missing or corrupt — start fresh */ }
+
+function saveStats() {
+    fs.mkdirSync(path.dirname(STATS_FILE), { recursive: true });
+    fs.writeFileSync(STATS_FILE, JSON.stringify(gameStats, null, 2));
+}
+
+function recordGame(mode) {
+    const date = new Date().toISOString().slice(0, 10);
+    gameStats.push({ date, mode });
+    saveStats();
+}
+
+app.get('/api/game-stats', (req, res) => {
+    const counts = {};
+    for (const entry of gameStats) {
+        if (!counts[entry.date]) counts[entry.date] = { solo: 0, multi: 0 };
+        counts[entry.date][entry.mode] = (counts[entry.date][entry.mode] || 0) + 1;
+    }
+    const days = Object.entries(counts)
+        .map(([date, c]) => {
+            const d = new Date(date + 'T00:00:00');
+            return {
+                date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                solo: c.solo,
+                multi: c.multi,
+                total: c.solo + c.multi
+            };
+        })
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 30);
+    res.json(days);
+});
 
 // Redirect root to the game
 app.get('/', (req, res) => {
@@ -1124,7 +1179,8 @@ io.on('connection', (socket) => {
 
         const state = getStateForPlayer(room.gameState, sessionToken, room.disconnectedPlayers);
         callback({ success: true, roomCode, sessionToken, state });
-        // Don't broadcast to room list — solo rooms are private
+        recordGame('solo');
+        broadcastRoomList();
     });
 
     socket.on('createRoom', ({ playerName, maxPlayers, password }, callback) => {
@@ -1264,6 +1320,7 @@ io.on('connection', (socket) => {
             const state = getStateForPlayer(room.gameState, p.sessionToken, room.disconnectedPlayers);
             io.to(socketId).emit('gameStart', { state });
         }
+        recordGame('multi');
         broadcastRoomList();
     });
 
@@ -1801,9 +1858,6 @@ function getRoomInfo(roomCode) {
 function getRoomList() {
     const list = [];
     for (const [roomCode, room] of rooms) {
-        // Solo rooms are private — don't show in lobby
-        if (room.solo) continue;
-
         // Find host by sessionToken
         let hostName = 'Unknown';
         for (const [, p] of room.players) {
@@ -1817,8 +1871,9 @@ function getRoomList() {
             hostName,
             hasPassword: !!room.password,
             maxPlayers: room.maxPlayers,
-            playerCount: room.players.size,
-            gameStarted: room.gameStarted
+            playerCount: room.solo && room.gameState ? room.gameState.players.length : room.players.size,
+            gameStarted: room.gameStarted,
+            solo: room.solo || false
         });
     }
     return list;

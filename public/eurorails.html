@@ -1057,11 +1057,12 @@
                             <th style="padding: 10px 12px; color: #888; font-weight: 600;">Host</th>
                             <th style="padding: 10px 8px; color: #888; font-weight: 600; text-align: center; width: 30px;" title="Password required">&#128274;</th>
                             <th style="padding: 10px 12px; color: #888; font-weight: 600; text-align: center;">Players</th>
+                            <th style="padding: 10px 12px; color: #888; font-weight: 600; text-align: center;">Mode</th>
                             <th style="padding: 10px 12px; color: #888; font-weight: 600; text-align: center;">Status</th>
                         </tr>
                     </thead>
                     <tbody id="lobbyRoomTableBody">
-                        <tr><td colspan="4" style="padding: 20px; text-align: center; color: #666; font-style: italic;">No rooms available</td></tr>
+                        <tr><td colspan="5" style="padding: 20px; text-align: center; color: #666; font-style: italic;">No rooms available</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1086,17 +1087,25 @@
                     <span style="color: #888; font-size: 13px;">Password:</span>
                     <input type="password" id="lobbyRoomPassword" placeholder="Optional" autocomplete="new-password" style="width: 120px; padding: 6px 10px; margin-bottom: 0; font-size: 14px;">
                 </div>
-                <button onclick="createRoom()" style="padding: 8px 24px; font-size: 15px; margin-left: auto;">Create Room</button>
+            </div>
+            <div style="margin-top: 25px;">
+                <button onclick="createRoom()" style="padding: 8px 24px; font-size: 15px;">Create Room</button>
+            </div>
+            <div style="margin-top: 12px; color: #666; font-size: 13px;">or</div>
+            <div style="margin-top: 12px;">
+                <button onclick="showSoloSetup()" style="padding: 8px 24px; font-size: 15px; background: #2ecc71;">Solo Mode</button>
             </div>
         </div>
 
-        <div class="solo-divider">or</div>
-
-        <div style="text-align: center;">
-            <button onclick="showSoloSetup()" style="padding: 10px 32px; font-size: 15px; background: #2ecc71;">Solo Mode - Under Construction</button>
-        </div>
-
         <div id="lobbyError" style="color: #ff6666; text-align: center; margin-top: 10px; min-height: 20px;"></div>
+
+        <!-- Recent Updates -->
+        <div id="recentUpdates" style="border-top: 1px solid #333; margin-top: 16px; padding-top: 12px; display: none;">
+            <label id="recentUpdatesToggle" style="font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; user-select: none;">
+                <span id="recentUpdatesArrow" style="display: inline-block; font-size: 10px; opacity: 0.5; transition: transform 0.25s ease; transform: rotate(-90deg);">&#9660;</span> Recent Updates
+            </label>
+            <div id="recentUpdatesList" style="max-height: 180px; overflow-y: auto; margin-top: 6px; font-size: 13px; display: none;"></div>
+        </div>
     </div>
 
     <!-- Lobby: Waiting Room -->
@@ -6010,13 +6019,13 @@ function joinRoom(roomCode, hasPassword) {
 function renderRoomList(roomList) {
     const tbody = document.getElementById("lobbyRoomTableBody");
     if (!roomList || roomList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="padding: 20px; text-align: center; color: #666; font-style: italic;">No rooms available</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="padding: 20px; text-align: center; color: #666; font-style: italic;">No rooms available</td></tr>';
         return;
     }
     tbody.innerHTML = "";
     for (const room of roomList) {
         const tr = document.createElement("tr");
-        const joinable = !room.gameStarted && room.playerCount < room.maxPlayers;
+        const joinable = !room.solo && !room.gameStarted && room.playerCount < room.maxPlayers;
         tr.style.cursor = joinable ? "pointer" : "default";
         tr.style.opacity = joinable ? "1" : "0.5";
         tr.style.borderTop = "1px solid #333";
@@ -6029,6 +6038,7 @@ function renderRoomList(roomList) {
             <td style="padding: 10px 12px;">${escapeHtml(room.hostName)}</td>
             <td style="padding: 10px 8px; text-align: center;">${room.hasPassword ? '&#128274;' : ''}</td>
             <td style="padding: 10px 12px; text-align: center;">${room.playerCount}/${room.maxPlayers}</td>
+            <td style="padding: 10px 12px; text-align: center;">${room.solo ? '<span style="color: #888;">Solo</span>' : '<span style="color: #ccc;">Multi</span>'}</td>
             <td style="padding: 10px 12px; text-align: center;">${room.gameStarted ? '<span style="color: #e74c3c;">In Progress</span>' : '<span style="color: #2ecc71;">Waiting</span>'}</td>
         `;
         tbody.appendChild(tr);
@@ -6176,6 +6186,12 @@ let soloAIPlayers = []; // [{ difficulty: 'easy', color: null }, ...]
 
 function showSoloSetup() {
     const nameInput = document.getElementById("lobbyPlayerName");
+    if (!nameInput.value.trim()) {
+        document.getElementById("lobbyError").textContent = "Please enter your name.";
+        nameInput.focus();
+        return;
+    }
+    document.getElementById("lobbyError").textContent = "";
     const soloNameInput = document.getElementById("soloPlayerName");
     soloNameInput.value = nameInput.value;
 
@@ -6372,6 +6388,27 @@ socket.on('roomUpdate', (info) => {
 socket.emit('listRooms', (roomList) => {
     renderRoomList(roomList);
 });
+
+// Fetch recent commits for lobby widget
+fetch('/api/commits').then(r => r.json()).then(commits => {
+    if (!commits.length) return;
+    const container = document.getElementById('recentUpdates');
+    const list = document.getElementById('recentUpdatesList');
+    list.innerHTML = commits.map(c =>
+        `<div style="padding: 4px 0; border-bottom: 1px solid #2a2a2a; display: flex; justify-content: space-between; gap: 12px;">` +
+        `<span style="color: #aaa;">${c.message}</span>` +
+        `<span style="color: #555; white-space: nowrap; font-size: 12px;">${c.date}</span></div>`
+    ).join('');
+    container.style.display = '';
+    // Toggle handler for collapsible Recent Updates
+    document.getElementById('recentUpdatesToggle').onclick = () => {
+        const list = document.getElementById('recentUpdatesList');
+        const arrow = document.getElementById('recentUpdatesArrow');
+        const isHidden = list.style.display === 'none';
+        list.style.display = isHidden ? '' : 'none';
+        arrow.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
+    };
+}).catch(() => {});
 
 // Auto-rejoin on connect (fires on initial connection AND Socket.IO auto-reconnects)
 socket.on('connect', () => {

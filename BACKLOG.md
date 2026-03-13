@@ -8,10 +8,6 @@ A running list of planned features, improvements, and known issues.
 
 Solo mode branches from the main lobby as its own game type. The player creates a private room (accessible only to themselves and spectators, if supported). They can add up to 5 AI opponents that take turns just like human players.
 
-- [ ] **Lobby entry point** — Add a "Solo Mode" option in the lobby that creates a private, single-player room
-- [ ] **AI opponent setup** — Let the player choose 1–5 AI opponents and assign each a difficulty (Easy, Hard, Brutal)
-- [ ] **AI turn loop** — AI players take turns in sequence: build track, operate trains, pick up/deliver goods, draw event cards
-- [ ] **AI: Easy difficulty** — Myopic, serial play: one demand at a time, greedy routing, no batching, no strategic discards, avoids ferries
 - [ ] **AI: Hard difficulty** — Intelligent human-level play: opportunistic route batching, payout/cost build scoring with network awareness, situational upgrades, active hand evaluation, deliberate ferry investment
 - [ ] **AI: Brutal difficulty** — Near-optimal play: systematic multi-delivery planning, expected-value build calculations over future hands, optimal upgrade timing, EV-based discard decisions, full landmass access modeling for ferries
 
@@ -25,6 +21,15 @@ The AI strategy engine is the bulk of the work (~70%+ of effort). Build incremen
 4. **Hard difficulty** — Plays like a competent human: route batching, build ROI scoring, situational upgrades, active hand evaluation, deliberate ferry decisions
 5. **Brutal difficulty last** — Near-optimal play: EV-based decisions across all five strategic dimensions. This tier alone could be as complex as all others combined.
 
+## AI Players in Multiplayer
+
+Allow the host to fill empty multiplayer slots with AI opponents so games can start without a full human lobby. The AI engine already exists — this is mostly lobby wiring and turn routing. Full plan in [`AI_MULTIPLAYER_PLAN.md`](AI_MULTIPLAYER_PLAN.md).
+
+- [ ] **AI player slots in lobby** — Host can add/remove AI players to open slots, choosing color and difficulty
+- [ ] **Turn routing** — Server detects AI turns and calls `executeAITurn()` instead of waiting for socket input; skip turn timer for AI
+- [ ] **Client UI** — Show AI players distinctly in lobby and in-game, with add/remove controls for the host
+- [ ] **Edge cases** — Room cleanup when all humans leave, skip disconnect/reconnect logic for AI
+
 ## Gameplay
 
 - [ ] **Borrowing** — A player may borrow up to ECU 20 from the bank at any time and immediately spend it on building or hold it in reserve. The player must pay back **double** the borrowed amount from all future delivery payoffs until the doubled debt is fully repaid. Per the official rules (p. 26, "Money" section), borrowing is intended as a safety valve for players who become trapped or unable to make progress. The loan is taken voluntarily; there is no forced borrowing.
@@ -34,6 +39,8 @@ The AI strategy engine is the bulk of the work (~70%+ of effort). Build incremen
 - [ ] **Economy difficulty setting** — Add a pre-game room option with three economy modes (Standard, Constrained, Generous) that adjust demand card payout amounts and route length mix
 - [ ] **Configurable victory conditions** — Allow the game room to customize win conditions before the game starts
 - [ ] **Set train destination** — Player selects a city as their destination; the train automatically moves toward it each operate phase until it arrives, the player undoes movement, or the mode is turned off
+- [ ] **Faster train tier** — Add a 20+ speed train option to reduce late-game drag when players have long routes
+- [ ] **Turn countdown clock** — Optional time pressure element with a visible countdown timer per turn
 
 ## UI / Visual
 
@@ -42,6 +49,12 @@ The AI strategy engine is the bulk of the work (~70%+ of effort). Build incremen
 - [ ] **In-game tutorial** — Guided walkthrough teaching players the basic functions: building track, operating trains, picking up and dropping off goods, using ferries, renting opponent railroads (trackage rights), etc. Uses highlight overlays on existing UI elements to direct attention. Includes a tutorial toggle option in the game room prior to game start.
 - [ ] **Overhaul demand card row hover effect** — When hovering a demand card row, highlight origin and destination cities simultaneously on the map using distinct colors (e.g. one color for origin cities, another for the destination)
 - [ ] **Event modal text should list all effects** — The persistent event banner at the top of the screen doesn't always describe every impact of the event (e.g. missing that rail building is disallowed in the affected area). Update event descriptions to fully enumerate all gameplay effects
+- [ ] **Prominent cash display** — Show current ECU balance next to player name or on train card so it's always visible without digging into the sidebar
+- [ ] **Better turn phase and movement limit indicators** — Clearer visual feedback for what phase you're in and how much movement remains
+- [ ] **Improved trackage rights payment animation** — Replace falling coins with a more polished visual for trackage rights transfers
+- [ ] **Toggle to hide city production info** — Option to declutter the board by hiding goods-produced-at-city labels
+- [ ] **Basic gameplay instructions dropdown** — Quick-reference panel (like the existing map legend) explaining core mechanics
+- [ ] **AI hints system** — "What would an expert do?" suggestion feature for learning players
 
 ## Save & Resume
 
@@ -56,67 +69,18 @@ Independent of solo mode — no blocking dependencies in either direction.
 
 ---
 
-## Reconnection: Survive Tab Closure via localStorage Fallback
+## Reconnection Improvement
 
-Currently, reconnection credentials are stored in `sessionStorage`, which is scoped to a single tab. If a player closes their tab (or is in incognito mode), the credentials are lost and they cannot rejoin the game. This change adds a `localStorage` fallback so credentials survive tab closure, while preserving multi-tab play (e.g., testing with multiple players in one browser).
-
-### Implementation
-
-All changes are client-side only, in `public/eurorails.html` (Multiplayer Lobby section):
-
-1. **Save to both storages on room create (~line 7114)** — After the existing `sessionStorage.setItem` calls for `sessionToken` and `roomCode`, add matching `localStorage.setItem` calls.
-
-2. **Save to both storages on room join (~line 7140)** — Same as above, in the `joinRoom` callback.
-
-3. **Clear both storages on leave room (~line 7196)** — Add `localStorage.removeItem` for both keys alongside the existing `sessionStorage.removeItem` calls.
-
-4. **Fallback read in the connect handler (~line 7325)** — Read credentials from `sessionStorage` first, falling back to `localStorage`:
-   ```js
-   const savedToken = sessionStorage.getItem('sessionToken')
-                   || localStorage.getItem('sessionToken');
-   const savedRoom  = sessionStorage.getItem('roomCode')
-                   || localStorage.getItem('roomCode');
-   ```
-   On successful rejoin, copy credentials into the new tab's `sessionStorage` and clear `localStorage` so a second new tab won't also reclaim the player:
-   ```js
-   sessionStorage.setItem('sessionToken', savedToken);
-   sessionStorage.setItem('roomCode', savedRoom);
-   localStorage.removeItem('sessionToken');
-   localStorage.removeItem('roomCode');
-   ```
-
-5. **Clear both storages on rejoin failure (~line 7339)** — Add `localStorage.removeItem` for both keys alongside the existing `sessionStorage.removeItem` calls.
-
-### Testing Plan
-
-- [ ] **Multi-tab play still works (regression)** — Open two tabs. Create a room in Tab A, join from Tab B. Start the game. Verify both tabs play independently as separate players — Tab B does NOT auto-rejoin as Player 1.
-
-- [ ] **Tab refresh reconnects (existing behavior)** — Start a 2-player game in two tabs. Refresh Tab A. Verify Tab A auto-rejoins as the same player.
-
-- [ ] **Tab closure and reopen reconnects (new behavior)** — Start a 2-player game in two tabs. Close Tab A entirely. Open a new tab to `localhost:3000/eurorails.html`. Verify the new tab auto-rejoins as Player 1 and enters the game view.
-
-- [ ] **Recovery credentials are one-time use** — After completing the tab closure test above, open yet another new tab. Verify the third tab lands on the lobby and does NOT rejoin as Player 1 (localStorage was cleared after recovery).
-
-- [ ] **Leave room clears recovery credentials** — Create a room, then leave it. Close the tab, open a new one. Verify the new tab shows the lobby with no rejoin attempt.
-
-- [ ] **Failed rejoin clears recovery credentials** — Start a game, then kill and restart the server (room is gone). Close the tab, open a new one. Verify rejoin fails gracefully, the player sees the lobby, and no stale credentials remain.
-
-- [ ] **Incognito mode recovery** — Open two incognito tabs and start a game. Close one incognito tab. Open a new incognito tab to the same URL. Verify the new tab rejoins as the disconnected player.
-
-### Relationship to Save & Resume (SAVE_RESUME_PLAN.md)
-
-This feature and the Save & Resume feature both use localStorage but serve different purposes and do not conflict:
-
-- **This feature** handles short-lived disconnects (tab closed during an active game, reconnect within the 5-minute grace period). It stores `sessionToken` and `roomCode` in localStorage as one-time-use recovery credentials. The room still exists in server memory.
-- **Save & Resume** handles long-lived persistence (game saved to disk, resume hours or days later). It stores seat codes under a separate `savedGames` localStorage key. The room is gone; the game is reconstructed from a file on disk.
-
-The two features use different localStorage keys (`sessionToken`/`roomCode` vs `savedGames`) and different server paths (Socket.IO `rejoinGame` vs `resumeGame`). Either can be built first. If this feature lands first, players get seamless recovery for short disconnects immediately, and Save & Resume adds persistent cross-session recovery on top of that.
+- [ ] **localStorage fallback for tab closure recovery** — Add localStorage as a fallback so reconnection credentials survive tab closure and incognito mode, while preserving multi-tab play. Full plan in [`LOCALSTORAGE_FALLBACK_PLAN.md`](LOCALSTORAGE_FALLBACK_PLAN.md).
 
 ---
 
 ## Bug Fixes
 
-- [ ] *(Add known bugs here)*
+- [ ] **Demand card highlights randomly disappear between turns** — Persistent route highlighting on demand card rows vanishes unpredictably when turns change; sometimes selects the wrong card automatically
+- [ ] **Cheapest route ignores trackage rights fees** — The "cheapest route" pathfinding option doesn't factor in the 4M per-opponent trackage rights cost, forcing players to mentally calculate whether foreign track is actually cheaper
+- [ ] **Cards not visible during other players' turns** — Players can't see their own demand cards while waiting at game start or during other players' turns
+- [ ] **Alps region lacks clear milepost paths** — No clear traversal route through the Alps (unlike the physical board), making Italy builds disproportionately expensive and unattractive
 
 ## Completed
 
@@ -135,3 +99,8 @@ The two features use different localStorage keys (`sessionToken`/`roomCode` vs `
 - [x] Demand card system
 - [x] Hosted on Render
 - [x] Reconnection handling
+- [x] Solo Mode: Lobby entry point
+- [x] Solo Mode: AI opponent setup
+- [x] Solo Mode: AI turn loop
+- [x] Solo Mode: AI Easy difficulty
+- [x] Derailment event load drop fix
