@@ -4490,30 +4490,34 @@ function updateUI() {
                        gameState.phase === "operate" ? "Operate" : "Build";
     const phaseColor = phaseColorMap[gameState.phase] || "#fff";
 
+    const phaseIconMap = {
+        "initialBuilding": "\u{1F528}",
+        "operate": "\u{1F682}",
+        "build": "\u{1F527}"
+    };
+    const phaseIcon = phaseIconMap[gameState.phase] || "";
+
     const playersList = document.getElementById("playersList");
     playersList.innerHTML = gameState.players.map((p, i) => {
         const isCurrent = i === gameState.currentPlayerIndex;
         if (isCurrent) {
             const connectedCount = getConnectedMajorCities(p.color).length;
             return `<div class="player-info active">
-                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                    <strong style="color:${COLOR_MAP[p.color]};">${p.name}</strong>
-                    <span style="color:${phaseColor}; font-weight:bold; font-size:11px;">${phaseText}</span>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <strong style="color:${COLOR_MAP[p.color]}; font-size:14px;">${p.name}</strong>
+                    <span style="background:${phaseColor}22; border:1px solid ${phaseColor}; color:${phaseColor}; font-weight:bold; font-size:10px; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:0.5px;">${phaseIcon} ${phaseText}</span>
                 </div>
-                <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:2px;">
-                    <span>Cash: <span style="color:#4a9eff; font-weight:bold;">ECU ${p.cash}M</span></span>
-                    <span>Cities: <span style="color:${connectedCount >= 7 ? '#4a9e4a' : '#ff8800'}; font-weight:bold;">${connectedCount}/7</span></span>
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#1a1a2e; padding:6px 8px; border-radius:4px; border:1px solid #333;">
+                    <span style="color:#ffd700; font-size:16px; font-weight:bold;">ECU ${p.cash}M</span>
+                    <span style="font-size:11px;">Major Cities: <span style="color:${connectedCount >= 7 ? '#4a9e4a' : '#ff8800'}; font-weight:bold;">${connectedCount}/7</span></span>
                 </div>
-                ${gameState.phase === "operate" ? `
-                <div style="font-size:11px; margin-bottom:2px;">
-                    Movement: <span style="color:#ffff00; font-weight:bold;">${p.movement}mp${p.trainLocation && isInHalfSpeedZone(p.trainLocation) ? ' (half-speed)' : ''}</span>
-                </div>` : ""}
             </div>`;
         } else {
+            const inactiveConnected = getConnectedMajorCities(p.color).length;
             return `<div class="player-info">
-                <div style="display:flex; justify-content:space-between;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
                     <strong style="color:${COLOR_MAP[p.color]};">${p.name}</strong>
-                    <span style="font-size:11px;">ECU ${p.cash}M | ${p.demandCards.length} cards</span>
+                    <span style="font-size:11px;"><span style="color:#ffd700; font-weight:bold;">ECU ${p.cash}M</span> | <span style="color:${inactiveConnected >= 7 ? '#4a9e4a' : '#ff8800'}; font-weight:bold;">${inactiveConnected}/7</span> Major Cities</span>
                 </div>
             </div>`;
         }
@@ -4624,11 +4628,6 @@ function updateUI() {
         const shortestActive = gameState.buildPathMode === "shortest";
 
         let buildHtml = `
-            <div style="font-size: 12px; margin-bottom: 10px;">Click two mileposts to build track</div>
-            <div style="display:flex; gap:4px; margin-bottom:8px;">
-                <button onclick="setBuildPathMode('cheapest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${cheapestActive ? '#4a9e4a' : '#555'}; background:${cheapestActive ? '#2a4a2a' : '#222'}; color:${cheapestActive ? '#88ff88' : '#888'}; cursor:pointer;">Cheapest</button>
-                <button onclick="setBuildPathMode('shortest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${shortestActive ? '#4a9eff' : '#555'}; background:${shortestActive ? '#1a2a4a' : '#222'}; color:${shortestActive ? '#88ccff' : '#888'}; cursor:pointer;">Shortest</button>
-            </div>
             <div style="font-size:11px; margin-bottom:8px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                     <span>Turn Budget:</span>
@@ -4637,6 +4636,11 @@ function updateUI() {
                 <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
                     <div style="background:${budgetColor}; height:100%; width:${budgetPct}%; transition:width 0.3s;"></div>
                 </div>
+            </div>
+            <div style="font-size: 12px; margin-bottom: 10px;">Click two mileposts to build track</div>
+            <div style="display:flex; gap:4px; margin-bottom:8px;">
+                <button onclick="setBuildPathMode('cheapest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${cheapestActive ? '#4a9e4a' : '#555'}; background:${cheapestActive ? '#2a4a2a' : '#222'}; color:${cheapestActive ? '#88ff88' : '#888'}; cursor:pointer;">Cheapest</button>
+                <button onclick="setBuildPathMode('shortest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${shortestActive ? '#4a9eff' : '#555'}; background:${shortestActive ? '#1a2a4a' : '#222'}; color:${shortestActive ? '#88ccff' : '#888'}; cursor:pointer;">Shortest</button>
             </div>`;
 
         if (gameState.buildHistory.length > 0) {
@@ -4674,7 +4678,22 @@ function updateUI() {
         buildHtml += `<button onclick="endTurn()" style="width: 100%; margin-bottom: 5px;">End Building Turn</button>`;
         actionButtons.innerHTML = buildHtml;
     } else if (gameState.phase === "operate") {
-        let operateHtml = `<div style="font-size: 12px; margin-bottom: 10px;">Click along your track to move train</div>`;
+        const maxMovement = TRAIN_TYPES[currentPlayer.trainType] ? TRAIN_TYPES[currentPlayer.trainType].movement : 9;
+        const inHalfSpeed = currentPlayer.trainLocation && isInHalfSpeedZone(currentPlayer.trainLocation);
+        const effectiveMax = inHalfSpeed ? Math.floor(maxMovement / 2) : maxMovement;
+        const movePct = effectiveMax > 0 ? Math.round((currentPlayer.movement / effectiveMax) * 100) : 0;
+        const moveColor = currentPlayer.movement > effectiveMax * 0.5 ? "#4a9eff" : currentPlayer.movement > effectiveMax * 0.2 ? "#ffcc00" : "#ff4444";
+        let operateHtml = `
+            <div style="font-size:11px; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span>Movement:</span>
+                    <strong style="color:${moveColor};">${currentPlayer.movement} / ${effectiveMax} mp${inHalfSpeed ? ' \u26A0 half' : ''}</strong>
+                </div>
+                <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
+                    <div style="background:${moveColor}; height:100%; width:${movePct}%; transition:width 0.3s;"></div>
+                </div>
+            </div>
+            <div style="font-size: 12px; margin-bottom: 10px;">Click along your track to move train</div>`;
         const opCity = getPlayerCity(currentPlayer);
 
         // Trackage rights toggle
@@ -4768,11 +4787,6 @@ function updateUI() {
         const shortestActive = gameState.buildPathMode === "shortest";
 
         let buildHtml = `
-            <div style="font-size: 12px; margin-bottom: 10px;">Click two mileposts to build track</div>
-            <div style="display:flex; gap:4px; margin-bottom:8px;">
-                <button onclick="setBuildPathMode('cheapest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${cheapestActive ? '#4a9e4a' : '#555'}; background:${cheapestActive ? '#2a4a2a' : '#222'}; color:${cheapestActive ? '#88ff88' : '#888'}; cursor:pointer;">Cheapest</button>
-                <button onclick="setBuildPathMode('shortest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${shortestActive ? '#4a9eff' : '#555'}; background:${shortestActive ? '#1a2a4a' : '#222'}; color:${shortestActive ? '#88ccff' : '#888'}; cursor:pointer;">Shortest</button>
-            </div>
             <div style="font-size:11px; margin-bottom:8px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                     <span>Turn Budget:</span>
@@ -4781,6 +4795,11 @@ function updateUI() {
                 <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
                     <div style="background:${budgetColor}; height:100%; width:${budgetPct}%; transition:width 0.3s;"></div>
                 </div>
+            </div>
+            <div style="font-size: 12px; margin-bottom: 10px;">Click two mileposts to build track</div>
+            <div style="display:flex; gap:4px; margin-bottom:8px;">
+                <button onclick="setBuildPathMode('cheapest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${cheapestActive ? '#4a9e4a' : '#555'}; background:${cheapestActive ? '#2a4a2a' : '#222'}; color:${cheapestActive ? '#88ff88' : '#888'}; cursor:pointer;">Cheapest</button>
+                <button onclick="setBuildPathMode('shortest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${shortestActive ? '#4a9eff' : '#555'}; background:${shortestActive ? '#1a2a4a' : '#222'}; color:${shortestActive ? '#88ccff' : '#888'}; cursor:pointer;">Shortest</button>
             </div>`;
 
         if (gameState.buildHistory.length > 0) {
