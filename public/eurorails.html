@@ -4846,7 +4846,7 @@ function updateUI() {
                 operateHtml += `<div style="font-size:11px; margin-bottom:8px; background:#1a4a1a; padding:6px; border-radius:3px; border:1px solid #4a9e4a;">
                     <div style="color:#4a9e4a; margin-bottom:4px;"><strong>Deliveries Available!</strong></div>
                     ${deliverable.map(d => `
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; padding:4px 6px;">
                             <span>${GOODS_ICONS[d.demand.good] || "?"} ${d.demand.good} → ECU ${d.demand.payout}M</span>
                             <button onclick="deliverGood(${d.cardIdx}, ${d.dIdx})" style="padding:2px 8px; font-size:10px; background:#4a9e4a;">Deliver</button>
                         </div>
