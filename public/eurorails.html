@@ -5368,9 +5368,9 @@ document.addEventListener("DOMContentLoaded", function() {
                             const ferryKey = getFerryKey(buildPath[i], buildPath[i + 1]);
                             for (let fc of gameState.ferryConnections) {
                                 if (getFerryKey(fc.fromId, fc.toId) === ferryKey) {
-                                    if (!playerOwnsFerry(ferryKey, currentPlayer.color)) {
-                                        newFerries.push(ferryKey);
-                                    }
+                                    // Include all ferry edges (not just unowned) so the server
+                                    // always knows which edges are ferries
+                                    newFerries.push(ferryKey);
                                     break;
                                 }
                             }

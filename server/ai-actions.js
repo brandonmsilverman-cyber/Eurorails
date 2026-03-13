@@ -248,6 +248,17 @@ module.exports = function(deps) {
             }
         }
 
+        // Add ferry port mileposts to owned set when the player owns the ferry
+        if (gs.ferryConnections) {
+            for (const fc of gs.ferryConnections) {
+                const fk = getFerryKey(fc.fromId, fc.toId);
+                if (playerOwnsFerry(gs, fk, player.color)) {
+                    ownedMileposts.add(fc.fromId);
+                    ownedMileposts.add(fc.toId);
+                }
+            }
+        }
+
         // Build must start from owned track or a major city
         const startMp = gs.mileposts_by_id ? gs.mileposts_by_id[buildPath[0]] : null;
         const startsFromOwned = ownedMileposts.has(buildPath[0]);
