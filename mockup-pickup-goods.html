@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pickup Goods Visibility Mockup — Before & After</title>
+<style>
+  body {
+    background: #1a1a1a;
+    color: #ccc;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+    padding: 40px 20px;
+  }
+
+  h1 {
+    color: #fff;
+    font-size: 18px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin: 0;
+    border-bottom: 1px solid #555;
+    padding-bottom: 8px;
+  }
+
+  h2 {
+    color: #4a9eff;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0;
+  }
+
+  .scenario { text-align: center; }
+  .scenario p { color: #888; font-size: 12px; margin: 4px 0 0; max-width: 500px; }
+
+  .comparison {
+    display: flex;
+    gap: 40px;
+    align-items: flex-start;
+  }
+
+  .column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .column-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 3px 12px;
+    border-radius: 10px;
+    font-weight: bold;
+  }
+
+  .column-label.before {
+    color: #888;
+    background: #333;
+  }
+
+  .column-label.after {
+    color: #4a9e4a;
+    background: #1a3a1a;
+    border: 1px solid #4a9e4a;
+  }
+
+  /* ── Sidebar panel (simulates the in-game action panel) ── */
+  .sidebar-panel {
+    width: 260px;
+    background: #222;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 11px;
+  }
+
+  /* ── Demand card overlay (exact CSS from game) ── */
+  .demand-card-overlay {
+    flex: 1;
+    min-width: 0;
+    background: linear-gradient(145deg, #1c2a3e, #162030);
+    border: 1.5px solid #3a5a7a;
+    border-radius: 8px;
+    padding: 10px 8px;
+    font-size: 12px;
+    color: #d0dae8;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(100,160,220,0.1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .demand-card-overlay.deliverable {
+    border-color: #4a9e4a;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 8px rgba(74,158,74,0.3);
+  }
+
+  .demand-card-overlay .card-demands-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    min-height: 0;
+  }
+
+  .demand-card-overlay .card-demand {
+    padding: 3px 0;
+  }
+
+  .demand-card-overlay .card-demand + .card-demand {
+    border-top: 1px solid #2a3a50;
+  }
+
+  .demand-card-overlay .good-name {
+    font-weight: bold;
+    color: #e0e8f0;
+    font-size: 12px;
+  }
+
+  .demand-card-overlay .payout {
+    color: #ffdd44;
+    font-weight: bold;
+    float: right;
+    font-size: 12px;
+  }
+
+  .demand-card-overlay .source-cities {
+    font-size: 11px;
+    color: #8899aa;
+    margin-top: 1px;
+  }
+
+  .demand-card-overlay .source-cities span {
+    cursor: pointer;
+    text-decoration: underline;
+    color: #7baadd;
+  }
+
+  .demand-card-overlay .dest-city {
+    font-size: 11px;
+    margin-top: 1px;
+  }
+
+  .demand-card-overlay .dest-city span {
+    cursor: pointer;
+    text-decoration: underline;
+    color: #eebb44;
+    font-weight: bold;
+  }
+
+  .demand-card-overlay .deliver-btn {
+    width: 100%;
+    padding: 4px;
+    margin-top: 2px;
+    font-size: 10px;
+    font-weight: bold;
+    background: #3a8a3a;
+    color: #fff;
+    border: 1px solid #4a9e4a;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  .cards-row {
+    display: flex;
+    gap: 8px;
+    width: 500px;
+  }
+
+  /* ── NEW: pickup-available badge on demand cards ── */
+  .pickup-badge {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: bold;
+    color: #4a9e4a;
+    background: rgba(74, 158, 74, 0.15);
+    border: 1px solid rgba(74, 158, 74, 0.3);
+    border-radius: 3px;
+    padding: 1px 4px;
+    margin-top: 2px;
+  }
+
+  /* ── Selected demand row highlight (uses player color, exact from game) ── */
+  .demand-selected {
+    background: linear-gradient(90deg, rgba(255, 68, 68, 0.19), rgba(255, 68, 68, 0.06));
+    border-left: 3px solid #ff4444;
+    padding-left: 5px;
+    margin-left: -8px;
+    border-radius: 3px;
+    box-shadow: inset 0 0 12px rgba(255, 68, 68, 0.08);
+  }
+</style>
+</head>
+<body>
+
+<h1>Pickup Goods Visibility — Mockup</h1>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SCENARIO 1: Sidebar — Available Goods Panel            -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="scenario">
+  <h2>Scenario 1: Sidebar — At City With Goods</h2>
+  <p>Player (Alice, red) is at Frankfurt during operate phase. Frankfurt produces Beer and Hops. Alice's demand cards include Beer (to Paris) and Coal (to Berlin). Beer matches a demand card row.</p>
+</div>
+
+<div class="comparison">
+
+  <!-- BEFORE -->
+  <div class="column">
+    <span class="column-label before">Before</span>
+    <div class="sidebar-panel">
+      <!-- Movement bar -->
+      <div style="margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+          <span>Movement:</span>
+          <strong style="color:#4a9eff;">7 / 9 mp</strong>
+        </div>
+        <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
+          <div style="background:#4a9eff; height:100%; width:78%;"></div>
+        </div>
+      </div>
+      <div style="font-size: 12px; margin-bottom: 10px;">Click along your track to move train</div>
+
+      <!-- Trackage rights -->
+      <div style="margin-bottom:8px;">
+        <button style="width:100%; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid #555; background:#222; color:#888; cursor:pointer;">
+          &#x1F682; Suggest Foreign Track: OFF
+        </button>
+      </div>
+
+      <!-- Carried Goods (current) -->
+      <div style="background:#333; padding:6px; border-radius:3px; margin-bottom:8px;">
+        <div style="color:#4a9eff; margin-bottom:4px;"><strong>Carried Goods:</strong></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+          <span>&#x26CF; Coal</span>
+          <button style="padding:2px 6px; font-size:10px;">Drop</button>
+        </div>
+      </div>
+
+      <!-- Available at city (CURRENT - plain) -->
+      <div style="background:#333; padding:6px; border-radius:3px; margin-bottom:8px;">
+        <div style="color:#4a9e4a; margin-bottom:4px;"><strong>Available at Frankfurt:</strong></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+          <span>&#x1F37A; Beer <span style="color:#888;">(3/4)</span></span>
+          <button style="padding:2px 6px; font-size:10px;">Pick Up</button>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+          <span>&#x1F33F; Hops <span style="color:#888;">(2/3)</span></span>
+          <button style="padding:2px 6px; font-size:10px;">Pick Up</button>
+        </div>
+      </div>
+
+      <button style="width: 100%; margin-bottom: 5px; padding: 6px;">Proceed to Build Phase</button>
+    </div>
+  </div>
+
+  <!-- AFTER -->
+  <div class="column">
+    <span class="column-label after">After</span>
+    <div class="sidebar-panel">
+      <!-- Movement bar -->
+      <div style="margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+          <span>Movement:</span>
+          <strong style="color:#4a9eff;">7 / 9 mp</strong>
+        </div>
+        <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
+          <div style="background:#4a9eff; height:100%; width:78%;"></div>
+        </div>
+      </div>
+      <div style="font-size: 12px; margin-bottom: 10px;">Click along your track to move train</div>
+
+      <!-- Trackage rights -->
+      <div style="margin-bottom:8px;">
+        <button style="width:100%; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid #555; background:#222; color:#888; cursor:pointer;">
+          &#x1F682; Suggest Foreign Track: OFF
+        </button>
+      </div>
+
+      <!-- Carried Goods (current) -->
+      <div style="background:#333; padding:6px; border-radius:3px; margin-bottom:8px;">
+        <div style="color:#4a9eff; margin-bottom:4px;"><strong>Carried Goods:</strong></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+          <span>&#x26CF; Coal</span>
+          <button style="padding:2px 6px; font-size:10px;">Drop</button>
+        </div>
+      </div>
+
+      <!-- Available at city (NEW - demand matching highlights + larger buttons) -->
+      <div style="background:#333; padding:6px; border-radius:3px; margin-bottom:8px;">
+        <div style="color:#4a9e4a; margin-bottom:4px;"><strong>Available at Frankfurt:</strong></div>
+
+        <!-- Beer: matches a selected demand row -> gold highlight -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; padding:4px 6px; border-left: 3px solid #ffdd44; background: rgba(255, 221, 68, 0.12); border-radius: 3px;">
+          <div>
+            <span>&#x1F37A; Beer <span style="color:#888;">(3/4)</span></span>
+            <span style="color:#ffdd44; font-size:9px; font-weight:bold; margin-left:4px;">&#x2B50; SELECTED</span>
+          </div>
+          <button style="padding:5px 12px; font-size:12px; font-weight:bold; background:#cc9900; color:#fff; border:none; border-radius:3px; cursor:pointer;">Pick Up</button>
+        </div>
+
+        <!-- Hops: does NOT match any demand card -> no highlight -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; padding:4px 6px;">
+          <span>&#x1F33F; Hops <span style="color:#888;">(2/3)</span></span>
+          <button style="padding:5px 12px; font-size:12px; font-weight:bold; background:#4a9e4a; color:#fff; border:none; border-radius:3px; cursor:pointer;">Pick Up</button>
+        </div>
+      </div>
+
+      <button style="width: 100%; margin-bottom: 5px; padding: 6px;">Proceed to Build Phase</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SCENARIO 2: Sidebar — Goods match demand but unselected -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="scenario">
+  <h2>Scenario 2: Sidebar — Demand Match (Not Selected) + Out of Supply</h2>
+  <p>Player is at Cardiff. Cardiff produces Coal and Hops. Coal matches a demand card row that is NOT currently selected. Hops is out of supply. Shows the "any demand" subtle highlight vs out-of-stock state.</p>
+</div>
+
+<div class="comparison">
+
+  <!-- BEFORE -->
+  <div class="column">
+    <span class="column-label before">Before</span>
+    <div class="sidebar-panel">
+      <!-- Available at city (CURRENT) -->
+      <div style="background:#333; padding:6px; border-radius:3px; margin-bottom:8px;">
+        <div style="color:#4a9e4a; margin-bottom:4px;"><strong>Available at Cardiff:</strong></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+          <span>&#x26CF; Coal <span style="color:#888;">(2/3)</span></span>
+          <button style="padding:2px 6px; font-size:10px;">Pick Up</button>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+          <span>&#x1F33F; Hops <span style="color:#ff6666;">(out)</span></span>
+          <button style="padding:2px 6px; font-size:10px;" disabled>Pick Up</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AFTER -->
+  <div class="column">
+    <span class="column-label after">After</span>
+    <div class="sidebar-panel">
+      <!-- Available at city (NEW) -->
+      <div style="background:#333; padding:6px; border-radius:3px; margin-bottom:8px;">
+        <div style="color:#4a9e4a; margin-bottom:4px;"><strong>Available at Cardiff:</strong></div>
+
+        <!-- Coal: matches an unselected demand row -> subtle green highlight -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; padding:4px 6px; background: rgba(74, 158, 74, 0.15); border-radius: 3px;">
+          <div>
+            <span>&#x26CF; Coal <span style="color:#888;">(2/3)</span></span>
+            <span style="color:#4a9e4a; font-size:9px; margin-left:4px;">&#x1F4CB;</span>
+          </div>
+          <button style="padding:5px 12px; font-size:12px; font-weight:bold; background:#4a9e4a; color:#fff; border:none; border-radius:3px; cursor:pointer;">Pick Up</button>
+        </div>
+
+        <!-- Hops: out of supply -> disabled -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; padding:4px 6px;">
+          <span>&#x1F33F; Hops <span style="color:#ff6666;">(out)</span></span>
+          <button style="padding:5px 12px; font-size:12px; font-weight:bold; background:#4a9e4a; color:#fff; border:none; border-radius:3px; cursor:pointer; opacity:0.5;" disabled>Pick Up</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SCENARIO 3: Sidebar — Strike blocking                  -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="scenario">
+  <h2>Scenario 3: Sidebar — Strike Blocking Pickup</h2>
+  <p>Player is at a city during a strike event. All pickups are disabled.</p>
+</div>
+
+<div class="comparison">
+
+  <!-- BEFORE -->
+  <div class="column">
+    <span class="column-label before">Before</span>
+    <div class="sidebar-panel">
+      <div style="background:#333; padding:6px; border-radius:3px; margin-bottom:8px;">
+        <div style="color:#4a9e4a; margin-bottom:4px;"><strong>Available at Frankfurt: <span style="color:#ff6666;">(STRIKE)</span></strong></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+          <span>&#x1F37A; Beer <span style="color:#888;">(3/4)</span></span>
+          <button style="padding:2px 6px; font-size:10px;" disabled>Pick Up</button>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+          <span>&#x1F33F; Hops <span style="color:#888;">(2/3)</span></span>
+          <button style="padding:2px 6px; font-size:10px;" disabled>Pick Up</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AFTER -->
+  <div class="column">
+    <span class="column-label after">After</span>
+    <div class="sidebar-panel">
+      <div style="background:#333; padding:6px; border-radius:3px; margin-bottom:8px;">
+        <div style="color:#4a9e4a; margin-bottom:4px;"><strong>Available at Frankfurt: <span style="color:#ff6666;">(STRIKE)</span></strong></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; padding:4px 6px;">
+          <span>&#x1F37A; Beer <span style="color:#888;">(3/4)</span></span>
+          <button style="padding:5px 12px; font-size:12px; font-weight:bold; background:#4a9e4a; color:#fff; border:none; border-radius:3px; cursor:pointer; opacity:0.5;" disabled>Pick Up</button>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; padding:4px 6px;">
+          <span>&#x1F33F; Hops <span style="color:#888;">(2/3)</span></span>
+          <button style="padding:5px 12px; font-size:12px; font-weight:bold; background:#4a9e4a; color:#fff; border:none; border-radius:3px; cursor:pointer; opacity:0.5;" disabled>Pick Up</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SCENARIO 4: Demand Cards — Pickup Available Badge      -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="scenario">
+  <h2>Scenario 4: Demand Cards — "Available Here" Badge</h2>
+  <p>Player (Alice, red) is at Frankfurt. The Beer demand row shows a green "Available here" badge since Frankfurt produces Beer. The Coal row has no badge (Frankfurt doesn't produce Coal). The Wine row on card 2 also has no badge.</p>
+</div>
+
+<div class="comparison">
+
+  <!-- BEFORE -->
+  <div class="column">
+    <span class="column-label before">Before</span>
+    <div class="cards-row">
+      <!-- Card 1 -->
+      <div class="demand-card-overlay">
+        <div class="card-demands-list">
+          <!-- Beer demand - selected -->
+          <div class="card-demand demand-selected">
+            <div>
+              <span style="font-size:14px;">&#x1F37A;</span>
+              <span class="good-name">Beer</span>
+              <span class="payout">8M</span>
+            </div>
+            <div class="source-cities">From: <span>Dublin</span>, <span>Frankfurt</span>, <span>M&uuml;nchen</span></div>
+            <div class="dest-city">To: <span>Paris</span></div>
+          </div>
+          <!-- Coal demand -->
+          <div class="card-demand">
+            <div>
+              <span style="font-size:14px;">&#x26CF;</span>
+              <span class="good-name">Coal</span>
+              <span class="payout">5M</span>
+            </div>
+            <div class="source-cities">From: <span>Cardiff</span>, <span>Essen</span></div>
+            <div class="dest-city">To: <span>Berlin</span></div>
+          </div>
+          <!-- Wine demand -->
+          <div class="card-demand">
+            <div>
+              <span style="font-size:14px;">&#x1F377;</span>
+              <span class="good-name">Wine</span>
+              <span class="payout">6M</span>
+            </div>
+            <div class="source-cities">From: <span>Bordeaux</span>, <span>Lisboa</span></div>
+            <div class="dest-city">To: <span>London</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="demand-card-overlay">
+        <div class="card-demands-list">
+          <div class="card-demand">
+            <div>
+              <span style="font-size:14px;">&#x1F9C0;</span>
+              <span class="good-name">Cheese</span>
+              <span class="payout">7M</span>
+            </div>
+            <div class="source-cities">From: <span>Amsterdam</span></div>
+            <div class="dest-city">To: <span>Roma</span></div>
+          </div>
+          <div class="card-demand">
+            <div>
+              <span style="font-size:14px;">&#x1F6A7;</span>
+              <span class="good-name">Marble</span>
+              <span class="payout">9M</span>
+            </div>
+            <div class="source-cities">From: <span>Marseille</span>, <span>Roma</span></div>
+            <div class="dest-city">To: <span>Wien</span></div>
+          </div>
+          <div class="card-demand">
+            <div>
+              <span style="font-size:14px;">&#x1F3AD;</span>
+              <span class="good-name">Tourists</span>
+              <span class="payout">4M</span>
+            </div>
+            <div class="source-cities">From: <span>London</span>, <span>Paris</span></div>
+            <div class="dest-city">To: <span>Barcelona</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AFTER -->
+  <div class="column">
+    <span class="column-label after">After</span>
+    <div class="cards-row">
+      <!-- Card 1 -->
+      <div class="demand-card-overlay">
+        <div class="card-demands-list">
+          <!-- Beer demand - selected + pickup available -->
+          <div class="card-demand demand-selected">
+            <div>
+              <span style="font-size:14px;">&#x1F37A;</span>
+              <span class="good-name">Beer</span>
+              <span class="payout">8M</span>
+            </div>
+            <div class="source-cities">From: <span>Dublin</span>, <span>Frankfurt</span>, <span>M&uuml;nchen</span></div>
+            <div class="dest-city">To: <span>Paris</span></div>
+            <div><span class="pickup-badge">&#x1F4E6; Available here</span></div>
+          </div>
+          <!-- Coal demand - not available here -->
+          <div class="card-demand">
+            <div>
+              <span style="font-size:14px;">&#x26CF;</span>
+              <span class="good-name">Coal</span>
+              <span class="payout">5M</span>
+            </div>
+            <div class="source-cities">From: <span>Cardiff</span>, <span>Essen</span></div>
+            <div class="dest-city">To: <span>Berlin</span></div>
+          </div>
+          <!-- Wine demand - not available here -->
+          <div class="card-demand">
+            <div>
+              <span style="font-size:14px;">&#x1F377;</span>
+              <span class="good-name">Wine</span>
+              <span class="payout">6M</span>
+            </div>
+            <div class="source-cities">From: <span>Bordeaux</span>, <span>Lisboa</span></div>
+            <div class="dest-city">To: <span>London</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2 - no pickups available -->
+      <div class="demand-card-overlay">
+        <div class="card-demands-list">
+          <div class="card-demand">
+            <div>
+              <span style="font-size:14px;">&#x1F9C0;</span>
+              <span class="good-name">Cheese</span>
+              <span class="payout">7M</span>
+            </div>
+            <div class="source-cities">From: <span>Amsterdam</span></div>
+            <div class="dest-city">To: <span>Roma</span></div>
+          </div>
+          <div class="card-demand">
+            <div>
+              <span style="font-size:14px;">&#x1F6A7;</span>
+              <span class="good-name">Marble</span>
+              <span class="payout">9M</span>
+            </div>
+            <div class="source-cities">From: <span>Marseille</span>, <span>Roma</span></div>
+            <div class="dest-city">To: <span>Wien</span></div>
+          </div>
+          <div class="card-demand">
+            <div>
+              <span style="font-size:14px;">&#x1F3AD;</span>
+              <span class="good-name">Tourists</span>
+              <span class="payout">4M</span>
+            </div>
+            <div class="source-cities">From: <span>London</span>, <span>Paris</span></div>
+            <div class="dest-city">To: <span>Barcelona</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SCENARIO 5: Full context — sidebar + cards together    -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="scenario">
+  <h2>Scenario 5: Full Context — Sidebar + Demand Cards Together (After Only)</h2>
+  <p>Shows how the improved sidebar and demand card badges work together. Player at Frankfurt with Beer selected on demand card. Train carrying Coal (1/3 capacity).</p>
+</div>
+
+<div class="column">
+  <span class="column-label after">After</span>
+  <div style="display:flex; gap:20px; align-items:flex-start;">
+    <!-- Sidebar -->
+    <div class="sidebar-panel">
+      <div style="margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+          <span>Movement:</span>
+          <strong style="color:#ffcc00;">3 / 9 mp</strong>
+        </div>
+        <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
+          <div style="background:#ffcc00; height:100%; width:33%;"></div>
+        </div>
+      </div>
+      <div style="font-size: 12px; margin-bottom: 10px;">Click along your track to move train</div>
+
+      <div style="margin-bottom:8px;">
+        <button style="width:100%; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid #555; background:#222; color:#888; cursor:pointer;">
+          &#x1F682; Suggest Foreign Track: OFF
+        </button>
+      </div>
+
+      <!-- Carried Goods -->
+      <div style="background:#333; padding:6px; border-radius:3px; margin-bottom:8px;">
+        <div style="color:#4a9eff; margin-bottom:4px;"><strong>Carried Goods:</strong></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+          <span>&#x26CF; Coal</span>
+          <button style="padding:2px 6px; font-size:10px;">Drop</button>
+        </div>
+      </div>
+
+      <!-- Available at city (NEW) -->
+      <div style="background:#333; padding:6px; border-radius:3px; margin-bottom:8px;">
+        <div style="color:#4a9e4a; margin-bottom:4px;"><strong>Available at Frankfurt:</strong></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; padding:4px 6px; border-left: 3px solid #ffdd44; background: rgba(255, 221, 68, 0.12); border-radius: 3px;">
+          <div>
+            <span>&#x1F37A; Beer <span style="color:#888;">(3/4)</span></span>
+            <span style="color:#ffdd44; font-size:9px; font-weight:bold; margin-left:4px;">&#x2B50; SELECTED</span>
+          </div>
+          <button style="padding:5px 12px; font-size:12px; font-weight:bold; background:#cc9900; color:#fff; border:none; border-radius:3px; cursor:pointer;">Pick Up</button>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; padding:4px 6px;">
+          <span>&#x1F33F; Hops <span style="color:#888;">(2/3)</span></span>
+          <button style="padding:5px 12px; font-size:12px; font-weight:bold; background:#4a9e4a; color:#fff; border:none; border-radius:3px; cursor:pointer;">Pick Up</button>
+        </div>
+      </div>
+
+      <!-- Undo button -->
+      <div style="background:#3d2200; border:2px solid #cc6600; border-radius:4px; padding:8px; margin-bottom:8px;">
+        <button style="width:100%; padding:10px; font-size:14px; background:#cc6600; color:#fff; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">&#x21A9; Undo Move</button>
+      </div>
+
+      <button style="width: 100%; margin-bottom: 5px; padding: 6px;">Proceed to Build Phase</button>
+      <div style="border-top: 1px solid #555; margin-top: 8px; padding-top: 8px;">
+        <button style="width: 100%; padding: 4px 8px; font-size: 11px; background: rgba(180, 60, 60, 0.15); color: #cc7777; border: 1px solid #994444; border-radius: 3px; cursor: pointer;">Discard Hand & End Turn</button>
+      </div>
+    </div>
+
+    <!-- Demand Cards -->
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <div class="cards-row">
+        <div class="demand-card-overlay">
+          <div class="card-demands-list">
+            <div class="card-demand demand-selected">
+              <div>
+                <span style="font-size:14px;">&#x1F37A;</span>
+                <span class="good-name">Beer</span>
+                <span class="payout">8M</span>
+              </div>
+              <div class="source-cities">From: <span>Dublin</span>, <span>Frankfurt</span>, <span>M&uuml;nchen</span></div>
+              <div class="dest-city">To: <span>Paris</span></div>
+              <div><span class="pickup-badge">&#x1F4E6; Available here</span></div>
+            </div>
+            <div class="card-demand">
+              <div>
+                <span style="font-size:14px;">&#x26CF;</span>
+                <span class="good-name">Coal</span>
+                <span class="payout">5M</span>
+              </div>
+              <div class="source-cities">From: <span>Cardiff</span>, <span>Essen</span></div>
+              <div class="dest-city">To: <span>Berlin</span></div>
+            </div>
+            <div class="card-demand">
+              <div>
+                <span style="font-size:14px;">&#x1F377;</span>
+                <span class="good-name">Wine</span>
+                <span class="payout">6M</span>
+              </div>
+              <div class="source-cities">From: <span>Bordeaux</span>, <span>Lisboa</span></div>
+              <div class="dest-city">To: <span>London</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="demand-card-overlay">
+          <div class="card-demands-list">
+            <div class="card-demand">
+              <div>
+                <span style="font-size:14px;">&#x1F9C0;</span>
+                <span class="good-name">Cheese</span>
+                <span class="payout">7M</span>
+              </div>
+              <div class="source-cities">From: <span>Amsterdam</span></div>
+              <div class="dest-city">To: <span>Roma</span></div>
+            </div>
+            <div class="card-demand">
+              <div>
+                <span style="font-size:14px;">&#x1F6A7;</span>
+                <span class="good-name">Marble</span>
+                <span class="payout">9M</span>
+              </div>
+              <div class="source-cities">From: <span>Marseille</span>, <span>Roma</span></div>
+              <div class="dest-city">To: <span>Wien</span></div>
+            </div>
+            <div class="card-demand">
+              <div>
+                <span style="font-size:14px;">&#x1F3AD;</span>
+                <span class="good-name">Tourists</span>
+                <span class="payout">4M</span>
+              </div>
+              <div class="source-cities">From: <span>London</span>, <span>Paris</span></div>
+              <div class="dest-city">To: <span>Barcelona</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="demand-card-overlay">
+          <div class="card-demands-list">
+            <div class="card-demand">
+              <div>
+                <span style="font-size:14px;">&#x1F697;</span>
+                <span class="good-name">Cars</span>
+                <span class="payout">6M</span>
+              </div>
+              <div class="source-cities">From: <span>M&uuml;nchen</span>, <span>Torino</span></div>
+              <div class="dest-city">To: <span>Madrid</span></div>
+            </div>
+            <div class="card-demand">
+              <div>
+                <span style="font-size:14px;">&#x1F33F;</span>
+                <span class="good-name">Hops</span>
+                <span class="payout">4M</span>
+              </div>
+              <div class="source-cities">From: <span>Frankfurt</span>, <span>Praha</span></div>
+              <div class="dest-city">To: <span>Dublin</span></div>
+              <div><span class="pickup-badge">&#x1F4E6; Available here</span></div>
+            </div>
+            <div class="card-demand">
+              <div>
+                <span style="font-size:14px;">&#x1F4E6;</span>
+                <span class="good-name">Imports</span>
+                <span class="payout">10M</span>
+              </div>
+              <div class="source-cities">From: <span>Istanbul</span></div>
+              <div class="dest-city">To: <span>Hamburg</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- LEGEND                                                 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div style="max-width: 600px; background: #222; padding: 16px; border-radius: 6px; font-size: 11px; line-height: 1.8;">
+  <div style="color: #4a9eff; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Design Changes Summary</div>
+  <div><strong style="color:#ffdd44;">1. Selected demand highlight:</strong> Gold left-border + amber tint + "SELECTED" badge on goods matching a selected demand row</div>
+  <div><strong style="color:#4a9e4a;">2. Unselected demand hint:</strong> Subtle green tint + clipboard icon on goods matching any demand card row</div>
+  <div><strong style="color:#4a9e4a;">3. Larger buttons:</strong> 12px bold green buttons (was 10px plain), gold for selected-demand matches, dimmed when disabled</div>
+  <div><strong style="color:#4a9e4a;">4. Demand card badge:</strong> Green "Available here" badge on demand card rows when at a city producing that good</div>
+</div>
+
+</body>
+</html>

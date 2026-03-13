@@ -1,4 +1,5 @@
 [
+  {"message": "Improve pickup goods visibility with demand-matching highlights and larger buttons", "date": "Mar 13, 2026"},
   {"message": "Add ECU balance and phase/waiting indicator to train card", "date": "Mar 13, 2026"},
   {"message": "Prominent cash display, phase badges, and movement progress bar", "date": "Mar 13, 2026"},
   {"message": "Fix post-commit hook and increase recent updates to 20 commits", "date": "Mar 13, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Fix lobby player colors to match rail line colors", "date": "Mar 12, 2026"},
   {"message": "Fix 5 AI paralysis bugs: stale targets, skippable actions, path walking", "date": "Mar 12, 2026"},
   {"message": "Fix AI discontinuous track building and stuck deploy loop", "date": "Mar 12, 2026"},
-  {"message": "Phase 3 Steps 2-3: Add aiState and implement Easy AI core strategy module", "date": "Mar 11, 2026"},
-  {"message": "Phase 3 Step 1: Extract action handlers into server/ai-actions.js", "date": "Mar 11, 2026"}
+  {"message": "Phase 3 Steps 2-3: Add aiState and implement Easy AI core strategy module", "date": "Mar 11, 2026"}
 ]

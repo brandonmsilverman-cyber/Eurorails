@@ -4627,6 +4627,18 @@ function updateUI() {
                     ? `<button class="deliver-btn" onclick="event.stopPropagation(); deliverGood(${cardIdx}, ${dIdx})">💰 Deliver ECU ${demand.payout}M</button>`
                     : "";
 
+                // Check if this good can be picked up at the current city
+                const pickupAvailable = isMyTurnForCards &&
+                    gameState.phase === "operate" &&
+                    currentCity && CITIES[currentCity] &&
+                    CITIES[currentCity].goods.includes(demand.good) &&
+                    myPlayer.loads.length < TRAIN_TYPES[myPlayer.trainType].capacity &&
+                    (GOODS[demand.good] ? (GOODS[demand.good].chips - getGoodsInCirculation(demand.good)) > 0 : false) &&
+                    !isEventBlocking("load", { milepostId: myPlayer.trainLocation });
+                const pickupBadge = pickupAvailable
+                    ? `<div><span style="display:inline-block; font-size:9px; font-weight:bold; color:#4a9e4a; background:rgba(74,158,74,0.15); border:1px solid rgba(74,158,74,0.3); border-radius:3px; padding:1px 4px; margin-top:2px;">📦 Available here</span></div>`
+                    : "";
+
                 const isSelected = dIdx === selectedIdx;
                 const selectedStyle = isSelected
                     ? `background: linear-gradient(90deg, ${pColor}30, ${pColor}10); border-left: 3px solid ${pColor}; padding-left: 5px; margin-left: -8px; border-radius: 3px; box-shadow: inset 0 0 12px ${pColor}15;`
@@ -4645,6 +4657,7 @@ function updateUI() {
                         onmouseenter="highlightCities(['${demand.to}'])"
                         onmouseleave="clearHighlight()">${demand.to}</span>
                     </div>
+                    ${pickupBadge}
                     ${deliverBtn}
                 </div>`;
             }).join("");
@@ -4778,6 +4791,17 @@ function updateUI() {
         if (opCity && CITIES[opCity] && CITIES[opCity].goods.length > 0) {
             const trainFull = currentPlayer.loads.length >= TRAIN_TYPES[currentPlayer.trainType].capacity;
             const strikeBlocked = isEventBlocking("load", { milepostId: currentPlayer.trainLocation });
+            // Compute which goods match demand cards for highlighting
+            const selectedGoods = new Set();
+            const allDemandGoods = new Set();
+            if (currentPlayer.demandCards) {
+                currentPlayer.demandCards.forEach((card, ci) => {
+                    card.demands.forEach((d, di) => {
+                        allDemandGoods.add(d.good);
+                        if (currentPlayer.selectedDemands && currentPlayer.selectedDemands[ci] === di) selectedGoods.add(d.good);
+                    });
+                });
+            }
             operateHtml += `<div style="font-size:11px; margin-bottom:8px; background:#333; padding:6px; border-radius:3px;">
                 <div style="color:#4a9e4a; margin-bottom:4px;"><strong>Available at ${opCity}:${strikeBlocked ? ' <span style="color:#ff6666;">(STRIKE)</span>' : ''}</strong></div>
                 ${CITIES[opCity].goods.map(g => {
@@ -4787,10 +4811,21 @@ function updateUI() {
                     const supplyLeft = maxChips - inCirc;
                     const canPickThis = !trainFull && supplyLeft > 0 && !strikeBlocked;
                     const supplyNote = supplyLeft <= 0 ? ' <span style="color:#ff6666;">(out)</span>' : ` <span style="color:#888;">(${supplyLeft}/${maxChips})</span>`;
+                    const isSelectedGood = selectedGoods.has(g);
+                    const isOnDemand = allDemandGoods.has(g);
+                    const rowStyle = isSelectedGood
+                        ? 'border-left: 3px solid #ffdd44; background: rgba(255, 221, 68, 0.12); padding-left: 5px;'
+                        : isOnDemand
+                            ? 'background: rgba(74, 158, 74, 0.15);'
+                            : '';
+                    const matchLabel = isSelectedGood ? ' <span style="color:#ffdd44; font-size:9px; font-weight:bold;">⭐ SELECTED</span>'
+                        : isOnDemand ? ' <span style="color:#4a9e4a; font-size:9px;">📋</span>'
+                        : '';
+                    const btnBg = isSelectedGood && canPickThis ? '#cc9900' : '#4a9e4a';
                     return `
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
-                        <span>${GOODS_ICONS[g] || "?"} ${g}${supplyNote}</span>
-                        <button onclick="pickupGood('${g}')" style="padding:2px 6px; font-size:10px;" ${canPickThis ? "" : "disabled"}>Pick Up</button>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; padding:4px 6px; border-radius:3px; ${rowStyle}">
+                        <span>${GOODS_ICONS[g] || "?"} ${g}${supplyNote}${matchLabel}</span>
+                        <button onclick="pickupGood('${g}')" style="padding:5px 12px; font-size:12px; font-weight:bold; background:${btnBg}; color:#fff; border:none; border-radius:3px; cursor:pointer;${canPickThis ? '' : ' opacity:0.5;'}" ${canPickThis ? "" : "disabled"}>Pick Up</button>
                     </div>`;
                 }).join("")}
             </div>`;
