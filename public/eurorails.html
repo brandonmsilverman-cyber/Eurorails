@@ -346,6 +346,40 @@
             font-style: italic;
         }
 
+        .train-status-card .train-status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #1a1a2e;
+            padding: 6px 8px;
+            border-radius: 4px;
+            border: 1px solid #333;
+            margin: 8px 0;
+            position: relative;
+            z-index: 1;
+        }
+
+        .train-status-card .train-status-row .ecu {
+            font-size: 13px;
+            font-weight: bold;
+            color: #ffd700;
+        }
+
+        .train-status-card .train-status-row .phase-badge {
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .train-status-card .train-status-row .waiting {
+            font-size: 10px;
+            font-style: italic;
+            color: #888;
+        }
+
         #demandCardsOverlay {
             display: flex;
             gap: 6px;
@@ -3498,11 +3532,33 @@ function drawMap() {
 
         const trainSvg = trainSvgs[myPlayer.trainType] || trainSvgs["Freight"];
 
+        // Build status row: ECU + phase/waiting indicator
+        const myPlayerIndex = gameState.players.indexOf(myPlayer);
+        const isMyTurn = myPlayerIndex === gameState.currentPlayerIndex;
+        const tcPhaseColorMap = { "initialBuilding": "#ff8800", "operate": "#4a9e4a", "build": "#4a7aff" };
+        const tcPhaseIconMap = { "initialBuilding": "\u{1F528}", "operate": "\u{1F682}", "build": "\u{1F527}" };
+        const tcPhaseTextMap = { "initialBuilding": "Initial Building", "operate": "Operate", "build": "Build" };
+        let statusRightHtml;
+        if (isMyTurn) {
+            const pc = tcPhaseColorMap[gameState.phase] || "#fff";
+            const pi = tcPhaseIconMap[gameState.phase] || "";
+            const pt = tcPhaseTextMap[gameState.phase] || gameState.phase;
+            statusRightHtml = `<span class="phase-badge" style="background:${pc}22; border:1px solid ${pc}; color:${pc};">${pi} ${pt}</span>`;
+        } else {
+            const activePlayer = gameState.players[gameState.currentPlayerIndex];
+            const activeColor = COLOR_MAP[activePlayer.color] || "#4a9eff";
+            statusRightHtml = `<span class="waiting">Waiting for <span style="color:${activeColor}; font-style:normal; font-weight:bold;">${activePlayer.name}</span> to finish</span>`;
+        }
+
         trainCardEl.innerHTML = `
             <div class="train-status-card" style="border-color:${pColor}40;">
                 ${trainSvg}
                 <div class="train-header" style="color:${pColor}; border-bottom-color:${pColor}40;">
                     ${myPlayer.name}'s Train
+                </div>
+                <div class="train-status-row">
+                    <span class="ecu">ECU ${myPlayer.cash}M</span>
+                    ${statusRightHtml}
                 </div>
                 <div class="train-content">
                     <div class="train-info-col">
