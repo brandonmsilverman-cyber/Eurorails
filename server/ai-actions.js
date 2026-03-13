@@ -263,16 +263,20 @@ module.exports = function(deps) {
             const edgeKey = buildPath[i] + "|" + buildPath[i + 1];
             const ferryKey = getFerryKey(buildPath[i], buildPath[i + 1]);
 
-            // Check if this is a ferry edge
+            // Check if this is a ferry edge by checking ferryConnections directly
+            // (not just the client-provided ferries array, which excludes already-owned ferries)
             let isFerryEdge = false;
-            if (ferries && ferries.includes(ferryKey)) {
-                isFerryEdge = true;
-                if (!gs.ferryOwnership[ferryKey]) {
-                    gs.ferryOwnership[ferryKey] = [];
-                }
-                if (!gs.ferryOwnership[ferryKey].includes(player.color)) {
-                    gs.ferryOwnership[ferryKey].push(player.color);
-                    newSegments++;
+            for (const fc of gs.ferryConnections) {
+                if (getFerryKey(fc.fromId, fc.toId) === ferryKey) {
+                    isFerryEdge = true;
+                    if (!gs.ferryOwnership[ferryKey]) {
+                        gs.ferryOwnership[ferryKey] = [];
+                    }
+                    if (!gs.ferryOwnership[ferryKey].includes(player.color)) {
+                        gs.ferryOwnership[ferryKey].push(player.color);
+                        newSegments++;
+                    }
+                    break;
                 }
             }
             if (isFerryEdge) continue;

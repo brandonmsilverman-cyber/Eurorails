@@ -338,6 +338,27 @@ function serverValidatePath(gs, path, playerColor) {
         const fromId = path[i];
         const toId = path[i + 1];
 
+        // Check ferry connections first (ferries take priority over any spurious track segments)
+        const ferryKey = getFerryKey(fromId, toId);
+        let isFerry = false;
+        if (ferryKey) {
+            for (const fc of gs.ferryConnections) {
+                if (getFerryKey(fc.fromId, fc.toId) === ferryKey) {
+                    isFerry = true;
+                    break;
+                }
+            }
+        }
+
+        if (isFerry) {
+            if (playerOwnsFerry(gs, ferryKey, playerColor)) {
+                ferryCrossings.push(i);
+            } else {
+                return { valid: false, error: `No ferry ownership for crossing between ${fromId} and ${toId}` };
+            }
+            continue;
+        }
+
         // Check track segments
         let found = false;
         let isForeign = false;
@@ -350,15 +371,6 @@ function serverValidatePath(gs, path, playerColor) {
         }
 
         if (!found) {
-            // Check ferry connections
-            const ferryKey = getFerryKey(fromId, toId);
-            if (ferryKey && playerOwnsFerry(gs, ferryKey, playerColor)) {
-                ferryCrossings.push(i);
-                found = true;
-            }
-        }
-
-        if (!found) {
             return { valid: false, error: `No track connection between ${fromId} and ${toId}` };
         }
 
@@ -366,6 +378,24 @@ function serverValidatePath(gs, path, playerColor) {
     }
 
     return { valid: true, foreignSegments, ferryCrossings };
+}
+
+// Remove spurious track segments that overlap ferry connections.
+// These can exist from a prior bug where building through an already-owned ferry
+// created a regular track segment instead of recognizing the ferry edge.
+function cleanupSpuriousFerryTracks(gs) {
+    if (!gs.ferryConnections || !gs.tracks) return;
+    const ferryEdges = new Set();
+    for (const fc of gs.ferryConnections) {
+        ferryEdges.add(fc.fromId + "|" + fc.toId);
+        ferryEdges.add(fc.toId + "|" + fc.fromId);
+    }
+    const before = gs.tracks.length;
+    gs.tracks = gs.tracks.filter(t => !ferryEdges.has(t.from + "|" + t.to));
+    const removed = before - gs.tracks.length;
+    if (removed > 0) {
+        gs.gameLog.push(`Cleaned up ${removed} spurious track segment(s) overlapping ferry routes`);
+    }
 }
 
 // Get unique foreign track owner colors along a path up to endIdx
@@ -599,6 +629,9 @@ function serverDrawCardForPlayer(gs, player, logs, drawnEvents) {
 // Server-side endTurn: mutates gameState, returns UI hints for clients
 function serverEndTurn(gs, depth = 0) {
     const result = { logs: [], overlay: null, gameOver: false, winner: null };
+
+    // Clean up any spurious track segments overlapping ferry routes (from prior bug)
+    cleanupSpuriousFerryTracks(gs);
 
     // Guard against infinite recursion (all players abandoned/derailed)
     if (depth >= gs.players.length) {
