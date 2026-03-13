@@ -5,7 +5,7 @@ const path = require('path');
 const outFile = path.join(__dirname, '..', 'data', 'commits.json');
 
 try {
-    const stdout = execFileSync('git', ['log', '--format=%s||%ai', '-10'], { cwd: path.join(__dirname, '..') }).toString();
+    const stdout = execFileSync('git', ['log', '--format=%s||%ai', '-20'], { cwd: path.join(__dirname, '..') }).toString();
     const commits = stdout.trim().split('\n').filter(Boolean).map(line => {
         const [message, rawDate] = line.split('||');
         const d = new Date(rawDate);

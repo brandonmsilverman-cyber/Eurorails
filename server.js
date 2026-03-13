@@ -49,7 +49,7 @@ app.get('/api/commits', (req, res) => {
         const commits = JSON.parse(fs.readFileSync(COMMITS_FILE, 'utf8'));
         if (commits.length) return res.json(commits);
     } catch (e) { /* file missing — fall back to git */ }
-    execFile('git', ['log', '--format=%s||%ai', '-10'], { cwd: __dirname }, (err, stdout) => {
+    execFile('git', ['log', '--format=%s||%ai', '-20'], { cwd: __dirname }, (err, stdout) => {
         if (err) return res.json([]);
         const commits = stdout.trim().split('\n').filter(Boolean).map(line => {
             const [message, rawDate] = line.split('||');
