@@ -3144,15 +3144,16 @@ function drawMap() {
     const trainCardEl = document.getElementById("trainCardOverlay");
     if (trainCardEl && gameState.gameStarted) {
         const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-        const tt = TRAIN_TYPES[currentPlayer.trainType];
-        const pColor = COLOR_MAP[currentPlayer.color] || "#4a9eff";
-        const locationName = getPlayerLocationName(currentPlayer);
+        const myPlayer = (myPlayerId && gameState.players.find(p => p.id === myPlayerId)) || currentPlayer;
+        const tt = TRAIN_TYPES[myPlayer.trainType];
+        const pColor = COLOR_MAP[myPlayer.color] || "#4a9eff";
+        const locationName = getPlayerLocationName(myPlayer);
 
         let loadsHtml = "";
         if (tt) {
             for (let i = 0; i < tt.capacity; i++) {
-                if (i < currentPlayer.loads.length) {
-                    const g = currentPlayer.loads[i];
+                if (i < myPlayer.loads.length) {
+                    const g = myPlayer.loads[i];
                     loadsHtml += `<div class="load-item"><span>${GOODS_ICONS[g] || "?"}</span> ${g}</div>`;
                 } else {
                     loadsHtml += `<div class="load-item empty-slot">— empty —</div>`;
@@ -3495,22 +3496,22 @@ function drawMap() {
             </svg>`
         };
 
-        const trainSvg = trainSvgs[currentPlayer.trainType] || trainSvgs["Freight"];
+        const trainSvg = trainSvgs[myPlayer.trainType] || trainSvgs["Freight"];
 
         trainCardEl.innerHTML = `
             <div class="train-status-card" style="border-color:${pColor}40;">
                 ${trainSvg}
                 <div class="train-header" style="color:${pColor}; border-bottom-color:${pColor}40;">
-                    ${currentPlayer.name}'s Train
+                    ${myPlayer.name}'s Train
                 </div>
                 <div class="train-content">
                     <div class="train-info-col">
-                        <div class="train-stat"><span>Type:</span><strong>${currentPlayer.trainType}</strong></div>
+                        <div class="train-stat"><span>Type:</span><strong>${myPlayer.trainType}</strong></div>
                         <div class="train-stat"><span>Speed:</span><strong>${tt ? tt.movement : "?"}mp</strong></div>
                         <div class="train-stat"><span>Location:</span><strong>${locationName}</strong></div>
                     </div>
                     <div class="train-loads-col">
-                        <div class="train-loads-header">Cargo (${currentPlayer.loads.length}/${tt ? tt.capacity : "?"}):</div>
+                        <div class="train-loads-header">Cargo (${myPlayer.loads.length}/${tt ? tt.capacity : "?"}):</div>
                         ${loadsHtml}
                     </div>
                 </div>
