@@ -390,9 +390,31 @@ function serverCheckTrackageStrandRisk(gs, movePath, playerColor, cashAfterFees)
     return potentialCash >= 4;
 }
 
+// Shared helper: apply derailment/gale effects to a single player
+function applyDerailmentToPlayer(gs, player, pIdx, logs, eventLabel, drawingPlayerIndex) {
+    gs.derailedPlayers[pIdx] = 1;
+
+    if (player.loads.length === 0) {
+        const msg = `${player.name} ${eventLabel} Loses next turn.`;
+        logs.push(msg);
+        gs.gameLog.push(msg);
+    } else {
+        const dropIndex = Math.floor(Math.random() * player.loads.length);
+        const droppedLoad = player.loads.splice(dropIndex, 1)[0];
+        const msg = `${player.name} ${eventLabel} Loses next turn and drops ${droppedLoad}.`;
+        logs.push(msg);
+        gs.gameLog.push(msg);
+    }
+
+    // Drawing player in operate phase loses remaining movement immediately
+    if (pIdx === drawingPlayerIndex && gs.phase === "operate") {
+        player.movement = 0;
+    }
+}
+
 // Draw one card for a player, skipping event cards (events handled separately during turns)
 // Apply immediate event effects on the server
-function serverApplyEventEffect(gs, eventCard, logs) {
+function serverApplyEventEffect(gs, eventCard, logs, drawingPlayerIndex) {
     if (eventCard.type === "tax") {
         for (const player of gs.players) {
             let tax = 0;
@@ -416,11 +438,7 @@ function serverApplyEventEffect(gs, eventCard, logs) {
                 const player = gs.players[pIdx];
                 if (player.trainLocation === null) continue;
                 if (zoneSet.has(player.trainLocation)) {
-                    gs.derailedPlayers[pIdx] = 1;
-                    if (player.loads.length > 0) player.loads.pop();
-                    const msg = `${player.name} derailed! Loses next turn and 1 load.`;
-                    logs.push(msg);
-                    gs.gameLog.push(msg);
+                    applyDerailmentToPlayer(gs, player, pIdx, logs, "derailed!", drawingPlayerIndex);
                 }
             }
         }
@@ -462,11 +480,7 @@ function serverApplyEventEffect(gs, eventCard, logs) {
                     }
                 }
                 if (atFerryPort && zoneSet.has(player.trainLocation)) {
-                    gs.derailedPlayers[pIdx] = 1;
-                    if (player.loads.length > 0) player.loads.pop();
-                    const msg = `${player.name} caught in gale at ferry port! Loses next turn and 1 load.`;
-                    logs.push(msg);
-                    gs.gameLog.push(msg);
+                    applyDerailmentToPlayer(gs, player, pIdx, logs, "caught in gale at ferry port!", drawingPlayerIndex);
                 }
             }
         }
@@ -497,7 +511,7 @@ function serverDrawCardForPlayer(gs, player, logs, drawnEvents) {
             gs.gameLog.push(eventMsg);
 
             // Apply immediate effects
-            serverApplyEventEffect(gs, eventCard, logs);
+            serverApplyEventEffect(gs, eventCard, logs, gs.currentPlayerIndex);
 
             // Persistent events stay active
             if (eventCard.persistent) {
@@ -1820,4 +1834,4 @@ const listener = server.listen(PORT, () => {
     console.log(`Eurorails server running at http://localhost:${PORT}`);
 });
 
-module.exports = { listener, rooms };
+module.exports = { listener, rooms, serverApplyEventEffect, applyDerailmentToPlayer };
