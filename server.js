@@ -65,8 +65,28 @@ function generateDeck() {
     const goodsKeys = Object.keys(GOODS);
     const cities = Object.keys(CITIES);
     const MIN_SPREAD = 15;
+    const LONG_ROUTE_CARD_CHANCE = 0.15;
 
-    function generateDemand() {
+    // Sample distance distribution to find 80th percentile threshold
+    const distSamples = [];
+    for (let s = 0; s < 500; s++) {
+        const good = goodsKeys[Math.floor(Math.random() * goodsKeys.length)];
+        const sources = GOODS[good].sources;
+        const to = cities[Math.floor(Math.random() * cities.length)];
+        if (sources.includes(to)) continue;
+        const toCoords = CITIES[to];
+        const minDist = sources.reduce((min, src) => {
+            if (src === to) return min;
+            const sc = CITIES[src];
+            return Math.min(min, Math.hypot(sc.x - toCoords.x, sc.y - toCoords.y));
+        }, Infinity);
+        if (minDist !== Infinity && minDist >= DEMAND_MIN_DISTANCE) distSamples.push(minDist);
+    }
+    distSamples.sort((a, b) => a - b);
+    const longRouteThreshold = distSamples[Math.floor(distSamples.length * 0.8)] || 25;
+
+    function generateDemand(minDistOverride) {
+        const minDistRequired = minDistOverride || DEMAND_MIN_DISTANCE;
         const good = goodsKeys[Math.floor(Math.random() * goodsKeys.length)];
         const sources = GOODS[good].sources;
         const from = sources[Math.floor(Math.random() * sources.length)];
@@ -81,15 +101,21 @@ function generateDeck() {
                 return Math.min(min, Math.hypot(sc.x - toCoords.x, sc.y - toCoords.y));
             }, Infinity);
             attempts++;
-        } while ((to === from || sources.includes(to) || minDist < DEMAND_MIN_DISTANCE) && attempts < 50);
+        } while ((to === from || sources.includes(to) || minDist < minDistRequired) && attempts < 50);
         const payout = calculatePayout(minDist, GOODS[good].chips);
         return { good, from, to, payout, minDist };
     }
 
     for (let i = 0; i < 120; i++) {
         let demands, cardAttempts = 0;
+        const isLongRouteCard = Math.random() < LONG_ROUTE_CARD_CHANCE;
         do {
             demands = [generateDemand(), generateDemand(), generateDemand()];
+            // For long route cards, regenerate the longest demand with the elevated threshold
+            if (isLongRouteCard) {
+                demands.sort((a, b) => a.minDist - b.minDist);
+                demands[2] = generateDemand(longRouteThreshold);
+            }
             const dists = demands.map(d => d.minDist);
             const spread = Math.max(...dists) - Math.min(...dists);
             cardAttempts++;
