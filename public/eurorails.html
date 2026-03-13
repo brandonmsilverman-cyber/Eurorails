@@ -1915,8 +1915,8 @@ function animateCardDiscard(cardIndex, onComplete) {
 }
 
 function showDemandCardFlyAnimation(cards, onComplete) {
-    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-    const pColor = COLOR_MAP[currentPlayer.color] || "#4a9eff";
+    const myPlayer = (myPlayerId && gameState.players.find(p => p.id === myPlayerId)) || gameState.players[gameState.currentPlayerIndex];
+    const pColor = COLOR_MAP[myPlayer.color] || "#4a9eff";
     const demandOverlay = document.getElementById("demandCardsOverlay");
     const placeholders = demandOverlay ? demandOverlay.querySelectorAll(".demand-card-overlay.placeholder") : [];
 
@@ -5949,8 +5949,6 @@ const socket = io();
 let myPlayerId = null;
 let myRoomCode = null;
 let isHost = false;
-let pendingInitialCardAnimation = false;
-let pendingCardDrawAnimation = false;
 
 let selectedMaxPlayers = 3;
 
@@ -6498,16 +6496,10 @@ function initializeGameView(state, isRejoin) {
         logDiv.scrollTop = logDiv.scrollHeight;
     }
 
-    if (isRejoin) {
-        // On rejoin, skip card deal animations — cards are already dealt
-        pendingInitialCardAnimation = false;
-    } else {
-        // Only animate initial cards for the first player (it's their turn, overlay will show).
-        // Other players get their animation when it first becomes their turn.
+    if (!isRejoin) {
+        // Animate initial card deal for the local player
         const myPlayer = gameState.players.find(p => p.id === myPlayerId);
-        const isFirstPlayer = myPlayer && gameState.players[0] && gameState.players[0].id === myPlayerId;
-        if (isFirstPlayer && myPlayer.demandCards.length > 0) {
-            pendingInitialCardAnimation = false;
+        if (myPlayer && myPlayer.demandCards.length > 0) {
             cardAnimationHoldQueue = true;
             for (const card of myPlayer.demandCards) {
                 card._animating = true;
@@ -6515,8 +6507,6 @@ function initializeGameView(state, isRejoin) {
             }
             updateUI();
             flushCardAnimationQueue();
-        } else {
-            pendingInitialCardAnimation = true;
         }
     }
 }
@@ -6696,22 +6686,10 @@ socket.on('stateUpdate', ({ state, uiEvent }) => {
         showTurnOverlay(uiEvent.overlay.playerName, uiEvent.overlay.playerColor, uiEvent.overlay.phaseLabel);
     }
 
-    // If I just discarded my hand, defer card animation until my next turn
+    // If I just discarded my hand, animate replacement cards immediately
     if (uiEvent?.type === 'turnChanged' && uiEvent.drawnBy) {
         const myPlayer = gameState.players.find(p => p.id === myPlayerId);
-        if (myPlayer && uiEvent.drawnBy.name === myPlayer.name) {
-            pendingCardDrawAnimation = true;
-        }
-    }
-
-    // Animate demand cards the first time it becomes this player's turn
-    // (covers both initial deal and post-discard redraw)
-    if (pendingInitialCardAnimation || pendingCardDrawAnimation) {
-        const myPlayer = gameState.players.find(p => p.id === myPlayerId);
-        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-        if (myPlayer && currentPlayer && currentPlayer.id === myPlayerId && myPlayer.demandCards.length > 0) {
-            pendingInitialCardAnimation = false;
-            pendingCardDrawAnimation = false;
+        if (myPlayer && uiEvent.drawnBy.name === myPlayer.name && myPlayer.demandCards.length > 0) {
             cardAnimationHoldQueue = true;
             for (const card of myPlayer.demandCards) {
                 card._animating = true;
