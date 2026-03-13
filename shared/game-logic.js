@@ -1030,16 +1030,18 @@ function playerOwnsFerry(ctx, ferryKey, playerColor) {
 
 // ctx must have: mileposts, mileposts_by_id, cityToMilepost, ferryConnections,
 //                ferryOwnership, tracks, activeEvents
-function findPath(ctx, startId, endId, playerColor, mode) {
+function findPath(ctx, startId, endId, playerColor, mode, allowForeignTrack) {
     mode = mode || "cheapest";
+    allowForeignTrack = allowForeignTrack || false;
     var dist = {};
     var prev = {};
     var costTie = {}; // secondary tiebreaker: real cost for "shortest", segment count for "cheapest"
     var heap = new MinHeap();
 
-    // Build sets of edges owned by this player (free) and by other players (blocked)
+    // Build sets of edges owned by this player (free) and by other players (blocked/foreign)
     var ownedEdges = new Set();
     var blockedEdges = new Set();
+    var foreignEdges = new Set();
     if (playerColor) {
         for (var t = 0; t < ctx.tracks.length; t++) {
             var track = ctx.tracks[t];
@@ -1049,8 +1051,12 @@ function findPath(ctx, startId, endId, playerColor, mode) {
                 ownedEdges.add(fwd);
                 ownedEdges.add(rev);
             } else {
-                blockedEdges.add(fwd);
-                blockedEdges.add(rev);
+                foreignEdges.add(fwd);
+                foreignEdges.add(rev);
+                if (!allowForeignTrack) {
+                    blockedEdges.add(fwd);
+                    blockedEdges.add(rev);
+                }
             }
         }
     }
@@ -1123,16 +1129,18 @@ function findPath(ctx, startId, endId, playerColor, mode) {
             var neighborId = current.neighbors[n];
             var neighbor = ctx.mileposts_by_id[neighborId];
             var edgeKey = current.id + "|" + neighborId;
-            // Cannot build on edges owned by other players
+            // Cannot build on edges owned by other players (unless foreign track allowed)
             if (blockedEdges.has(edgeKey)) continue;
             // Cannot build into event-blocked mileposts (snow/fog/gale zones)
             if (buildBlockedMileposts.has(neighborId)) continue;
             // If player already owns this edge, weight is 0 in cheapest mode
             var isOwned = ownedEdges.has(edgeKey);
-            var realEdgeCost = isOwned ? 0 : getMileppostCost(current, neighbor);
+            var isForeign = foreignEdges.has(edgeKey);
+            var realEdgeCost = (isOwned || isForeign) ? 0 : getMileppostCost(current, neighbor);
             // In "shortest" mode, every edge costs 1 (even owned ones) to find the
             // path with fewest total segments rather than detouring through existing track.
-            // In "cheapest" mode, owned edges are free.
+            // In "cheapest" mode, owned edges are free, foreign edges are free (no build cost).
+            // In "shortest" mode, foreign edges cost 1 (passable but not free — prevents wild detours).
             var edgeWeight = mode === "shortest" ? 1 : realEdgeCost;
             var newDist = dist[current.id] + edgeWeight;
             // Tiebreaker: in "shortest" mode, prefer lower real cost; in "cheapest" mode, prefer fewer segments
@@ -1194,9 +1202,16 @@ function findPath(ctx, startId, endId, playerColor, mode) {
 
     // Always compute real build cost by walking the path
     var realCost = 0;
+    var foreignSegments = [];
     for (var i = 0; i < path.length - 1; i++) {
         var edgeKey = path[i] + "|" + path[i + 1];
         if (ownedEdges.has(edgeKey)) continue; // already own this track segment
+
+        // Track foreign segments (no build cost for these)
+        if (foreignEdges.has(edgeKey)) {
+            foreignSegments.push(i);
+            continue;
+        }
 
         // Check if this is a ferry edge
         var ferryKey = getFerryKey(path[i], path[i + 1]);
@@ -1224,7 +1239,7 @@ function findPath(ctx, startId, endId, playerColor, mode) {
         }
     }
 
-    return { path: path, cost: realCost };
+    return { path: path, cost: realCost, foreignSegments: foreignSegments };
 }
 
 // Check if an active gale 138 event blocks ferry movement between two ports

@@ -1361,8 +1361,8 @@ computeCoastDistances = function() {
     gameState.coastDistance = _shared.computeCoastDistances(makeGameCtx());
 };
 
-findPath = function(startId, endId, playerColor, mode) {
-    return _shared.findPath(makeGameCtx(), startId, endId, playerColor, mode);
+findPath = function(startId, endId, playerColor, mode, allowForeignTrack) {
+    return _shared.findPath(makeGameCtx(), startId, endId, playerColor, mode, allowForeignTrack);
 };
 
 findPathOnTrack = function(startId, endId, playerColor, allowForeignTrack) {

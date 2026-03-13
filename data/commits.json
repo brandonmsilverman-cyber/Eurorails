@@ -1,4 +1,5 @@
 [
+  {"message": "Add allowForeignTrack param to findPath() with foreignSegments return", "date": "Mar 13, 2026"},
   {"message": "Align deliver button with pickup button vertical midline", "date": "Mar 13, 2026"},
   {"message": "Shrink pickup button to match deliver button format", "date": "Mar 13, 2026"},
   {"message": "Improve pickup goods visibility with demand-matching highlights and larger buttons", "date": "Mar 13, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Fix derailment/gale events to randomly drop loads and zero movement budget", "date": "Mar 13, 2026"},
   {"message": "Add 15% long-route demand cards and backlog discard pile reshuffle", "date": "Mar 12, 2026"},
   {"message": "Add manual zoom in/out buttons to bottom-left of map", "date": "Mar 12, 2026"},
-  {"message": "Fix lobby player colors to match rail line colors", "date": "Mar 12, 2026"},
-  {"message": "Fix 5 AI paralysis bugs: stale targets, skippable actions, path walking", "date": "Mar 12, 2026"}
+  {"message": "Fix lobby player colors to match rail line colors", "date": "Mar 12, 2026"}
 ]
