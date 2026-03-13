@@ -2712,15 +2712,22 @@ function drawMap() {
             const segments = gameState.pathPreview.length - 1;
             const hasForeign = foreignSegs.length > 0;
             let trackageFee = 0;
-            if (hasForeign && gameState.phase === "operate") {
-                const cp = gameState.players[gameState.currentPlayerIndex];
-                const owners = getForeignTrackOwners(gameState.pathPreview, segments, cp.color, foreignSegs);
-                for (const oc of owners) {
-                    if (!gameState.trackageRightsPaidThisTurn[oc]) trackageFee += 4;
+            const cp = gameState.players[gameState.currentPlayerIndex];
+            if (hasForeign) {
+                if (gameState.phase === "operate") {
+                    const owners = getForeignTrackOwners(gameState.pathPreview, segments, cp.color, foreignSegs);
+                    for (const oc of owners) {
+                        if (!gameState.trackageRightsPaidThisTurn[oc]) trackageFee += 4;
+                    }
+                } else {
+                    // Build phase: compute trackage rights fee for foreign segments
+                    const owners = getForeignTrackOwners(gameState.pathPreview, segments, cp.color, foreignSegs);
+                    trackageFee = owners.size * 4;
                 }
             }
             let costText;
             const isOperate = gameState.phase === "operate";
+            const isBuild = gameState.phase === "build" || gameState.phase === "initialBuilding";
             const costHasHalfSpeed = isOperate && gameState.pathPreviewCost > segments;
             if (hasPartial) {
                 if (isOperate) {
@@ -2728,10 +2735,14 @@ function drawMap() {
                 } else {
                     costText = `${gameState.pathPreviewCost}M total · ${cutoff}/${segments} seg`;
                 }
-                if (trackageFee > 0) costText += ` · 🚂${trackageFee}M rent`;
+                if (trackageFee > 0) costText += ` · 🚂${trackageFee}M/turn rent`;
                 else if (hasForeign) costText += ` · 🚂paid`;
             } else if (hasForeign) {
-                costText = trackageFee > 0 ? `${segments} seg · 🚂${trackageFee}M rent` : `${segments} seg · 🚂paid`;
+                if (isBuild) {
+                    costText = trackageFee > 0 ? `${gameState.pathPreviewCost}M build · 🚂${trackageFee}M/turn rent` : `${gameState.pathPreviewCost}M build`;
+                } else {
+                    costText = trackageFee > 0 ? `${segments} seg · 🚂${trackageFee}M rent` : `${segments} seg · 🚂paid`;
+                }
             } else if (isOperate) {
                 costText = costHasHalfSpeed ? `${gameState.pathPreviewCost}mp (${segments} steps, half-speed)` : `${segments} steps`;
             } else {
@@ -5691,7 +5702,7 @@ document.addEventListener("DOMContentLoaded", function() {
             } else if (gameState.phase === "initialBuilding" || gameState.phase === "build") {
                 if (gameState.selectedMilepost) {
                     // Building second click: check if path is affordable (fully or partially)
-                    let pathResult = findPath(gameState.selectedMilepost.id, nearest.id, currentPlayer.color, gameState.buildPathMode);
+                    let pathResult = findPath(gameState.selectedMilepost.id, nearest.id, currentPlayer.color, gameState.buildPathMode, gameState.useForeignTrackInBuild);
 
                     // Force direct path for neighboring mileposts when direct edge isn't owned/blocked
                     if (pathResult && gameState.selectedMilepost.neighbors.includes(nearest.id)) {
@@ -5706,7 +5717,7 @@ document.addEventListener("DOMContentLoaded", function() {
                         );
                         if (!directOwned && !directBlocked) {
                             const directCost = getMileppostCost(selMp, nearest);
-                            pathResult = { path: [selMp.id, nearest.id], cost: directCost };
+                            pathResult = { path: [selMp.id, nearest.id], cost: directCost, foreignSegments: [] };
                         }
                     }
 
@@ -5715,7 +5726,9 @@ document.addEventListener("DOMContentLoaded", function() {
                         gameState.pathPreview = null;
                         gameState.pathPreviewCost = null;
                         gameState.pathPreviewCutoff = null;
+                        gameState.pathPreviewForeignSegments = [];
                     } else {
+                        gameState.pathPreviewForeignSegments = pathResult.foreignSegments || [];
                         const remainingBudget = 20 - gameState.buildingThisTurn;
                         const maxAffordable = Math.min(remainingBudget, currentPlayer.cash);
                         const isFullyValid = pathResult.cost <= maxAffordable;
@@ -5737,10 +5750,13 @@ document.addEventListener("DOMContentLoaded", function() {
                             }
                             let accCost = 0;
                             let cutoffIdx = 0;
+                            const foreignSet = new Set(pathResult.foreignSegments || []);
                             for (let i = 0; i < pathResult.path.length - 1; i++) {
                                 const fromId = pathResult.path[i];
                                 const toId = pathResult.path[i + 1];
                                 const edgeKey = fromId + "|" + toId;
+                                // Foreign edges: stop buildable cutoff at first foreign gap
+                                if (foreignSet.has(i)) break;
                                 // Check if this segment is already owned (free)
                                 if (ownedEdges.has(edgeKey)) {
                                     cutoffIdx = i + 1;
