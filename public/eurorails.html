@@ -1284,6 +1284,7 @@ let gameState = {
     pathPreviewCutoff: null,  // index in pathPreview where affordable portion ends (for green/red split)
     pathPreviewForeignSegments: [], // indices of segments using foreign track (for visual indication)
     buildPathMode: "cheapest",  // "cheapest" or "shortest"
+    useForeignTrackInBuild: false, // build phase: consider foreign track as traversable in pathfinding
     useTrackageRights: false,   // operate phase: allow using other players' track for 4M/turn
     trackageRightsPaidThisTurn: {},    // { ownerColor: true } — which opponents have been paid 4M this turn
     trackageRightsLog: [],             // [{from, to, amount}] — log of payments this operate phase for modal
@@ -4269,6 +4270,17 @@ function setBuildPathMode(mode) {
     drawMap();
 }
 
+function toggleBuildForeignTrack() {
+    gameState.useForeignTrackInBuild = !gameState.useForeignTrackInBuild;
+    // Clear preview so it recalculates with new setting
+    gameState.pathPreview = null;
+    gameState.pathPreviewCost = null;
+    gameState.pathPreviewCutoff = null;
+    gameState.pathPreviewForeignSegments = [];
+    updateUI();
+    drawMap();
+}
+
 function undoLastBuild() {
     // In multiplayer, send undo action to server
     if (typeof socket !== 'undefined' && myPlayerId) {
@@ -4400,6 +4412,7 @@ function endOperatePhase() {
     gameState.buildHistory = [];
     gameState.operateHistory = [];
     gameState.buildPathMode = "cheapest";
+    gameState.useForeignTrackInBuild = false;
     gameState.useTrackageRights = false;
     gameState.trackageRightsPaidThisTurn = {};
     gameState.trackageRightsLog = [];
@@ -4444,6 +4457,7 @@ function endTurnLocal() {
     gameState.buildHistory = [];
     gameState.operateHistory = [];
     gameState.buildPathMode = "cheapest";
+    gameState.useForeignTrackInBuild = false;
     gameState.useTrackageRights = false;
     gameState.trackageRightsPaidThisTurn = {};
     gameState.trackageRightsLog = [];
@@ -4695,6 +4709,7 @@ function updateUI() {
         const budgetColor = remainingBudget > 10 ? "#4a9e4a" : remainingBudget > 5 ? "#ffcc00" : "#ff4444";
         const cheapestActive = gameState.buildPathMode === "cheapest";
         const shortestActive = gameState.buildPathMode === "shortest";
+        const foreignActive = gameState.useForeignTrackInBuild;
 
         let buildHtml = `
             <div style="font-size:11px; margin-bottom:8px;">
@@ -4710,6 +4725,11 @@ function updateUI() {
             <div style="display:flex; gap:4px; margin-bottom:8px;">
                 <button onclick="setBuildPathMode('cheapest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${cheapestActive ? '#4a9e4a' : '#555'}; background:${cheapestActive ? '#2a4a2a' : '#222'}; color:${cheapestActive ? '#88ff88' : '#888'}; cursor:pointer;">Cheapest</button>
                 <button onclick="setBuildPathMode('shortest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${shortestActive ? '#4a9eff' : '#555'}; background:${shortestActive ? '#1a2a4a' : '#222'}; color:${shortestActive ? '#88ccff' : '#888'}; cursor:pointer;">Shortest</button>
+            </div>
+            <div style="margin-bottom:8px;">
+                <button onclick="toggleBuildForeignTrack()" style="width:100%; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${foreignActive ? '#cc6600' : '#555'}; background:${foreignActive ? '#3d2200' : '#222'}; color:${foreignActive ? '#ffaa44' : '#888'}; cursor:pointer;">
+                    🚂 Use Foreign Track: ${foreignActive ? 'ON' : 'OFF'}
+                </button>
             </div>`;
 
         if (gameState.buildHistory.length > 0) {
@@ -4876,6 +4896,7 @@ function updateUI() {
         const budgetColor = remainingBudget > 10 ? "#4a9e4a" : remainingBudget > 5 ? "#ffcc00" : "#ff4444";
         const cheapestActive = gameState.buildPathMode === "cheapest";
         const shortestActive = gameState.buildPathMode === "shortest";
+        const foreignActive = gameState.useForeignTrackInBuild;
 
         let buildHtml = `
             <div style="font-size:11px; margin-bottom:8px;">
@@ -4891,6 +4912,11 @@ function updateUI() {
             <div style="display:flex; gap:4px; margin-bottom:8px;">
                 <button onclick="setBuildPathMode('cheapest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${cheapestActive ? '#4a9e4a' : '#555'}; background:${cheapestActive ? '#2a4a2a' : '#222'}; color:${cheapestActive ? '#88ff88' : '#888'}; cursor:pointer;">Cheapest</button>
                 <button onclick="setBuildPathMode('shortest')" style="flex:1; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${shortestActive ? '#4a9eff' : '#555'}; background:${shortestActive ? '#1a2a4a' : '#222'}; color:${shortestActive ? '#88ccff' : '#888'}; cursor:pointer;">Shortest</button>
+            </div>
+            <div style="margin-bottom:8px;">
+                <button onclick="toggleBuildForeignTrack()" style="width:100%; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${foreignActive ? '#cc6600' : '#555'}; background:${foreignActive ? '#3d2200' : '#222'}; color:${foreignActive ? '#ffaa44' : '#888'}; cursor:pointer;">
+                    🚂 Use Foreign Track: ${foreignActive ? 'ON' : 'OFF'}
+                </button>
             </div>`;
 
         if (gameState.buildHistory.length > 0) {
@@ -6671,6 +6697,7 @@ function applyServerState(state) {
     gameState.pathPreviewCutoff = null;
     gameState.pathPreviewForeignSegments = [];
     gameState.buildPathMode = "cheapest";
+    gameState.useForeignTrackInBuild = false;
     gameState.useTrackageRights = false;
 }
 
