@@ -285,6 +285,15 @@ var LANDMASSES = {
 };
 
 // Terrain regions
+// Mountain pass corridors through the Alps — each is a center-line with a radius.
+// Points within the radius get friendlier terrain (mostly clear/mountain, no alpine).
+// Based on historical Alpine passes: Mont Cenis (west), Gotthard (central), Brenner (east).
+var MOUNTAIN_PASSES = [
+    { from: [39.5, 37], to: [41, 44], radius: 1.3 },   // Mont Cenis — France to Torino
+    { from: [44, 35.5], to: [43.5, 43], radius: 1.3 },  // Gotthard — Switzerland to Milano
+    { from: [49, 36], to: [48.5, 43], radius: 1.3 }     // Brenner — Austria to Venezia
+];
+
 var TERRAIN_REGIONS = {
     alpine: [
         [[39,37], [45,35], [49,36], [53,36], [55,38], [53,41], [50,43], [48,44], [44,48], [39,48], [37,44], [39,37]]
@@ -639,6 +648,17 @@ function polygonDepth(point, polygon) {
 
 function getTerrainType(x, y) {
     var hash = terrainHash(x, y);
+
+    // Check mountain pass corridors — override alpine terrain with clear/mountain
+    for (var i = 0; i < MOUNTAIN_PASSES.length; i++) {
+        var pass = MOUNTAIN_PASSES[i];
+        var dist = segmentDistance(x, y, pass.from[0], pass.from[1], pass.to[0], pass.to[1]);
+        if (dist <= pass.radius) {
+            // 70% clear, 30% mountain — no alpine in passes
+            if (hash < 0.70) return "clear";
+            return "mountain";
+        }
+    }
 
     // Check alpine regions first
     for (var p = 0; p < TERRAIN_REGIONS.alpine.length; p++) {
