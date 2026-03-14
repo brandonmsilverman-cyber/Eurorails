@@ -34,18 +34,11 @@ Allow the host to fill empty multiplayer slots with AI opponents so games can st
 
 ## UI / Visual
 
-- [x] **Highlight demand-matching goods at pickup** — When at a city picking up goods, visually highlight any "available at city" options in the actions panel that match a good on the currently selected (highlighted) row of an active demand card
-- [x] **More prominent goods pickup UI** — Make the option to pick up goods more visible and easier to interact with when stopped at a city
-- [ ] **In-game tutorial** — Guided walkthrough teaching players the basic functions: building track, operating trains, picking up and dropping off goods, using ferries, renting opponent railroads (trackage rights), etc. 
 - [ ] **Overhaul demand card row hover effect** — When hovering a demand card row, highlight origin and destination cities simultaneously on the map using distinct colors (e.g. one color for origin cities, another for the destination)
 - [ ] **Event modal text should list all effects** — The persistent event banner at the top of the screen doesn't always describe every impact of the event (e.g. missing that rail building is disallowed in the affected area). Update event descriptions to fully enumerate all gameplay effects
-- [x] **Prominent cash display** — Show current ECU balance next to player name or on train card so it's always visible without digging into the sidebar
-- [x] **Better turn phase and movement limit indicators** — Clearer visual feedback for what phase you're in and how much movement remains
-- [x] **Shrink pickup button to match deliver button** — Resize the goods pickup button so it uses the same compact format as the deliver button for visual consistency
 - [ ] **Improved trackage rights payment animation** — Replace falling coins with a more polished visual for trackage rights transfers
-- [ ] **Toggle to hide city production info** — Option to declutter the board by hiding goods-produced-at-city labels
-- [x] **Basic gameplay instructions dropdown** — Quick-reference panel (like the existing map legend) explaining core mechanics
 - [ ] **AI hints system** — "What would an expert do?" suggestion feature for learning players
+- [ ] **Add ferry building and usage to tutorial** — Explain how ferry routes work (building, costs, shared ownership, crossing) in the in-game tutorial
 
 ## Save & Resume
 
@@ -68,7 +61,17 @@ Independent of solo mode — no blocking dependencies in either direction.
 
 ## Bug Fixes
 
-- [x] **Alps region lacks clear milepost paths** — No clear traversal route through the Alps (unlike the physical board), making Italy builds disproportionately expensive and unattractive
+- [ ] **Demand card text overflow** — Text in the bottom row of the demand card can extend past the bottom edge of the card due to "available here" banners pushing content down
+- [ ] **Event banner text not vertically centered** — Text on map event title banners (e.g. "Snow: Torino") is not centered vertically within the banner
+- [ ] **Turn budget overstates available miles** — Turn budget shows 20 miles when the player has less money available in total ECU reserve
+- [ ] **London-Amsterdam ferry endpoint misplaced** — The London-Amsterdam ferry endpoint appears in the middle of the UK (visual only); move it to a milepost on the east coast of the UK
+- [ ] **Zoom-out hover twitching** — When fully zoomed out, mouse hover causes slight twitching in Chrome (possibly scroll-bar related)
+
+## Balance / Gameplay Feedback
+
+- [ ] **Small trip payouts too generous** — Early-game short deliveries may pay too much, making the opening phase too easy; consider tuning payout curves
+- [ ] **Spain/Italy access too open** — Access routes into Spain and Italy could be more strategically restrictive to create meaningful geographic chokepoints
+- [ ] **Faster train speed option** — Add a game room option for faster train speeds (12/16 MP instead of 9/12) for quicker games
 
 ## Completed
 
@@ -97,3 +100,10 @@ Independent of solo mode — no blocking dependencies in either direction.
 - [x] Cheapest/shortest route foreign track consideration
 - [x] Basic gameplay instructions dropdown (How to Play tutorial)
 - [x] Alps region — mountain pass corridors (Mont Cenis, Gotthard, Brenner)
+- [x] Highlight demand-matching goods at pickup
+- [x] More prominent goods pickup UI
+- [x] Prominent cash display
+- [x] Better turn phase and movement limit indicators
+- [x] Shrink pickup button to match deliver button
+- [x] Toggle to hide city production info (Map Icons toggle in Goods Legend)
+- [x] In-game tutorial (guided walkthrough of core mechanics)

@@ -69,6 +69,10 @@ npm-debug.log*
 Eurorails\ map.webp
 Eurorails\ Rules,\ Mayfair\ Games\ Inc.,\ 1990.pdf
 
+# ── Game saves ──
+# Saved game state files (generated at runtime).
+saves/
+
 # ── Backup files ──
 *.bak
 *.backup

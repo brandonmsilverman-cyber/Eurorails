@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 3000;
 const DISCONNECT_GRACE_MS = parseInt(process.env.DISCONNECT_GRACE_MS) || 300000; // 5 minutes
 const TURN_TIMER_MS = parseInt(process.env.TURN_TIMER_MS) || 90000; // 90 seconds
 const AI_ACTION_DELAY_MS = parseInt(process.env.AI_ACTION_DELAY_MS) || 1500; // delay between AI actions so human can watch
+const SAVES_DIR = process.env.SAVES_DIR || path.join(__dirname, 'saves');
 
 // --- Shared Game Logic Module ---
 const gl = require('./shared/game-logic');
@@ -1026,6 +1027,7 @@ function createGameState(playerList) {
     }
 
     return {
+        gameId: randomUUID(),
         players,
         currentPlayerIndex: 0,
         turn: 1,
@@ -1055,6 +1057,260 @@ function createGameState(playerList) {
         coastDistance,
         eventZones
     };
+}
+
+// --- Save & Resume ---
+
+const SAVE_SCHEMA_VERSION = 1;
+
+function generateSeatCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 4; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return code;
+}
+
+function generateSeatCodes(players) {
+    const seats = {};
+    const usedCodes = new Set();
+    for (const p of players) {
+        if (p.abandoned) continue;
+        let code;
+        do {
+            code = generateSeatCode();
+        } while (usedCodes.has(code));
+        usedCodes.add(code);
+        seats[p.color] = { name: p.name, seatCode: code };
+    }
+    return seats;
+}
+
+function serializeForSave(gameState, gameName) {
+    const seats = generateSeatCodes(gameState.players);
+    const gs = gameState;
+
+    const saveData = {
+        schemaVersion: SAVE_SCHEMA_VERSION,
+        gameId: gs.gameId,
+        savedAt: new Date().toISOString(),
+        gameName: gameName || null,
+
+        seats,
+
+        state: {
+            players: gs.players.map(p => ({
+                id: p.id,
+                name: p.name,
+                color: p.color,
+                cash: p.cash,
+                trainType: p.trainType,
+                trainLocation: p.trainLocation,
+                demandCards: p.demandCards,
+                loads: p.loads,
+                ferryState: p.ferryState,
+                selectedDemands: p.selectedDemands,
+                abandoned: p.abandoned || false,
+                isAI: p.isAI || false,
+                difficulty: p.difficulty || null,
+                aiState: p.aiState || null
+            })),
+            currentPlayerIndex: gs.currentPlayerIndex,
+            turn: gs.turn,
+            phase: gs.phase,
+            buildingPhaseCount: gs.buildingPhaseCount,
+            initialBuildingRounds: gs.initialBuildingRounds,
+            tracks: gs.tracks,
+            ferryOwnership: gs.ferryOwnership,
+            demandCardDeck: gs.demandCardDeck,
+            activeEvents: gs.activeEvents,
+            derailedPlayers: gs.derailedPlayers,
+            destroyedRiverTracks: gs.destroyedRiverTracks,
+            halfSpeedActive: gs.halfSpeedActive,
+            trackageRightsPaidThisTurn: gs.trackageRightsPaidThisTurn,
+            trackageRightsLog: gs.trackageRightsLog,
+            gameLog: gs.gameLog
+        }
+    };
+
+    return saveData;
+}
+
+function validateSaveFile(data) {
+    if (!data || typeof data !== 'object') {
+        throw new Error('Save file is not a valid object');
+    }
+    if (!data.gameId || typeof data.gameId !== 'string') {
+        throw new Error('Save file missing gameId');
+    }
+    if (!data.seats || typeof data.seats !== 'object') {
+        throw new Error('Save file missing seats');
+    }
+    if (!data.state || typeof data.state !== 'object') {
+        throw new Error('Save file missing state');
+    }
+    const requiredStateFields = [
+        'players', 'currentPlayerIndex', 'turn', 'phase',
+        'tracks', 'demandCardDeck', 'gameLog'
+    ];
+    for (const field of requiredStateFields) {
+        if (data.state[field] === undefined) {
+            throw new Error(`Save file missing state.${field}`);
+        }
+    }
+    if (!Array.isArray(data.state.players) || data.state.players.length === 0) {
+        throw new Error('Save file has no players');
+    }
+}
+
+function writeSaveFile(saveData) {
+    const filePath = path.join(SAVES_DIR, `${saveData.gameId}.json`);
+    fs.writeFileSync(filePath, JSON.stringify(saveData, null, 2));
+    return filePath;
+}
+
+function readSaveFile(gameId) {
+    const filePath = path.join(SAVES_DIR, `${gameId}.json`);
+    if (!fs.existsSync(filePath)) {
+        return null;
+    }
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    validateSaveFile(data);
+    return data;
+}
+
+function listSaveFiles() {
+    if (!fs.existsSync(SAVES_DIR)) return [];
+    const files = fs.readdirSync(SAVES_DIR).filter(f => f.endsWith('.json'));
+    const results = [];
+    for (const file of files) {
+        try {
+            const data = JSON.parse(fs.readFileSync(path.join(SAVES_DIR, file), 'utf8'));
+            results.push({
+                gameId: data.gameId,
+                gameName: data.gameName || null,
+                savedAt: data.savedAt,
+                playerCount: data.state.players.filter(p => !p.abandoned).length,
+                players: data.state.players.map(p => ({ name: p.name, color: p.color, abandoned: p.abandoned || false }))
+            });
+        } catch (e) {
+            // Skip corrupt save files
+        }
+    }
+    return results;
+}
+
+function loadGameStateFromSave(saveData) {
+    // Regenerate hex grid (deterministic, not saved)
+    const grid = generateHexGrid();
+    const gridCtx = { mileposts: grid.mileposts, mileposts_by_id: grid.mileposts_by_id };
+    const coastDistance = computeCoastDistances(gridCtx);
+
+    // Recompute event zones
+    const eventZones = {};
+    for (const evt of EVENT_CARDS) {
+        if (evt.type === "derailment" && evt.cities) {
+            const zone = new Set();
+            for (const cityName of evt.cities) {
+                const cityMpId = grid.cityToMilepost[cityName];
+                if (cityMpId !== undefined) {
+                    for (const id of getMilepostsInHexRange(gridCtx, cityMpId, evt.radius)) {
+                        zone.add(id);
+                    }
+                }
+            }
+            eventZones[evt.id] = Array.from(zone);
+        } else if ((evt.type === "snow" || evt.type === "fog") && evt.city) {
+            const cityMpId = grid.cityToMilepost[evt.city];
+            if (cityMpId !== undefined) {
+                const zone = getMilepostsInHexRange(gridCtx, cityMpId, evt.radius);
+                eventZones[evt.id] = Array.from(zone);
+            }
+        } else if (evt.type === "gale" && evt.seaAreas) {
+            const coastalStarts = getCoastalMilepostsForSeaAreas(gridCtx, evt.seaAreas);
+            const zone = getMilepostsInHexRangeMultiSource(gridCtx, coastalStarts, evt.radius - 1);
+            eventZones[evt.id] = Array.from(zone);
+        }
+    }
+
+    const s = saveData.state;
+
+    // Rebuild player objects with movement reset (turn-scoped state)
+    const players = s.players.map(p => ({
+        id: p.id,
+        name: p.name,
+        color: p.color,
+        cash: p.cash,
+        trainType: p.trainType,
+        trainLocation: p.trainLocation,
+        demandCards: p.demandCards,
+        loads: p.loads,
+        movement: 0,
+        ferryState: p.ferryState || null,
+        selectedDemands: p.selectedDemands || [null, null, null],
+        abandoned: p.abandoned || false,
+        isAI: p.isAI || false,
+        difficulty: p.difficulty || null,
+        aiState: p.aiState || null
+    }));
+
+    return {
+        gameId: saveData.gameId,
+        players,
+        currentPlayerIndex: s.currentPlayerIndex,
+        turn: s.turn,
+        phase: s.phase,
+        buildingPhaseCount: s.buildingPhaseCount || 0,
+        initialBuildingRounds: s.initialBuildingRounds || 2,
+        gameStarted: true,
+        demandCardDeck: s.demandCardDeck,
+        tracks: s.tracks,
+        ferryOwnership: s.ferryOwnership || {},
+        gameLog: s.gameLog,
+        buildingThisTurn: 0,
+        majorCitiesThisTurn: 0,
+        halfSpeedActive: s.halfSpeedActive || {},
+        activeEvents: s.activeEvents || [],
+        derailedPlayers: s.derailedPlayers || {},
+        destroyedRiverTracks: s.destroyedRiverTracks || [],
+        trackageRightsPaidThisTurn: {},
+        trackageRightsLog: [],
+        operateHistory: [],
+        buildHistory: [],
+        // Regenerated data
+        mileposts: grid.mileposts,
+        mileposts_by_id: grid.mileposts_by_id,
+        cityToMilepost: grid.cityToMilepost,
+        ferryConnections: grid.ferryConnections,
+        coastDistance,
+        eventZones
+    };
+}
+
+function validateSeatCode(saveData, seatCode) {
+    for (const [color, seat] of Object.entries(saveData.seats)) {
+        if (seat.seatCode === seatCode) {
+            return color;
+        }
+    }
+    return null;
+}
+
+function executePendingSave(roomCode, room) {
+    if (!room.pendingSave) return null;
+    const { gameName } = room.pendingSave;
+    room.pendingSave = null;
+
+    const gs = room.gameState;
+    const saveData = serializeForSave(gs, gameName);
+    writeSaveFile(saveData);
+
+    const msg = `Game saved (ID: ${gs.gameId})`;
+    gs.gameLog.push(msg);
+    console.log(`Room ${roomCode}: ${msg}`);
+
+    return saveData;
 }
 
 // Produce a version of gameState safe to send to a specific player.
@@ -1390,6 +1646,26 @@ io.on('connection', (socket) => {
                 console.log(`Room ${socket.roomCode}: ${gs.players[playerIndex].name} ends turn`);
                 const endTurnResult = aiActions.applyEndTurn(gs);
                 broadcastStateUpdate(socket.roomCode, room, endTurnResult.uiEvent);
+
+                // Execute pending save at turn boundary
+                const saveData = executePendingSave(socket.roomCode, room);
+                if (saveData) {
+                    for (const [socketId, p] of room.players) {
+                        const pColor = gs.players.find(gp => gp.id === p.sessionToken)?.color;
+                        const seat = pColor && saveData.seats[pColor];
+                        if (seat) {
+                            io.to(socketId).emit('gameSaved', {
+                                gameId: gs.gameId,
+                                gameName: saveData.gameName,
+                                savedAt: saveData.savedAt,
+                                seatCode: seat.seatCode,
+                                color: pColor
+                            });
+                        }
+                    }
+                    broadcastStateUpdate(socket.roomCode, room, { type: 'action', logs: [`Game saved (ID: ${gs.gameId})`] });
+                }
+
                 if (!endTurnResult.uiEvent.gameOver) {
                     maybeScheduleAITurn(socket.roomCode, room);
                     startTurnTimerIfNeeded(socket.roomCode, room);
@@ -1494,6 +1770,26 @@ io.on('connection', (socket) => {
                 console.log(`Room ${socket.roomCode}: ${gs.players[playerIndex].name} discarded hand`);
                 const discardResult = aiActions.applyDiscardHand(gs, playerIndex);
                 broadcastStateUpdate(socket.roomCode, room, discardResult.uiEvent);
+
+                // Execute pending save at turn boundary (discardHand ends the turn)
+                const discardSaveData = executePendingSave(socket.roomCode, room);
+                if (discardSaveData) {
+                    for (const [socketId, p] of room.players) {
+                        const pColor = gs.players.find(gp => gp.id === p.sessionToken)?.color;
+                        const seat = pColor && discardSaveData.seats[pColor];
+                        if (seat) {
+                            io.to(socketId).emit('gameSaved', {
+                                gameId: gs.gameId,
+                                gameName: discardSaveData.gameName,
+                                savedAt: discardSaveData.savedAt,
+                                seatCode: seat.seatCode,
+                                color: pColor
+                            });
+                        }
+                    }
+                    broadcastStateUpdate(socket.roomCode, room, { type: 'action', logs: [`Game saved (ID: ${gs.gameId})`] });
+                }
+
                 if (!discardResult.uiEvent.gameOver) {
                     maybeScheduleAITurn(socket.roomCode, room);
                     startTurnTimerIfNeeded(socket.roomCode, room);
@@ -1634,6 +1930,84 @@ io.on('connection', (socket) => {
         maybeScheduleAITurn(code, room);
 
         broadcastRoomList();
+    });
+
+    // --- Save & Resume socket handlers ---
+
+    socket.on('saveGame', ({ gameName }, callback) => {
+        const roomCode = socket.roomCode;
+        const room = roomCode && rooms.get(roomCode);
+        if (!room || !room.gameStarted || !room.gameState) {
+            return callback && callback({ success: false, error: 'No active game' });
+        }
+
+        const player = room.players.get(socket.id);
+        if (!player) {
+            return callback && callback({ success: false, error: 'Not a player in this game' });
+        }
+
+        const gs = room.gameState;
+        const playerIndex = gs.players.findIndex(p => p.id === player.sessionToken);
+        if (playerIndex === -1) {
+            return callback && callback({ success: false, error: 'Player not found in game state' });
+        }
+
+        // If it's the end of a turn (between turns), save immediately.
+        // Otherwise, queue the save for after the current turn ends.
+        const isCurrentPlayersTurn = playerIndex === gs.currentPlayerIndex;
+        const isTurnBoundary = !isCurrentPlayersTurn ||
+            (gs.phase === 'build' && gs.buildingThisTurn === 0 && gs.buildHistory.length === 0) ||
+            (gs.phase === 'operate' && gs.operateHistory.length === 0);
+
+        if (isTurnBoundary && !isCurrentPlayersTurn) {
+            // Safe to save immediately — no mid-turn state
+            const saveData = serializeForSave(gs, gameName);
+            writeSaveFile(saveData);
+            const msg = `Game saved (ID: ${gs.gameId})`;
+            gs.gameLog.push(msg);
+            console.log(`Room ${roomCode}: ${msg}`);
+
+            // Send each connected player their own seat code
+            for (const [socketId, p] of room.players) {
+                const pColor = gs.players.find(gp => gp.id === p.sessionToken)?.color;
+                const seat = pColor && saveData.seats[pColor];
+                if (seat) {
+                    io.to(socketId).emit('gameSaved', {
+                        gameId: gs.gameId,
+                        gameName: saveData.gameName,
+                        savedAt: saveData.savedAt,
+                        seatCode: seat.seatCode,
+                        color: pColor
+                    });
+                }
+            }
+
+            broadcastStateUpdate(roomCode, room, { type: 'action', logs: [msg] });
+            callback && callback({ success: true, message: 'Game saved.' });
+        } else {
+            // Queue save for end of turn
+            room.pendingSave = { gameName: gameName || null };
+            const msg = 'Game will be saved at end of current turn.';
+            gs.gameLog.push(msg);
+            console.log(`Room ${roomCode}: Save queued`);
+            broadcastStateUpdate(roomCode, room, { type: 'action', logs: [msg] });
+            callback && callback({ success: true, message: msg });
+        }
+    });
+
+    socket.on('listSavedGames', (callback) => {
+        const saves = listSaveFiles();
+        callback && callback({ success: true, saves });
+    });
+
+    socket.on('checkSavedGames', (gameIds, callback) => {
+        if (!Array.isArray(gameIds)) {
+            return callback && callback({ success: false, error: 'Expected array of game IDs' });
+        }
+        const valid = gameIds.filter(id =>
+            typeof id === 'string' && fs.existsSync(path.join(SAVES_DIR, `${id}.json`))
+        );
+        callback && callback({ success: true, validGameIds: valid });
     });
 
     socket.on('disconnect', () => {
@@ -1923,8 +2297,15 @@ function broadcastRoomList() {
 
 // --- Start Server ---
 
+fs.mkdirSync(SAVES_DIR, { recursive: true });
+
 const listener = server.listen(PORT, () => {
     console.log(`Eurorails server running at http://localhost:${PORT}`);
 });
 
-module.exports = { listener, rooms, serverApplyEventEffect, applyDerailmentToPlayer };
+module.exports = {
+    listener, rooms, serverApplyEventEffect, applyDerailmentToPlayer,
+    // Save & Resume exports (for testing)
+    serializeForSave, validateSaveFile, loadGameStateFromSave, validateSeatCode,
+    generateSeatCodes, readSaveFile, writeSaveFile, listSaveFiles
+};
