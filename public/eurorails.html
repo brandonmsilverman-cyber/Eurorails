@@ -1299,7 +1299,8 @@ let gameState = {
     activeEvents: [],                    // [{card, drawingPlayerIndex, drawingPlayerTurnEnded}]
     derailedPlayers: {},                 // {playerIndex: turnsRemaining}
     destroyedRiverTracks: [],            // track objects that were destroyed by floods
-    zoom: 1.0                             // map zoom level (1 = fit to viewport)
+    zoom: 1.0,                             // map zoom level (1 = fit to viewport)
+    showCityGoods: true                     // toggle city goods icons on map
 };
 
 
@@ -2859,7 +2860,7 @@ function drawMap() {
 
         // Draw goods icons below city name
         const cityData = CITIES[cityName];
-        if (cityData && cityData.goods && cityData.goods.length > 0) {
+        if (gameState.showCityGoods && cityData && cityData.goods && cityData.goods.length > 0) {
             const iconFontSize = Math.max(11, 14 * uiScale);
             ctx.font = `${iconFontSize}px Arial, sans-serif`;
             const icons = cityData.goods.map(g => GOODS_ICONS[g] || "?").join(" ");
@@ -3205,7 +3206,10 @@ function drawMap() {
                 const exhaustedTag = exhausted ? '<span style="color:#ff4444; font-size:10px; font-weight:bold;"> OUT</span>' : '';
                 goodsHtml += `<div class="legend-item" style="${itemStyle}"><span class="legend-symbol">${GOODS_ICONS[key]}</span>${key}${exhaustedTag} ${countText}</div>`;
             }
-            goodsHtml += '</div></div></div>';
+            goodsHtml += '</div>';
+            const gcActive = gameState.showCityGoods;
+            goodsHtml += `<div style="margin-top:6px;"><button onclick="toggleCityGoods()" style="width:100%; padding:5px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${gcActive ? '#4a9e4a' : '#555'}; background:${gcActive ? '#2a4a2a' : '#222'}; color:${gcActive ? '#88ff88' : '#888'}; cursor:pointer;">Map Icons: ${gcActive ? 'ON' : 'OFF'}</button></div>`;
+            goodsHtml += '</div></div>';
             goodsBox.innerHTML = goodsHtml;
         }
     }
@@ -4283,6 +4287,11 @@ function checkTrackageStrandRisk(movePath, playerColor, cashAfterFees) {
     if (potentialCash >= 4) return true;
 
     return false;
+}
+
+function toggleCityGoods() {
+    gameState.showCityGoods = !gameState.showCityGoods;
+    drawMap();
 }
 
 function toggleTrackageRights() {

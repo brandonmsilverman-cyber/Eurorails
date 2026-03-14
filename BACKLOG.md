@@ -44,7 +44,7 @@ Allow the host to fill empty multiplayer slots with AI opponents so games can st
 - [x] **Shrink pickup button to match deliver button** — Resize the goods pickup button so it uses the same compact format as the deliver button for visual consistency
 - [ ] **Improved trackage rights payment animation** — Replace falling coins with a more polished visual for trackage rights transfers
 - [ ] **Toggle to hide city production info** — Option to declutter the board by hiding goods-produced-at-city labels
-- [ ] **Basic gameplay instructions dropdown** — Quick-reference panel (like the existing map legend) explaining core mechanics
+- [x] **Basic gameplay instructions dropdown** — Quick-reference panel (like the existing map legend) explaining core mechanics
 - [ ] **AI hints system** — "What would an expert do?" suggestion feature for learning players
 
 ## Save & Resume
@@ -68,7 +68,7 @@ Independent of solo mode — no blocking dependencies in either direction.
 
 ## Bug Fixes
 
-- [ ] **Alps region lacks clear milepost paths** — No clear traversal route through the Alps (unlike the physical board), making Italy builds disproportionately expensive and unattractive
+- [x] **Alps region lacks clear milepost paths** — No clear traversal route through the Alps (unlike the physical board), making Italy builds disproportionately expensive and unattractive
 
 ## Completed
 
@@ -95,3 +95,5 @@ Independent of solo mode — no blocking dependencies in either direction.
 - [x] Persistent Player UI Overhaul (demand cards, train card, highlight persistence, immediate card animations)
 - [x] Ferry crossing doesn't stop movement at entry milepost
 - [x] Cheapest/shortest route foreign track consideration
+- [x] Basic gameplay instructions dropdown (How to Play tutorial)
+- [x] Alps region — mountain pass corridors (Mont Cenis, Gotthard, Brenner)

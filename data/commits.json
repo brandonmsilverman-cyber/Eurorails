@@ -1,4 +1,5 @@
 [
+  {"message": "Add toggle to hide city goods icons on map", "date": "Mar 13, 2026"},
   {"message": "Add mountain pass corridors through Alps for traversable routes to Italy", "date": "Mar 13, 2026"},
   {"message": "Add How to Play tutorial dropdown to legend panel", "date": "Mar 13, 2026"},
   {"message": "Wire foreign track toggle to build commit with network-aware connectivity", "date": "Mar 13, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Immediate card animation at game start and after discard", "date": "Mar 13, 2026"},
   {"message": "Fix demand card highlight persistence across turns and deliveries", "date": "Mar 13, 2026"},
   {"message": "Persistent train card rendering during other players' turns", "date": "Mar 13, 2026"},
-  {"message": "Persistent demand card rendering during other players' turns", "date": "Mar 13, 2026"},
-  {"message": "Pre-generate commits.json for Render deploy (shallow clone fix)", "date": "Mar 13, 2026"}
+  {"message": "Persistent demand card rendering during other players' turns", "date": "Mar 13, 2026"}
 ]
