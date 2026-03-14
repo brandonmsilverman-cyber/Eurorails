@@ -1102,6 +1102,14 @@
             </div>
         </div>
 
+        <!-- Saved Games (shown only if localStorage has entries) -->
+        <div id="lobbySavedGames" class="setup-section" style="border-top: 1px solid #444; padding-top: 20px; display: none;">
+            <label>Your Saved Games:</label>
+            <div style="border: 1px solid #444; border-radius: 5px; overflow: hidden;">
+                <div id="lobbySavedGamesList" style="max-height: 200px; overflow-y: auto;"></div>
+            </div>
+        </div>
+
         <!-- Create Room -->
         <div class="setup-section" style="border-top: 1px solid #444; padding-top: 20px;">
             <label>Create a New Room:</label>
@@ -1194,6 +1202,47 @@
             <button id="soloStartBtn" onclick="startSoloGame()" style="padding: 12px 40px; font-size: 16px; background: #2ecc71;">Start Solo Game</button>
         </div>
     </div>
+
+    <!-- Seat Code Entry -->
+    <div class="setup-dialog" id="lobbySeatCodeEntry" style="display: none; max-width: 400px; width: 90%;">
+        <h1>Resume Game</h1>
+        <p id="seatCodeGameInfo" style="color: #aaa; text-align: center; margin-bottom: 20px;"></p>
+
+        <div id="seatCodePicker" style="display: none; margin-bottom: 20px;">
+            <label>Choose your seat:</label>
+            <div id="seatCodePickerList" style="margin-top: 10px;"></div>
+        </div>
+
+        <div id="seatCodeManualEntry" style="display: none;">
+            <label>Enter your seat code:</label>
+            <input type="text" id="seatCodeInput" placeholder="e.g. 7X2Q" maxlength="4" autocomplete="off"
+                   style="text-align: center; font-size: 24px; letter-spacing: 4px; text-transform: uppercase; width: 150px; margin: 10px auto; display: block;">
+        </div>
+
+        <div id="seatCodeError" style="color: #ff6666; text-align: center; margin-top: 10px; min-height: 20px;"></div>
+
+        <div class="setup-buttons" style="gap: 10px;">
+            <button onclick="leaveSeatCodeEntry()" style="padding: 12px 24px; font-size: 14px; background: #555; border: 1px solid #666;">Back</button>
+            <button id="seatCodeResumeBtn" onclick="submitSeatCode()" style="padding: 12px 40px; font-size: 16px;">Resume</button>
+        </div>
+    </div>
+
+    <!-- Resume Waiting Room -->
+    <div class="setup-dialog" id="lobbyResumeWaiting" style="display: none;">
+        <h1>Resuming Game</h1>
+        <p style="color: #aaa; text-align: center; margin-bottom: 20px;">Waiting for other players to rejoin...</p>
+
+        <div class="setup-section">
+            <label>Seats: <span id="resumeSeatedCount" style="color: #888; font-size: 13px;"></span></label>
+            <div id="resumeSeatList"></div>
+        </div>
+
+        <div class="setup-buttons" style="gap: 10px;">
+            <button onclick="leaveResumeWaiting()" style="padding: 12px 24px; font-size: 14px; background: #555; border: 1px solid #666;">Back</button>
+            <button id="resumeForceStartBtn" onclick="resumeForceStart()" style="display: none; padding: 12px 40px; font-size: 16px; background: #e67e22;">Start Without Missing Players</button>
+            <div id="resumeWaitingMsg" style="color: #888; font-size: 14px;">Waiting for all players...</div>
+        </div>
+    </div>
 </div>
 
 <div class="container" style="display: none;" id="gameContainer">
@@ -1233,6 +1282,11 @@
         <div class="sidebar-section">
             <h3>Log</h3>
             <div id="gameLog" style="height: 150px; overflow-y: auto; font-size: 12px;"></div>
+        </div>
+
+        <div id="saveGameSection" style="margin-top: auto; padding: 12px 15px; border-top: 1px solid #444; text-align: center;">
+            <button id="saveGameBtn" onclick="saveGame()" style="padding: 8px 24px; font-size: 13px; background: #2c3e50; border: 1px solid #4a6a8a; color: #aaa; cursor: pointer; border-radius: 4px;">Save Game</button>
+            <div id="saveGameStatus" style="font-size: 11px; color: #888; margin-top: 6px; min-height: 16px;"></div>
         </div>
     </div>
 </div>
@@ -4017,6 +4071,10 @@ function toggleDemandSelection(cardIdx, demandIdx) {
     } else {
         myPlayer.selectedDemands[cardIdx] = demandIdx;
     }
+    // Sync to server so selections persist across save/resume
+    if (typeof socket !== 'undefined') {
+        socket.emit('syncSelectedDemands', { selectedDemands: myPlayer.selectedDemands });
+    }
     updateUI();
     drawMap();
 }
@@ -6392,8 +6450,7 @@ function escapeHtml(str) {
 }
 
 function showLobbyRoom() {
-    document.getElementById("lobbyJoinCreate").style.display = "none";
-    document.getElementById("lobbyRoom").style.display = "block";
+    showScreen('lobbyRoom');
 }
 
 function leaveRoom() {
@@ -6403,8 +6460,7 @@ function leaveRoom() {
     isHost = false;
     sessionStorage.removeItem('sessionToken');
     sessionStorage.removeItem('roomCode');
-    document.getElementById("lobbyRoom").style.display = "none";
-    document.getElementById("lobbyJoinCreate").style.display = "block";
+    showScreen('lobbyJoinCreate');
     document.getElementById("lobbyError").textContent = "";
 }
 
@@ -6538,14 +6594,12 @@ function showSoloSetup() {
     soloPlayerColor = null;
     soloAIPlayers = [{ difficulty: 'easy', color: null }];
 
-    document.getElementById("lobbyJoinCreate").style.display = "none";
-    document.getElementById("lobbySoloSetup").style.display = "block";
+    showScreen('lobbySoloSetup');
     renderSoloSetup();
 }
 
 function leaveSoloSetup() {
-    document.getElementById("lobbySoloSetup").style.display = "none";
-    document.getElementById("lobbyJoinCreate").style.display = "block";
+    showScreen('lobbyJoinCreate');
     // Sync name back
     const soloName = document.getElementById("soloPlayerName").value;
     if (soloName) document.getElementById("lobbyPlayerName").value = soloName;
@@ -6715,6 +6769,331 @@ function startSoloGame() {
     });
 }
 
+// ============================================================================
+// SAVE & RESUME
+// ============================================================================
+
+let resumeGameId = null;   // gameId being resumed
+let resumeSeatCode = null;  // selected seat code
+let saveStatusTimer = null;
+
+function showSaveStatus(text, color, autoHideMs) {
+    const status = document.getElementById('saveGameStatus');
+    if (!status) return;
+    if (saveStatusTimer) clearTimeout(saveStatusTimer);
+    status.textContent = text;
+    status.style.color = color;
+    if (autoHideMs) {
+        saveStatusTimer = setTimeout(() => { status.textContent = ''; saveStatusTimer = null; }, autoHideMs);
+    }
+}
+
+function saveGame() {
+    const btn = document.getElementById('saveGameBtn');
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    showSaveStatus('Saving...', '#888');
+
+    socket.emit('saveGame', { gameName: null }, (res) => {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        if (res.success) {
+            showSaveStatus(res.message || 'Game saved!', '#2ecc71', 5000);
+        } else {
+            showSaveStatus(res.error || 'Save failed', '#e74c3c', 5000);
+        }
+    });
+}
+
+function getSavedGames() {
+    // Reconstruct saved games from individual localStorage keys.
+    // Each seat code is stored as seat_${gameId}_${color} to avoid cross-tab races.
+    // Metadata is stored as saveMeta_${gameId}.
+    const games = {};
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith('seat_')) {
+            const parts = key.split('_');
+            // key format: seat_${gameId}_${color} — gameId may contain underscores (UUIDs use hyphens, but be safe)
+            const color = parts[parts.length - 1];
+            const gameId = parts.slice(1, -1).join('_');
+            if (!games[gameId]) games[gameId] = { gameName: null, savedAt: null, seats: {} };
+            games[gameId].seats[color] = localStorage.getItem(key);
+        }
+    }
+    // Merge in metadata
+    for (const gameId of Object.keys(games)) {
+        try {
+            const meta = JSON.parse(localStorage.getItem(`saveMeta_${gameId}`) || '{}');
+            games[gameId].gameName = meta.gameName || null;
+            games[gameId].savedAt = meta.savedAt || null;
+        } catch (e) {}
+    }
+    // Also read legacy format for backward compatibility
+    try {
+        const legacy = JSON.parse(localStorage.getItem('savedGames') || '{}');
+        for (const [gameId, entry] of Object.entries(legacy)) {
+            if (!games[gameId]) games[gameId] = { gameName: entry.gameName, savedAt: entry.savedAt, seats: {} };
+            if (entry.seats) {
+                for (const [color, code] of Object.entries(entry.seats)) {
+                    if (!games[gameId].seats[color]) games[gameId].seats[color] = code;
+                }
+            }
+        }
+    } catch (e) {}
+    return games;
+}
+
+function removeSavedGame(gameId) {
+    // Remove all localStorage keys for this game
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key === `saveMeta_${gameId}` || (key.startsWith('seat_') && key.split('_').slice(1, -1).join('_') === gameId)) {
+            keysToRemove.push(key);
+        }
+    }
+    for (const key of keysToRemove) localStorage.removeItem(key);
+    // Also clean legacy format
+    try {
+        const legacy = JSON.parse(localStorage.getItem('savedGames') || '{}');
+        if (legacy[gameId]) {
+            delete legacy[gameId];
+            localStorage.setItem('savedGames', JSON.stringify(legacy));
+        }
+    } catch (e) {}
+}
+
+function renderSavedGames() {
+    const saved = getSavedGames();
+    const gameIds = Object.keys(saved);
+    const section = document.getElementById('lobbySavedGames');
+    const list = document.getElementById('lobbySavedGamesList');
+
+    if (gameIds.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+
+    // Validate which saves still exist on server
+    socket.emit('checkSavedGames', gameIds, (res) => {
+        if (!res.success) return;
+        const validIds = new Set(res.validGameIds);
+
+        // Remove stale entries
+        for (const id of gameIds) {
+            if (!validIds.has(id)) {
+                removeSavedGame(id);
+                delete saved[id];
+            }
+        }
+
+        const remaining = Object.keys(saved);
+        if (remaining.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = '';
+        list.innerHTML = '';
+
+        for (const gameId of remaining) {
+            const entry = saved[gameId];
+            const div = document.createElement('div');
+            div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid #333; cursor: pointer;';
+            div.onmouseenter = () => div.style.background = '#3a3a3a';
+            div.onmouseleave = () => div.style.background = '';
+
+            const seatColors = entry.seats ? Object.keys(entry.seats) : [];
+            const colorDots = seatColors.map(c =>
+                `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${COLOR_DISPLAY[c] || c};margin-right:3px;" title="${c}"></span>`
+            ).join('');
+
+            const savedDate = entry.savedAt ? new Date(entry.savedAt).toLocaleDateString() : 'Unknown';
+            const name = entry.gameName || 'Unnamed game';
+
+            div.innerHTML = `
+                <div>
+                    <div style="font-size: 14px;">${escapeHtml(name)}</div>
+                    <div style="font-size: 12px; color: #888; margin-top: 2px;">${colorDots} Saved ${savedDate}</div>
+                </div>
+                <button onclick="event.stopPropagation(); startResume('${gameId}')" style="padding: 6px 16px; font-size: 13px; background: #2980b9;">Resume</button>
+            `;
+            div.onclick = () => startResume(gameId);
+            list.appendChild(div);
+        }
+    });
+}
+
+function startResume(gameId) {
+    const saved = getSavedGames();
+    const entry = saved[gameId];
+    resumeGameId = gameId;
+    resumeSeatCode = null;
+
+    const seatCodeEntry = document.getElementById('lobbySeatCodeEntry');
+    const gameInfo = document.getElementById('seatCodeGameInfo');
+    const picker = document.getElementById('seatCodePicker');
+    const pickerList = document.getElementById('seatCodePickerList');
+    const manual = document.getElementById('seatCodeManualEntry');
+    document.getElementById('seatCodeError').textContent = '';
+
+    const name = entry?.gameName || 'Saved game';
+    gameInfo.textContent = name;
+
+    if (entry && entry.seats) {
+        const seatEntries = Object.entries(entry.seats);
+        if (seatEntries.length === 1) {
+            // Single seat — auto-submit
+            resumeSeatCode = seatEntries[0][1];
+            submitSeatCode();
+            return;
+        } else if (seatEntries.length > 1) {
+            // Multiple seats — show picker
+            picker.style.display = '';
+            manual.style.display = 'none';
+            pickerList.innerHTML = '';
+            for (const [color, code] of seatEntries) {
+                const btn = document.createElement('button');
+                btn.style.cssText = 'display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; margin-bottom: 6px; font-size: 14px; background: #2a2a2a; border: 1px solid #444; border-radius: 6px; cursor: pointer; color: #ccc;';
+                btn.onmouseenter = () => btn.style.borderColor = '#3498db';
+                btn.onmouseleave = () => btn.style.borderColor = '#444';
+                btn.innerHTML = `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${COLOR_DISPLAY[color] || color};"></span> Resume as ${color}`;
+                btn.onclick = () => {
+                    resumeSeatCode = code;
+                    submitSeatCode();
+                };
+                pickerList.appendChild(btn);
+            }
+            showScreen('lobbySeatCodeEntry');
+            return;
+        }
+    }
+
+    // No seats in localStorage — show manual entry
+    picker.style.display = 'none';
+    manual.style.display = '';
+    document.getElementById('seatCodeInput').value = '';
+    showScreen('lobbySeatCodeEntry');
+}
+
+function showScreen(screenId) {
+    const screens = ['lobbyJoinCreate', 'lobbyRoom', 'lobbySoloSetup', 'lobbySeatCodeEntry', 'lobbyResumeWaiting'];
+    for (const id of screens) {
+        document.getElementById(id).style.display = id === screenId ? 'block' : 'none';
+    }
+}
+
+function leaveSeatCodeEntry() {
+    resumeGameId = null;
+    resumeSeatCode = null;
+    showScreen('lobbyJoinCreate');
+}
+
+function submitSeatCode() {
+    const code = resumeSeatCode || document.getElementById('seatCodeInput').value.trim().toUpperCase();
+    if (!code || code.length !== 4) {
+        document.getElementById('seatCodeError').textContent = 'Please enter a 4-character seat code.';
+        return;
+    }
+    if (!resumeGameId) {
+        document.getElementById('seatCodeError').textContent = 'No game selected.';
+        return;
+    }
+
+    document.getElementById('seatCodeError').textContent = '';
+    socket.emit('resumeGame', { gameId: resumeGameId, seatCode: code }, (res) => {
+        if (!res.success) {
+            // If save not found, clean up localStorage entry
+            if (res.error === 'Save file not found') {
+                removeSavedGame(resumeGameId);
+                document.getElementById('seatCodeError').textContent = 'This saved game is no longer available.';
+            } else {
+                document.getElementById('seatCodeError').textContent = res.error;
+            }
+            // If we were auto-submitting (single seat), show manual entry instead
+            if (resumeSeatCode && document.getElementById('lobbySeatCodeEntry').style.display === 'none') {
+                document.getElementById('seatCodePicker').style.display = 'none';
+                document.getElementById('seatCodeManualEntry').style.display = '';
+                showScreen('lobbySeatCodeEntry');
+            }
+            return;
+        }
+
+        myPlayerId = res.sessionToken;
+        myRoomCode = res.roomCode;
+        isHost = false; // will be updated by resumeWaitingUpdate
+        sessionStorage.setItem('sessionToken', res.sessionToken);
+        sessionStorage.setItem('roomCode', res.roomCode);
+
+        if (res.allSeated && res.state) {
+            // Game starts immediately — initialize from the callback state
+            // so myPlayerId is guaranteed to be set before initializeGameView runs.
+            initializeGameView(res.state, true);
+        } else if (!res.allSeated) {
+            showScreen('lobbyResumeWaiting');
+        }
+    });
+}
+
+function renderResumeWaiting(info) {
+    if (!info) return;
+
+    document.getElementById('resumeSeatedCount').textContent = `(${info.seatedCount}/${info.totalSeats})`;
+
+    const listEl = document.getElementById('resumeSeatList');
+    listEl.innerHTML = '';
+
+    for (const seat of info.seats) {
+        const div = document.createElement('div');
+        div.style.cssText = 'display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin-bottom: 6px;';
+
+        const colorDot = `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${COLOR_DISPLAY[seat.color] || seat.color};"></span>`;
+        const status = seat.claimed
+            ? '<span style="color: #2ecc71;">Joined</span>'
+            : '<span style="color: #888; font-style: italic;">Waiting...</span>';
+
+        div.innerHTML = `${colorDot} <span>${escapeHtml(seat.name)}</span> ${status}`;
+        listEl.appendChild(div);
+    }
+
+    // Host controls
+    const isCurrentHost = info.hostSessionToken === myPlayerId;
+    const forceBtn = document.getElementById('resumeForceStartBtn');
+    const waitMsg = document.getElementById('resumeWaitingMsg');
+
+    if (isCurrentHost && info.seatedCount < info.totalSeats) {
+        forceBtn.style.display = 'inline-block';
+        waitMsg.style.display = 'none';
+    } else {
+        forceBtn.style.display = 'none';
+        waitMsg.style.display = info.seatedCount < info.totalSeats ? 'block' : 'none';
+        waitMsg.textContent = info.seatedCount < info.totalSeats
+            ? `Waiting for ${info.totalSeats - info.seatedCount} more player(s)...`
+            : 'All players seated — starting game...';
+    }
+}
+
+function leaveResumeWaiting() {
+    socket.emit('leaveResumeWaiting');
+    myRoomCode = null;
+    myPlayerId = null;
+    isHost = false;
+    sessionStorage.removeItem('sessionToken');
+    sessionStorage.removeItem('roomCode');
+    resumeGameId = null;
+    resumeSeatCode = null;
+    showScreen('lobbyJoinCreate');
+}
+
+function resumeForceStart() {
+    socket.emit('resumeForceStart', (res) => {
+        if (!res.success) {
+            console.log('[Client] Force start failed:', res.error);
+        }
+    });
+}
+
 // Socket event handlers
 socket.on('roomListUpdate', (roomList) => {
     renderRoomList(roomList);
@@ -6728,6 +7107,9 @@ socket.on('roomUpdate', (info) => {
 socket.emit('listRooms', (roomList) => {
     renderRoomList(roomList);
 });
+
+// Render saved games from localStorage (validates with server)
+renderSavedGames();
 
 // Fetch recent commits for lobby widget
 fetch('/api/commits').then(r => r.json()).then(commits => {
@@ -6850,6 +7232,37 @@ function initializeGameView(state, isRejoin) {
 
 socket.on('gameStart', ({ state }) => {
     initializeGameView(state, false);
+});
+
+socket.on('gameResumed', ({ state }) => {
+    console.log('[Client] Game resumed from save');
+    // Skip if already initialized (the triggering player inits from the callback)
+    if (!gameState.gameStarted) {
+        initializeGameView(state, true);
+    }
+});
+
+socket.on('resumeWaitingUpdate', (info) => {
+    renderResumeWaiting(info);
+    // If we're not already on the waiting screen, switch to it
+    if (document.getElementById('lobbyResumeWaiting').style.display === 'none') {
+        showScreen('lobbyResumeWaiting');
+    }
+});
+
+socket.on('gameSaved', (data) => {
+    console.log('[Client] Game saved:', data);
+    // Store each seat code in its own localStorage key to avoid cross-tab race conditions.
+    // When multiple tabs receive gameSaved simultaneously and write to a shared key,
+    // read-modify-write races cause seat codes to be lost. Separate keys eliminate this.
+    localStorage.setItem(`seat_${data.gameId}_${data.color}`, data.seatCode);
+    localStorage.setItem(`saveMeta_${data.gameId}`, JSON.stringify({
+        gameName: data.gameName,
+        savedAt: data.savedAt
+    }));
+
+    // Show status on all tabs (not just the one that clicked Save)
+    showSaveStatus('Game saved!', '#2ecc71', 5000);
 });
 
 // Apply server state update to local gameState

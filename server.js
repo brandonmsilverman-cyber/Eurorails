@@ -1307,10 +1307,19 @@ function executePendingSave(roomCode, room) {
     writeSaveFile(saveData);
 
     const msg = `Game saved (ID: ${gs.gameId})`;
+    const seatMsg = formatSeatCodesForLog(saveData);
     gs.gameLog.push(msg);
+    gs.gameLog.push(seatMsg);
     console.log(`Room ${roomCode}: ${msg}`);
 
     return saveData;
+}
+
+function formatSeatCodesForLog(saveData) {
+    const parts = Object.entries(saveData.seats).map(
+        ([color, seat]) => `${color}: ${seat.seatCode}`
+    );
+    return `Seat codes — ${parts.join(', ')}`;
 }
 
 // Produce a version of gameState safe to send to a specific player.
@@ -1357,6 +1366,7 @@ function getStateForPlayer(gameState, playerId, disconnectedPlayers) {
 // --- Room Management ---
 
 const rooms = new Map(); // roomCode -> { players: Map<socketId, {name, color, sessionToken}>, hostSessionToken, sessionToSocketId: Map, disconnectedPlayers: Map, gameStarted, gameState }
+const resumingGames = new Map(); // gameId -> roomCode (tracks which saved games are currently being resumed)
 
 function generateRoomCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars (0/O, 1/I)
@@ -1663,7 +1673,8 @@ io.on('connection', (socket) => {
                             });
                         }
                     }
-                    broadcastStateUpdate(socket.roomCode, room, { type: 'action', logs: [`Game saved (ID: ${gs.gameId})`] });
+                    const seatMsg = formatSeatCodesForLog(saveData);
+                    broadcastStateUpdate(socket.roomCode, room, { type: 'action', logs: [`Game saved (ID: ${gs.gameId})`, seatMsg] });
                 }
 
                 if (!endTurnResult.uiEvent.gameOver) {
@@ -1787,7 +1798,8 @@ io.on('connection', (socket) => {
                             });
                         }
                     }
-                    broadcastStateUpdate(socket.roomCode, room, { type: 'action', logs: [`Game saved (ID: ${gs.gameId})`] });
+                    const discardSeatMsg = formatSeatCodesForLog(discardSaveData);
+                    broadcastStateUpdate(socket.roomCode, room, { type: 'action', logs: [`Game saved (ID: ${gs.gameId})`, discardSeatMsg] });
                 }
 
                 if (!discardResult.uiEvent.gameOver) {
@@ -1934,6 +1946,18 @@ io.on('connection', (socket) => {
 
     // --- Save & Resume socket handlers ---
 
+    socket.on('syncSelectedDemands', ({ selectedDemands }) => {
+        const room = rooms.get(socket.roomCode);
+        if (!room || !room.gameState) return;
+        if (!Array.isArray(selectedDemands) || selectedDemands.length !== 3) return;
+        const player = room.players.get(socket.id);
+        if (!player) return;
+        const gsPlayer = room.gameState.players.find(p => p.id === player.sessionToken);
+        if (gsPlayer) {
+            gsPlayer.selectedDemands = selectedDemands;
+        }
+    });
+
     socket.on('saveGame', ({ gameName }, callback) => {
         const roomCode = socket.roomCode;
         const room = roomCode && rooms.get(roomCode);
@@ -1964,7 +1988,9 @@ io.on('connection', (socket) => {
             const saveData = serializeForSave(gs, gameName);
             writeSaveFile(saveData);
             const msg = `Game saved (ID: ${gs.gameId})`;
+            const seatMsg = formatSeatCodesForLog(saveData);
             gs.gameLog.push(msg);
+            gs.gameLog.push(seatMsg);
             console.log(`Room ${roomCode}: ${msg}`);
 
             // Send each connected player their own seat code
@@ -1982,7 +2008,7 @@ io.on('connection', (socket) => {
                 }
             }
 
-            broadcastStateUpdate(roomCode, room, { type: 'action', logs: [msg] });
+            broadcastStateUpdate(roomCode, room, { type: 'action', logs: [msg, seatMsg] });
             callback && callback({ success: true, message: 'Game saved.' });
         } else {
             // Queue save for end of turn
@@ -2010,6 +2036,226 @@ io.on('connection', (socket) => {
         callback && callback({ success: true, validGameIds: valid });
     });
 
+    socket.on('resumeGame', ({ gameId, seatCode }, callback) => {
+        if (!gameId || typeof gameId !== 'string' || !seatCode || typeof seatCode !== 'string') {
+            return callback && callback({ success: false, error: 'Invalid parameters' });
+        }
+
+        // Read save file and validate seat code
+        let saveData;
+        try {
+            saveData = readSaveFile(gameId);
+        } catch (e) {
+            return callback && callback({ success: false, error: 'Save file is corrupt' });
+        }
+        if (!saveData) {
+            return callback && callback({ success: false, error: 'Save file not found' });
+        }
+
+        const color = validateSeatCode(saveData, seatCode);
+        if (!color) {
+            return callback && callback({ success: false, error: 'Invalid seat code' });
+        }
+
+        // Check if this game is already loaded into a room
+        let roomCode = resumingGames.get(gameId);
+        let room = roomCode ? rooms.get(roomCode) : null;
+
+        // If the room was cleaned up, clear stale entry
+        if (roomCode && !room) {
+            resumingGames.delete(gameId);
+            roomCode = null;
+        }
+
+        if (!room) {
+            // Load game into a new room
+            const loadedState = loadGameStateFromSave(saveData);
+            roomCode = getUniqueRoomCode();
+
+            room = {
+                players: new Map(),
+                hostSessionToken: null, // set to first player who joins
+                sessionToSocketId: new Map(),
+                disconnectedPlayers: new Map(),
+                graceTimers: new Map(),
+                turnTimers: new Map(),
+                gameStarted: false, // will be set true once all seats filled
+                gameState: loadedState,
+                maxPlayers: saveData.state.players.filter(p => !p.abandoned).length,
+                password: null,
+                resuming: true, // flag to indicate this room is in resume-waiting state
+                saveData: saveData, // keep save data for seat code validation
+                seatedPlayers: new Map() // color -> sessionToken (tracks who has claimed which seat)
+            };
+
+            rooms.set(roomCode, room);
+            resumingGames.set(gameId, roomCode);
+            console.log(`Room ${roomCode} created for resumed game ${gameId}`);
+        }
+
+        // Check if this seat is already taken
+        if (room.seatedPlayers && room.seatedPlayers.has(color)) {
+            return callback && callback({ success: false, error: 'This seat is already taken' });
+        }
+
+        // Assign this player to their seat
+        const sessionToken = randomUUID();
+        const playerData = saveData.seats[color];
+
+        room.players.set(socket.id, { name: playerData.name, color, sessionToken });
+        room.sessionToSocketId.set(sessionToken, socket.id);
+        room.seatedPlayers.set(color, sessionToken);
+
+        // Update the game state player's id to the new session token
+        const gsPlayer = room.gameState.players.find(p => p.color === color);
+        if (gsPlayer) {
+            gsPlayer.id = sessionToken;
+        }
+
+        // First player to join becomes host
+        if (!room.hostSessionToken) {
+            room.hostSessionToken = sessionToken;
+        }
+
+        socket.join(roomCode);
+        socket.roomCode = roomCode;
+
+        console.log(`Room ${roomCode}: ${playerData.name} (${color}) seated [${room.seatedPlayers.size}/${room.maxPlayers}]`);
+
+        // Check if all non-abandoned seats are now filled
+        const allSeated = room.seatedPlayers.size >= room.maxPlayers;
+
+        if (allSeated) {
+            // All players are here — start the game
+            room.gameStarted = true;
+            room.resuming = false;
+            resumingGames.delete(gameId);
+            delete room.saveData;
+            delete room.seatedPlayers;
+
+            const resumeMsg = 'Game resumed from save';
+            room.gameState.gameLog.push(resumeMsg);
+            room.gameState.gameStarted = true;
+
+            console.log(`Room ${roomCode}: All players seated, game resumed`);
+
+            // Send each player their filtered game state
+            for (const [socketId, p] of room.players) {
+                const state = getStateForPlayer(room.gameState, p.sessionToken, room.disconnectedPlayers);
+                io.to(socketId).emit('gameResumed', { state });
+            }
+            broadcastRoomList();
+
+            // Schedule AI turn if current player is AI
+            maybeScheduleAITurn(roomCode, room);
+        } else {
+            // Notify all players in the room about the updated waiting room state
+            const waitingInfo = getResumeWaitingInfo(roomCode);
+            io.to(roomCode).emit('resumeWaitingUpdate', waitingInfo);
+        }
+
+        const response = {
+            success: true,
+            roomCode,
+            sessionToken,
+            color,
+            playerName: playerData.name,
+            allSeated
+        };
+        // Include state in callback for the triggering player so they don't
+        // depend on the gameResumed event arriving after myPlayerId is set.
+        if (allSeated) {
+            response.state = getStateForPlayer(room.gameState, sessionToken, room.disconnectedPlayers);
+        }
+        callback && callback(response);
+    });
+
+    socket.on('resumeForceStart', (callback) => {
+        const roomCode = socket.roomCode;
+        const room = roomCode && rooms.get(roomCode);
+        if (!room || !room.resuming) {
+            return callback && callback({ success: false, error: 'No resuming game' });
+        }
+
+        // Only host can force start
+        const callerPlayer = room.players.get(socket.id);
+        if (!callerPlayer || callerPlayer.sessionToken !== room.hostSessionToken) {
+            return callback && callback({ success: false, error: 'Only the host can force start' });
+        }
+
+        // Mark unseated players as abandoned
+        const gameId = room.gameState.gameId;
+        for (const p of room.gameState.players) {
+            if (!p.abandoned && !room.seatedPlayers.has(p.color)) {
+                p.abandoned = true;
+                console.log(`Room ${roomCode}: ${p.name} (${p.color}) marked abandoned on force start`);
+            }
+        }
+
+        room.gameStarted = true;
+        room.resuming = false;
+        resumingGames.delete(gameId);
+        delete room.saveData;
+        delete room.seatedPlayers;
+
+        const resumeMsg = 'Game resumed from save (some seats abandoned)';
+        room.gameState.gameLog.push(resumeMsg);
+        room.gameState.gameStarted = true;
+
+        console.log(`Room ${roomCode}: Force started with ${room.players.size} of ${room.maxPlayers} players`);
+
+        for (const [socketId, p] of room.players) {
+            const state = getStateForPlayer(room.gameState, p.sessionToken, room.disconnectedPlayers);
+            io.to(socketId).emit('gameResumed', { state });
+        }
+        broadcastRoomList();
+        maybeScheduleAITurn(roomCode, room);
+        callback && callback({ success: true });
+    });
+
+    socket.on('leaveResumeWaiting', () => {
+        const roomCode = socket.roomCode;
+        const room = roomCode && rooms.get(roomCode);
+        if (!room || !room.resuming) return;
+
+        const player = room.players.get(socket.id);
+        if (!player) return;
+
+        // Remove from seated players
+        if (room.seatedPlayers) {
+            room.seatedPlayers.delete(player.color);
+        }
+
+        // Restore original player id in game state
+        const gsPlayer = room.gameState.players.find(p => p.color === player.color);
+        if (gsPlayer) {
+            gsPlayer.id = player.color; // reset to a placeholder
+        }
+
+        room.sessionToSocketId.delete(player.sessionToken);
+        room.players.delete(socket.id);
+        socket.leave(roomCode);
+        socket.roomCode = null;
+
+        // Transfer host if needed
+        if (room.hostSessionToken === player.sessionToken) {
+            const nextPlayer = room.players.values().next().value;
+            room.hostSessionToken = nextPlayer ? nextPlayer.sessionToken : null;
+        }
+
+        // If room is empty, clean up
+        if (room.players.size === 0) {
+            const gameId = room.gameState.gameId;
+            rooms.delete(roomCode);
+            resumingGames.delete(gameId);
+            console.log(`Room ${roomCode} deleted (resume waiting room emptied)`);
+        } else {
+            const waitingInfo = getResumeWaitingInfo(roomCode);
+            io.to(roomCode).emit('resumeWaitingUpdate', waitingInfo);
+        }
+        broadcastRoomList();
+    });
+
     socket.on('disconnect', () => {
         const roomCode = socket.roomCode;
         if (!roomCode) return;
@@ -2021,6 +2267,36 @@ io.on('connection', (socket) => {
         console.log(`${player?.name || 'Unknown'} disconnected from room ${roomCode}`);
 
         if (!player) return;
+
+        // --- Resume waiting room disconnect ---
+        if (room.resuming) {
+            if (room.seatedPlayers) {
+                room.seatedPlayers.delete(player.color);
+            }
+            // Restore placeholder id in game state
+            const gsPlayer = room.gameState.players.find(p => p.color === player.color);
+            if (gsPlayer) gsPlayer.id = player.color;
+
+            room.sessionToSocketId.delete(player.sessionToken);
+            room.players.delete(socket.id);
+
+            if (room.hostSessionToken === player.sessionToken) {
+                const nextPlayer = room.players.values().next().value;
+                room.hostSessionToken = nextPlayer ? nextPlayer.sessionToken : null;
+            }
+
+            if (room.players.size === 0) {
+                const gameId = room.gameState.gameId;
+                rooms.delete(roomCode);
+                resumingGames.delete(gameId);
+                console.log(`Room ${roomCode} deleted (resume waiting room emptied)`);
+            } else {
+                const waitingInfo = getResumeWaitingInfo(roomCode);
+                io.to(roomCode).emit('resumeWaitingUpdate', waitingInfo);
+            }
+            broadcastRoomList();
+            return;
+        }
 
         // --- Lobby disconnect (game not started) ---
         if (!room.gameStarted) {
@@ -2255,6 +2531,32 @@ function expirePlayer(roomCode, sessionToken) {
     }
 }
 
+
+function getResumeWaitingInfo(roomCode) {
+    const room = rooms.get(roomCode);
+    if (!room || !room.resuming) return null;
+
+    const seats = [];
+    for (const p of room.gameState.players) {
+        if (p.abandoned) continue;
+        const claimed = room.seatedPlayers.has(p.color);
+        seats.push({
+            color: p.color,
+            name: p.name,
+            claimed,
+            isYou: false // client will fill this in
+        });
+    }
+
+    return {
+        roomCode,
+        gameId: room.gameState.gameId,
+        seats,
+        hostSessionToken: room.hostSessionToken,
+        seatedCount: room.seatedPlayers.size,
+        totalSeats: room.maxPlayers
+    };
+}
 
 function getRoomInfo(roomCode) {
     const room = rooms.get(roomCode);
