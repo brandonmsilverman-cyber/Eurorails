@@ -92,7 +92,7 @@ Two causes:
 
 ---
 
-### Commit 3: Fix demand card highlight persistence
+### Commit 3: Fix demand card highlight persistence — ✅ COMPLETE (`e483e8b`)
 
 **Fixes the bug where highlights randomly disappear between turns or select the wrong card.**
 
@@ -116,7 +116,7 @@ Two causes:
 
 ---
 
-### Commit 4: Immediate card animation at game start + after discard
+### Commit 4: Immediate card animation at game start + after discard — ✅ COMPLETE (`e4b4cf7`)
 
 **Removes the deferred-until-your-turn animation pattern.**
 

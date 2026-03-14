@@ -3150,6 +3150,30 @@ function drawMap() {
                 { symbol: "---", color: "#88bbee", text: "Ferry route" },
             ];
 
+            let tutorialHtml = '<div class="legend-box collapsed" id="tutorialBox">'
+                + '<div class="legend-title" onclick="document.getElementById(\'tutorialBox\').classList.toggle(\'collapsed\')">'
+                + 'How to Play <span class="collapse-icon">&#9660;</span></div>'
+                + '<div class="legend-content" style="font-size:11px;line-height:1.4;">'
+                + '<b>BUILDING</b> (first 2 rounds: build only; repeats after each operate phase)<br>'
+                + '&bull; Click a major city, then a destination milepost to start your line<br>'
+                + '&bull; Click the end of your track, then a destination milepost to extend it<br>'
+                + '&bull; Hover to preview paths; toggle Cheapest/Shortest mode<br>'
+                + '&bull; Max 20M and 2 major city connections per turn<br>'
+                + '&bull; Toggle "Use Foreign Track" to build through opponents\' track to reach a major city or your own line<br>'
+                + '&bull; Undo builds with "Undo Last Track"<br>'
+                + '&bull; Upgrade Train: costs 20M, uses your full build budget for the turn<br><br>'
+                + '<b>OPERATING</b> (after initial rounds)<br>'
+                + '&bull; Deploy: click any city on your track to place your train<br>'
+                + '&bull; Move: click a destination along your track<br>'
+                + '&bull; Pick Up: click "Pick Up" at a city that produces a good<br>'
+                + '&bull; Deliver: click "Deliver" at a demand card\'s destination with the right good<br>'
+                + '&bull; Drop: discard a load to free capacity<br>'
+                + '&bull; Foreign Track: toggle to ride opponents\' track (4M per opponent)<br><br>'
+                + '<b>ANYTIME</b><br>'
+                + '&bull; Discard Hand: replace all 3 demand cards and end your turn<br>'
+                + '&bull; Events (taxes, strikes, floods, gales, derailments) are drawn automatically'
+                + '</div></div>';
+
             let mapHtml = '<div class="legend-box collapsed" id="mapLegendBox"><div class="legend-title" onclick="document.getElementById(\'mapLegendBox\').classList.toggle(\'collapsed\')">Map Legend <span class="collapse-icon">&#9660;</span></div><div class="legend-content">';
             for (const item of mlItems) {
                 mapHtml += `<div class="legend-item"><span class="legend-symbol" style="color:${item.color}">${item.symbol}</span>${item.text}</div>`;
@@ -3157,7 +3181,7 @@ function drawMap() {
             mapHtml += '</div></div>';
             mapHtml += '<div id="goodsLegendBox"></div>';
 
-            legendEl.innerHTML = mapHtml;
+            legendEl.innerHTML = tutorialHtml + mapHtml;
             legendEl._mapBuilt = true;
         }
 

@@ -1,4 +1,5 @@
 [
+  {"message": "Add How to Play tutorial dropdown to legend panel", "date": "Mar 13, 2026"},
   {"message": "Wire foreign track toggle to build commit with network-aware connectivity", "date": "Mar 13, 2026"},
   {"message": "Wire foreign track toggle to hover preview and cost label", "date": "Mar 13, 2026"},
   {"message": "Add foreign track toggle button to build phase UI", "date": "Mar 13, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Persistent train card rendering during other players' turns", "date": "Mar 13, 2026"},
   {"message": "Persistent demand card rendering during other players' turns", "date": "Mar 13, 2026"},
   {"message": "Pre-generate commits.json for Render deploy (shallow clone fix)", "date": "Mar 13, 2026"},
-  {"message": "Various lobby screen improvements", "date": "Mar 13, 2026"},
-  {"message": "Fix derailment/gale events to randomly drop loads and zero movement budget", "date": "Mar 13, 2026"}
+  {"message": "Various lobby screen improvements", "date": "Mar 13, 2026"}
 ]

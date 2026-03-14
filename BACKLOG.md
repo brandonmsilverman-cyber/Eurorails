@@ -68,7 +68,6 @@ Independent of solo mode — no blocking dependencies in either direction.
 
 ## Bug Fixes
 
-- [ ] **Cheapest route ignores trackage rights fees** — The "cheapest route" pathfinding option doesn't factor in the 4M per-opponent trackage rights cost, forcing players to mentally calculate whether foreign track is actually cheaper
 - [ ] **Alps region lacks clear milepost paths** — No clear traversal route through the Alps (unlike the physical board), making Italy builds disproportionately expensive and unattractive
 
 ## Completed
@@ -95,3 +94,4 @@ Independent of solo mode — no blocking dependencies in either direction.
 - [x] Derailment event load drop fix
 - [x] Persistent Player UI Overhaul (demand cards, train card, highlight persistence, immediate card animations)
 - [x] Ferry crossing doesn't stop movement at entry milepost
+- [x] Cheapest/shortest route foreign track consideration
