@@ -1,4 +1,5 @@
 [
+  {"message": "Fix zoom-out hover twitching by caching container dimensions", "date": "Mar 14, 2026"},
   {"message": "Add resume lobby flow and save button UI (Save & Resume Phase 2)", "date": "Mar 14, 2026"},
   {"message": "Add server-side save/resume infrastructure (Phase 0 + Phase 1)", "date": "Mar 14, 2026"},
   {"message": "Add toggle to hide city goods icons on map", "date": "Mar 13, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Client sends all ferry edges in commitBuild payload and fix building from ferry ports", "date": "Mar 13, 2026"},
   {"message": "Fix ferry crossing not consuming movement when traversing already-owned ferries", "date": "Mar 13, 2026"},
   {"message": "Add post-commit hook to auto-regenerate commits.json", "date": "Mar 13, 2026"},
-  {"message": "Immediate card animation at game start and after discard", "date": "Mar 13, 2026"},
-  {"message": "Fix demand card highlight persistence across turns and deliveries", "date": "Mar 13, 2026"}
+  {"message": "Immediate card animation at game start and after discard", "date": "Mar 13, 2026"}
 ]

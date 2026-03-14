@@ -2235,9 +2235,8 @@ function drawMap() {
 
     // HiDPI/Retina support for sharp rendering
     const dpr = window.devicePixelRatio || 1;
-    const container = canvas.parentElement;
-    const containerW = container.clientWidth;
-    const containerH = container.clientHeight;
+    const containerW = gameState._containerW || canvas.parentElement.clientWidth;
+    const containerH = gameState._containerH || canvas.parentElement.clientHeight;
     const zoom = gameState.zoom || 1;
 
     // Canvas size scales with zoom; at zoom=1 it fits the container exactly
@@ -3889,6 +3888,17 @@ function startGame() {
     computeCoastDistances();
     gameState.canvas = document.getElementById("gameCanvas");
     gameState.ctx = gameState.canvas.getContext("2d");
+
+    // Cache container dimensions to avoid scrollbar feedback loop at zoom=1
+    const mapArea = gameState.canvas.parentElement;
+    gameState._containerW = mapArea.clientWidth;
+    gameState._containerH = mapArea.clientHeight;
+    new ResizeObserver(entries => {
+        const entry = entries[0];
+        gameState._containerW = entry.contentRect.width;
+        gameState._containerH = entry.contentRect.height;
+        drawMap();
+    }).observe(mapArea);
 
     drawMap();
     updateUI();
@@ -7199,6 +7209,17 @@ function initializeGameView(state, isRejoin) {
     computeCoastDistances();
     gameState.canvas = document.getElementById("gameCanvas");
     gameState.ctx = gameState.canvas.getContext("2d");
+
+    // Cache container dimensions to avoid scrollbar feedback loop at zoom=1
+    const mapArea = gameState.canvas.parentElement;
+    gameState._containerW = mapArea.clientWidth;
+    gameState._containerH = mapArea.clientHeight;
+    new ResizeObserver(entries => {
+        const entry = entries[0];
+        gameState._containerW = entry.contentRect.width;
+        gameState._containerH = entry.contentRect.height;
+        drawMap();
+    }).observe(mapArea);
 
     drawMap();
     updateUI();
