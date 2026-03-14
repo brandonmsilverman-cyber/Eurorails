@@ -2081,7 +2081,7 @@ io.on('connection', (socket) => {
                 turnTimers: new Map(),
                 gameStarted: false, // will be set true once all seats filled
                 gameState: loadedState,
-                maxPlayers: saveData.state.players.filter(p => !p.abandoned).length,
+                maxPlayers: saveData.state.players.filter(p => !p.abandoned && !p.isAI).length,
                 password: null,
                 resuming: true, // flag to indicate this room is in resume-waiting state
                 saveData: saveData, // keep save data for seat code validation
@@ -2186,7 +2186,7 @@ io.on('connection', (socket) => {
         // Mark unseated players as abandoned
         const gameId = room.gameState.gameId;
         for (const p of room.gameState.players) {
-            if (!p.abandoned && !room.seatedPlayers.has(p.color)) {
+            if (!p.abandoned && !p.isAI && !room.seatedPlayers.has(p.color)) {
                 p.abandoned = true;
                 console.log(`Room ${roomCode}: ${p.name} (${p.color}) marked abandoned on force start`);
             }
@@ -2538,7 +2538,7 @@ function getResumeWaitingInfo(roomCode) {
 
     const seats = [];
     for (const p of room.gameState.players) {
-        if (p.abandoned) continue;
+        if (p.abandoned || p.isAI) continue;
         const claimed = room.seatedPlayers.has(p.color);
         seats.push({
             color: p.color,

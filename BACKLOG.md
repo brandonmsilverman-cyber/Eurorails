@@ -40,19 +40,6 @@ Allow the host to fill empty multiplayer slots with AI opponents so games can st
 - [ ] **AI hints system** — "What would an expert do?" suggestion feature for learning players
 - [ ] **Add ferry building and usage to tutorial** — Explain how ferry routes work (building, costs, shared ownership, crossing) in the in-game tutorial
 
-## Save & Resume
-
-Persistent game saves that survive server restarts and browser closure. Players can save a game, close everything, and return hours or days later to resume where they left off. Full plan is in `SAVE_RESUME_PLAN.md`.
-
-- [ ] **Decouple game from room** — Introduce a `gameId` that identifies a game independently of the ephemeral room code
-- [ ] **Server-side save/load** — Serialize game state to JSON files on disk (`saves/{gameId}.json`), generate per-player seat codes for resuming
-- [ ] **Resume lobby flow** — "Your Saved Games" section in the lobby with seat picker UI (supports multi-tab testing where one browser controls multiple players)
-- [ ] **localStorage convenience layer** — Auto-save/retrieve seat codes so players don't have to re-enter them on the same browser
-
-Independent of solo mode — no blocking dependencies in either direction.
-
----
-
 ## Reconnection Improvement
 
 - [ ] **localStorage fallback for tab closure recovery** — Add localStorage as a fallback so reconnection credentials survive tab closure and incognito mode, while preserving multi-tab play. Full plan in [`LOCALSTORAGE_FALLBACK_PLAN.md`](LOCALSTORAGE_FALLBACK_PLAN.md).
@@ -63,14 +50,14 @@ Independent of solo mode — no blocking dependencies in either direction.
 
 - [ ] **Demand card text overflow** — Text in the bottom row of the demand card can extend past the bottom edge of the card due to "available here" banners pushing content down
 - [ ] **Event banner text not vertically centered** — Text on map event title banners (e.g. "Snow: Torino") is not centered vertically within the banner
-- [ ] **Turn budget overstates available miles** — Turn budget shows 20 miles when the player has less money available in total ECU reserve
+- [ ] **Build turn budget overstates available ECU** — Turn budget in actions panel shows 20 ECU even when the player has less money available in total ECU reserve
 - [ ] **London-Amsterdam ferry endpoint misplaced** — The London-Amsterdam ferry endpoint appears in the middle of the UK (visual only); move it to a milepost on the east coast of the UK
-- [ ] **Zoom-out hover twitching** — When fully zoomed out, mouse hover causes slight twitching in Chrome (possibly scroll-bar related)
+- [x] **Zoom-out hover twitching** — When fully zoomed out, mouse hover causes slight twitching in Chrome (possibly scroll-bar related)
 
 ## Balance / Gameplay Feedback
 
 - [ ] **Small trip payouts too generous** — Early-game short deliveries may pay too much, making the opening phase too easy; consider tuning payout curves
-- [ ] **Spain/Italy access too open** — Access routes into Spain and Italy could be more strategically restrictive to create meaningful geographic chokepoints
+- [ ] **Spain access too open** — Access routes into Spain could be more strategically restrictive to create meaningful geographic chokepoints
 - [ ] **Faster train speed option** — Add a game room option for faster train speeds (12/16 MP instead of 9/12) for quicker games
 
 ## Completed
@@ -107,3 +94,4 @@ Independent of solo mode — no blocking dependencies in either direction.
 - [x] Shrink pickup button to match deliver button
 - [x] Toggle to hide city production info (Map Icons toggle in Goods Legend)
 - [x] In-game tutorial (guided walkthrough of core mechanics)
+- [x] Save & Resume (decouple game from room, server-side save/load, resume lobby flow, localStorage convenience layer)
