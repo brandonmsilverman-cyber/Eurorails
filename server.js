@@ -763,6 +763,7 @@ function serverEndTurn(gs, depth = 0) {
 function broadcastStateUpdate(roomCode, room, uiEvent) {
     room.lastActivity = Date.now();
     for (const [socketId, p] of room.players) {
+        if (p.isAI) continue; // AI players have no socket
         const state = getStateForPlayer(room.gameState, p.sessionToken, room.disconnectedPlayers);
         io.to(socketId).emit('stateUpdate', { state, uiEvent });
     }
@@ -1606,14 +1607,25 @@ io.on('connection', (socket) => {
         socket.leave(roomCode);
         socket.roomCode = null;
 
-        if (room.players.size === 0) {
+        // Check if any human players remain
+        let hasHumans = false;
+        for (const [, p] of room.players) {
+            if (!p.isAI) { hasHumans = true; break; }
+        }
+
+        if (room.players.size === 0 || !hasHumans) {
+            // Remove AI players too — don't keep a room with only AI
             rooms.delete(roomCode);
-            console.log(`Room ${roomCode} deleted (empty)`);
+            console.log(`Room ${roomCode} deleted (${room.players.size === 0 ? 'empty' : 'no humans remaining'})`);
         } else {
             if (player && room.hostSessionToken === player.sessionToken) {
-                // Transfer host to next player
-                const nextPlayer = room.players.values().next().value;
-                room.hostSessionToken = nextPlayer.sessionToken;
+                // Transfer host to next human player
+                for (const [, p] of room.players) {
+                    if (!p.isAI) {
+                        room.hostSessionToken = p.sessionToken;
+                        break;
+                    }
+                }
             }
             io.to(roomCode).emit('roomUpdate', getRoomInfo(roomCode));
         }
@@ -1637,15 +1649,106 @@ io.on('connection', (socket) => {
         if (callback) callback({ success: true });
     });
 
+    socket.on('addAIPlayer', ({ color, difficulty }, callback) => {
+        const room = rooms.get(socket.roomCode);
+        if (!room || room.gameStarted) {
+            return callback && callback({ success: false, error: 'Cannot add AI player' });
+        }
+
+        // Host-only
+        const callerPlayer = room.players.get(socket.id);
+        if (!callerPlayer || callerPlayer.sessionToken !== room.hostSessionToken) {
+            return callback && callback({ success: false, error: 'Only the host can add AI players' });
+        }
+
+        // Room full check
+        if (room.players.size >= room.maxPlayers) {
+            return callback && callback({ success: false, error: 'Room is full' });
+        }
+
+        // Validate color
+        if (!color || !LOBBY_COLORS.includes(color)) {
+            return callback && callback({ success: false, error: 'Invalid color' });
+        }
+
+        // Check color not taken
+        for (const [, p] of room.players) {
+            if (p.color === color) {
+                return callback && callback({ success: false, error: 'Color already taken' });
+            }
+        }
+
+        // Validate difficulty
+        const validDifficulties = ['easy'];
+        if (!difficulty || !validDifficulties.includes(difficulty)) {
+            return callback && callback({ success: false, error: 'Invalid difficulty' });
+        }
+
+        // Count existing AI players for naming
+        let aiCount = 0;
+        for (const [, p] of room.players) {
+            if (p.isAI) aiCount++;
+        }
+
+        const aiKey = `ai-${randomUUID()}`;
+        const aiSessionToken = `ai-${randomUUID()}`;
+        room.players.set(aiKey, {
+            name: `AI ${aiCount + 1}`,
+            color,
+            sessionToken: aiSessionToken,
+            isAI: true,
+            difficulty
+        });
+
+        console.log(`AI player added to room ${socket.roomCode} (${color}, ${difficulty})`);
+        io.to(socket.roomCode).emit('roomUpdate', getRoomInfo(socket.roomCode));
+        callback && callback({ success: true });
+        broadcastRoomList();
+    });
+
+    socket.on('removeAIPlayer', ({ sessionToken }, callback) => {
+        const room = rooms.get(socket.roomCode);
+        if (!room || room.gameStarted) {
+            return callback && callback({ success: false, error: 'Cannot remove AI player' });
+        }
+
+        // Host-only
+        const callerPlayer = room.players.get(socket.id);
+        if (!callerPlayer || callerPlayer.sessionToken !== room.hostSessionToken) {
+            return callback && callback({ success: false, error: 'Only the host can remove AI players' });
+        }
+
+        // Find and remove the AI player by sessionToken
+        let removed = false;
+        for (const [key, p] of room.players) {
+            if (p.sessionToken === sessionToken && p.isAI) {
+                room.players.delete(key);
+                removed = true;
+                console.log(`AI player removed from room ${socket.roomCode} (${p.color})`);
+                break;
+            }
+        }
+
+        if (!removed) {
+            return callback && callback({ success: false, error: 'AI player not found' });
+        }
+
+        io.to(socket.roomCode).emit('roomUpdate', getRoomInfo(socket.roomCode));
+        callback && callback({ success: true });
+        broadcastRoomList();
+    });
+
     socket.on('startGame', () => {
         const room = rooms.get(socket.roomCode);
         if (!room) return;
         // Host check: look up the socket's sessionToken and compare to hostSessionToken
         const callerPlayer = room.players.get(socket.id);
         if (!callerPlayer || callerPlayer.sessionToken !== room.hostSessionToken) return;
-        if (room.players.size < room.maxPlayers) return;
 
-        // Check all players have selected colors
+        // Need at least 2 total players (human + AI)
+        if (room.players.size < 2) return;
+
+        // Check all players have selected colors (humans must pick; AI always has one)
         for (const [, p] of room.players) {
             if (!p.color) return;
         }
@@ -1653,24 +1756,36 @@ io.on('connection', (socket) => {
         room.gameStarted = true;
 
         // Build player list using sessionTokens as ids
+        // Include AI flags so createGameState sets up AI state
         const playerList = [];
         for (const [, p] of room.players) {
-            playerList.push({ id: p.sessionToken, name: p.name, color: p.color });
+            const entry = { id: p.sessionToken, name: p.name, color: p.color };
+            if (p.isAI) {
+                entry.isAI = true;
+                entry.difficulty = p.difficulty;
+            }
+            playerList.push(entry);
         }
 
         // Create authoritative game state on server
         room.gameState = createGameState(playerList);
 
-        console.log(`Game started in room ${socket.roomCode} with ${playerList.length} players`);
+        const humanCount = playerList.filter(p => !p.isAI).length;
+        const aiCount = playerList.filter(p => p.isAI).length;
+        console.log(`Game started in room ${socket.roomCode} with ${humanCount} human(s) and ${aiCount} AI player(s)`);
         console.log(`Deck has ${room.gameState.demandCardDeck.length} cards remaining`);
 
-        // Send each player their filtered game state
+        // Send each human player their filtered game state
         for (const [socketId, p] of room.players) {
+            if (p.isAI) continue; // AI players have no socket
             const state = getStateForPlayer(room.gameState, p.sessionToken, room.disconnectedPlayers);
             io.to(socketId).emit('gameStart', { state });
         }
         recordGame('multi');
         broadcastRoomList();
+
+        // If the first player is AI, schedule their turn
+        maybeScheduleAITurn(socket.roomCode, room);
     });
 
     // No-op: server now generates its own hex grid at game start (Step 0.4).
@@ -2185,8 +2300,9 @@ io.on('connection', (socket) => {
 
             console.log(`Room ${roomCode}: All players seated, game resumed`);
 
-            // Send each player their filtered game state
+            // Send each human player their filtered game state
             for (const [socketId, p] of room.players) {
+                if (p.isAI) continue;
                 const state = getStateForPlayer(room.gameState, p.sessionToken, room.disconnectedPlayers);
                 io.to(socketId).emit('gameResumed', { state });
             }
@@ -2251,6 +2367,7 @@ io.on('connection', (socket) => {
         console.log(`Room ${roomCode}: Force started with ${room.players.size} of ${room.maxPlayers} players`);
 
         for (const [socketId, p] of room.players) {
+            if (p.isAI) continue;
             const state = getStateForPlayer(room.gameState, p.sessionToken, room.disconnectedPlayers);
             io.to(socketId).emit('gameResumed', { state });
         }
@@ -2349,14 +2466,24 @@ io.on('connection', (socket) => {
             room.sessionToSocketId.delete(player.sessionToken);
             room.players.delete(socket.id);
 
-            if (room.players.size === 0) {
+            // Check if any human players remain
+            let hasHumans = false;
+            for (const [, p] of room.players) {
+                if (!p.isAI) { hasHumans = true; break; }
+            }
+
+            if (room.players.size === 0 || !hasHumans) {
                 rooms.delete(roomCode);
-                console.log(`Room ${roomCode} deleted (empty)`);
+                console.log(`Room ${roomCode} deleted (${room.players.size === 0 ? 'empty' : 'no humans remaining'})`);
             } else {
-                // Transfer host if host left
+                // Transfer host if host left (to next human)
                 if (room.hostSessionToken === player.sessionToken) {
-                    const nextPlayer = room.players.values().next().value;
-                    room.hostSessionToken = nextPlayer.sessionToken;
+                    for (const [, p] of room.players) {
+                        if (!p.isAI) {
+                            room.hostSessionToken = p.sessionToken;
+                            break;
+                        }
+                    }
                 }
                 io.to(roomCode).emit('roomUpdate', getRoomInfo(roomCode));
             }
