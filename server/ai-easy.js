@@ -79,7 +79,10 @@ function selectTargetDemand(gs, playerIndex, ctx, { excludeFullyBuilt = false } 
                     }
                 }
 
-                const score = demand.payout - totalCost;
+                let score = demand.payout - totalCost;
+                // Strongly prefer routes that are already fully built — the AI
+                // invested track-building turns into them and can deliver immediately.
+                if (totalCost === 0) score += 10;
 
                 if (totalCost <= player.cash) {
                     // Affordable — pick best profit margin
@@ -269,6 +272,7 @@ function findConnectorBuild(gs, playerIndex, ctx, srcId, destId, payout = 0) {
 
     let bestPath = null;
     let bestCost = Infinity;
+    let bestGoal = null;
     for (const ownedId of ownedCities) {
         for (const goalId of [srcId, destId]) {
             if (goalId === undefined || goalId === ownedId) continue;
@@ -276,6 +280,7 @@ function findConnectorBuild(gs, playerIndex, ctx, srcId, destId, payout = 0) {
             if (result && result.cost > 0 && result.cost < bestCost) {
                 bestCost = result.cost;
                 bestPath = result;
+                bestGoal = goalId;
             }
         }
     }
@@ -284,6 +289,18 @@ function findConnectorBuild(gs, playerIndex, ctx, srcId, destId, payout = 0) {
 
     // Block connector builds for unprofitable routes the AI can't afford
     if (bestPath.cost > player.cash && payout <= bestPath.cost) return null;
+
+    // Extend connector with the main route so the AI can build past the
+    // first connecting city if budget allows (connector → src/dest → other end).
+    const otherEnd = (bestGoal === srcId) ? destId : srcId;
+    if (otherEnd !== undefined) {
+        const mainRoute = findPath(ctx, bestGoal, otherEnd, player.color, "cheapest");
+        if (mainRoute && mainRoute.path.length > 1) {
+            const combinedPath = [...bestPath.path, ...mainRoute.path.slice(1)];
+            const combinedResult = { path: combinedPath, cost: bestPath.cost + mainRoute.cost };
+            return computeBuildActions(gs, playerIndex, ctx, combinedResult);
+        }
+    }
 
     return computeBuildActions(gs, playerIndex, ctx, bestPath);
 }
@@ -314,8 +331,7 @@ function getConnectedComponent(ctx, startMpId, playerColor) {
 }
 
 // Helper: find the best milepost on owned track to deploy the train.
-// Prefers a city milepost that is a source for a demand good, on the
-// connected component that contains the target route's source or destination.
+// Priority: target source > target dest > closest city to target source > any source city > any city.
 function chooseDeploy(gs, playerIndex, ctx, target) {
     const player = gs.players[playerIndex];
     const ownedMileposts = getPlayerOwnedMileposts(ctx, player.color);
@@ -324,13 +340,15 @@ function chooseDeploy(gs, playerIndex, ctx, target) {
 
     // If we have a target, find the component connected to the target's source/dest
     let preferredComponent = null;
+    let targetSrcId = null;
+    let targetDestId = null;
     if (target) {
-        const srcId = ctx.cityToMilepost[target.sourceCity];
-        const destId = ctx.cityToMilepost[target.destCity];
-        if (srcId && ownedMileposts.has(srcId)) {
-            preferredComponent = getConnectedComponent(ctx, srcId, player.color);
-        } else if (destId && ownedMileposts.has(destId)) {
-            preferredComponent = getConnectedComponent(ctx, destId, player.color);
+        targetSrcId = ctx.cityToMilepost[target.sourceCity];
+        targetDestId = ctx.cityToMilepost[target.destCity];
+        if (targetSrcId && ownedMileposts.has(targetSrcId)) {
+            preferredComponent = getConnectedComponent(ctx, targetSrcId, player.color);
+        } else if (targetDestId && ownedMileposts.has(targetDestId)) {
+            preferredComponent = getConnectedComponent(ctx, targetDestId, player.color);
         }
     }
 
@@ -349,7 +367,35 @@ function chooseDeploy(gs, playerIndex, ctx, target) {
         preferredComponent = largest;
     }
 
-    // Collect source cities from current demands
+    // 1. Deploy at target source if on owned track
+    if (targetSrcId && preferredComponent.has(targetSrcId)) {
+        return targetSrcId;
+    }
+
+    // 2. Deploy at target destination if on owned track
+    if (targetDestId && preferredComponent.has(targetDestId)) {
+        return targetDestId;
+    }
+
+    // 3. Deploy at the city closest (by track distance) to target source
+    if (targetSrcId) {
+        let bestId = null;
+        let bestDist = Infinity;
+        for (const mpId of preferredComponent) {
+            const mp = ctx.mileposts_by_id[mpId];
+            if (!mp || !mp.city) continue;
+            const targetMp = ctx.mileposts_by_id[targetSrcId];
+            if (!targetMp) continue;
+            const dist = Math.hypot(mp.x - targetMp.x, mp.y - targetMp.y);
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestId = mpId;
+            }
+        }
+        if (bestId) return bestId;
+    }
+
+    // 4. Any source city for any demand on preferred component
     const wantedSources = new Set();
     for (const card of player.demandCards) {
         if (!card || !card.demands) continue;
@@ -358,8 +404,6 @@ function chooseDeploy(gs, playerIndex, ctx, target) {
             for (const src of sources) wantedSources.add(src);
         }
     }
-
-    // Prefer source city on preferred component
     for (const mpId of preferredComponent) {
         const mp = ctx.mileposts_by_id[mpId];
         if (mp.city && wantedSources.has(mp.city.name)) {
@@ -367,7 +411,7 @@ function chooseDeploy(gs, playerIndex, ctx, target) {
         }
     }
 
-    // Fallback: any city on preferred component
+    // 5. Fallback: any city on preferred component
     for (const mpId of preferredComponent) {
         const mp = ctx.mileposts_by_id[mpId];
         if (mp.city) return mpId;
@@ -424,6 +468,17 @@ function planTurn(gs, playerIndex, ctx) {
     if (gs.phase === 'initialBuilding') {
         // Select target demand, excluding routes already fully built
         const target = selectTargetFromState(gs, playerIndex, ctx, { excludeFullyBuilt: true });
+
+        // Log demand cards and target for debugging
+        const demandSummary = player.demandCards.map((card, ci) => {
+            if (!card || !card.demands) return `card${ci}:empty`;
+            return `card${ci}:[${card.demands.map(d => `${d.good}→${d.to}($${d.payout})`).join(', ')}]`;
+        }).join(' | ');
+        const targetSummary = target
+            ? `${target.good} from ${target.sourceCity}→${target.destCity} (buildCost=${target.cost})`
+            : 'NONE';
+        console.log(`AI ${playerIndex} initialBuild: demands={${demandSummary}} target=${targetSummary} cash=${player.cash}`);
+
         if (!target) {
             actions.push({ type: 'endTurn' });
             return actions;
@@ -440,6 +495,7 @@ function planTurn(gs, playerIndex, ctx) {
             // Find the cheapest route from any major city toward source or dest.
             let bestPath = null;
             let bestCost = Infinity;
+            let bestGoal = null;
             for (const majorCity of MAJOR_CITIES) {
                 const majorId = ctx.cityToMilepost[majorCity];
                 if (majorId === undefined) continue;
@@ -449,11 +505,25 @@ function planTurn(gs, playerIndex, ctx) {
                     if (result && result.cost < bestCost) {
                         bestCost = result.cost;
                         bestPath = result;
+                        bestGoal = goalId;
                     }
                 }
             }
             if (bestPath) {
-                buildAction = computeBuildActions(gs, playerIndex, ctx, bestPath);
+                // Extend past the first city: append the main route so the AI
+                // can build major city → src/dest → other end in one action.
+                const otherEnd = (bestGoal === srcId) ? destId : srcId;
+                if (otherEnd !== undefined) {
+                    const mainRoute = findPath(ctx, bestGoal, otherEnd, player.color, "cheapest");
+                    if (mainRoute && mainRoute.path.length > 1) {
+                        const combinedPath = [...bestPath.path, ...mainRoute.path.slice(1)];
+                        const combinedResult = { path: combinedPath, cost: bestPath.cost + mainRoute.cost };
+                        buildAction = computeBuildActions(gs, playerIndex, ctx, combinedResult);
+                    }
+                }
+                if (!buildAction) {
+                    buildAction = computeBuildActions(gs, playerIndex, ctx, bestPath);
+                }
             }
         } else {
             // Subsequent builds: extend from existing track toward target
@@ -492,6 +562,16 @@ function planTurn(gs, playerIndex, ctx) {
 
         // Select target — prefers affordable demands
         const target = selectTargetFromState(gs, playerIndex, ctx);
+
+        // Log demand cards and target for debugging
+        const demandSummary = player.demandCards.map((card, ci) => {
+            if (!card || !card.demands) return `card${ci}:empty`;
+            return `card${ci}:[${card.demands.map((d, di) => `${d.good}→${d.to}($${d.payout})`).join(', ')}]`;
+        }).join(' | ');
+        const targetSummary = target
+            ? `${target.good} from ${target.sourceCity}→${target.destCity} (buildCost=${target.cost})`
+            : 'NONE';
+        console.log(`AI ${playerIndex} operate: demands={${demandSummary}} target=${targetSummary} loads=[${player.loads}] at=${getCityNameAt(ctx, player.trainLocation) || player.trainLocation} movement=${player.movement}`);
 
         // No target at all — discard hand to draw fresh cards
         if (!target) {
@@ -575,7 +655,23 @@ function planTurn(gs, playerIndex, ctx) {
             const arrivedCity = getCityNameAt(ctx, arrived);
             if (arrivedCity === target.sourceCity) {
                 actions.push({ type: 'pickupGood', good: target.good });
+                // Continue toward destination with remaining movement
+                const destId = ctx.cityToMilepost[target.destCity];
+                let destPath = findPathOnTrack(ctx, arrived, destId, player.color, false);
+                if (!destPath) {
+                    destPath = findFrontierMove(ctx, arrived, destId, player.color);
+                }
+                if (destPath) {
+                    actions.push({ type: 'commitMove', path: destPath.path });
+                    const destArrived = destPath.path[destPath.path.length - 1];
+                    const destArrivedCity = getCityNameAt(ctx, destArrived);
+                    if (destArrivedCity === target.destCity) {
+                        actions.push({ type: 'deliverGood', cardIndex: target.cardIndex, demandIndex: target.demandIndex });
+                    }
+                }
             }
+        } else {
+            console.log(`AI ${playerIndex} operate: no path to source ${target.sourceCity} from ${getCityNameAt(ctx, effectiveLocation) || effectiveLocation} — skipping movement`);
         }
         actions.push({ type: 'endOperatePhase' });
         return actions;
@@ -597,6 +693,7 @@ function planTurn(gs, playerIndex, ctx) {
         // Build toward target demand
         const target = selectTargetFromState(gs, playerIndex, ctx);
         if (target) {
+            console.log(`AI ${playerIndex} build: target=${target.good} from ${target.sourceCity}→${target.destCity} (buildCost=${target.cost}) cash=${player.cash}`);
             const srcId = ctx.cityToMilepost[target.sourceCity];
             const destId = ctx.cityToMilepost[target.destCity];
             const demand = player.demandCards[target.cardIndex]?.demands[target.demandIndex];

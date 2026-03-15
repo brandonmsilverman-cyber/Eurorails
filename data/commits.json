@@ -1,4 +1,5 @@
 [
+  {"message": "Improve AI route selection, building, deployment, and movement", "date": "Mar 14, 2026"},
   {"message": "Improve AI demand selection and movement to reduce stalling", "date": "Mar 14, 2026"},
   {"message": "Add idle room cleanup sweep every 2 hours", "date": "Mar 14, 2026"},
   {"message": "Make lobby scrollable and cap room list to 5 visible rows", "date": "Mar 14, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Shrink pickup button to match deliver button format", "date": "Mar 13, 2026"},
   {"message": "Improve pickup goods visibility with demand-matching highlights and larger buttons", "date": "Mar 13, 2026"},
   {"message": "Add ECU balance and phase/waiting indicator to train card", "date": "Mar 13, 2026"},
-  {"message": "Prominent cash display, phase badges, and movement progress bar", "date": "Mar 13, 2026"},
-  {"message": "Fix post-commit hook and increase recent updates to 20 commits", "date": "Mar 13, 2026"}
+  {"message": "Prominent cash display, phase badges, and movement progress bar", "date": "Mar 13, 2026"}
 ]

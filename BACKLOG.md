@@ -52,7 +52,6 @@ Allow the host to fill empty multiplayer slots with AI opponents so games can st
 - [ ] **Event banner text not vertically centered** — Text on map event title banners (e.g. "Snow: Torino") is not centered vertically within the banner
 - [ ] **Build turn budget overstates available ECU** — Turn budget in actions panel shows 20 ECU even when the player has less money available in total ECU reserve
 - [ ] **London-Amsterdam ferry endpoint misplaced** — The London-Amsterdam ferry endpoint appears in the middle of the UK (visual only); move it to a milepost on the east coast of the UK
-- [x] **Zoom-out hover twitching** — When fully zoomed out, mouse hover causes slight twitching in Chrome (possibly scroll-bar related)
 
 ## Balance / Gameplay Feedback
 
@@ -95,3 +94,4 @@ Allow the host to fill empty multiplayer slots with AI opponents so games can st
 - [x] Toggle to hide city production info (Map Icons toggle in Goods Legend)
 - [x] In-game tutorial (guided walkthrough of core mechanics)
 - [x] Save & Resume (decouple game from room, server-side save/load, resume lobby flow, localStorage convenience layer)
+- [x] Zoom-out hover twitching fix (Chrome scroll-bar related)
