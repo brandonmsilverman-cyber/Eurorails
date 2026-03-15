@@ -1,4 +1,5 @@
 [
+  {"message": "Add configurable win conditions and clean up solo mode tests", "date": "Mar 15, 2026"},
   {"message": "Fix AI track wormholes and movement undercharge bugs", "date": "Mar 15, 2026"},
   {"message": "Add AI multiplayer lobby UI, remove solo mode and player count picker", "date": "Mar 15, 2026"},
   {"message": "Add AI player lobby management for multiplayer rooms", "date": "Mar 15, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Add toggle to hide city goods icons on map", "date": "Mar 13, 2026"},
   {"message": "Add mountain pass corridors through Alps for traversable routes to Italy", "date": "Mar 13, 2026"},
   {"message": "Add How to Play tutorial dropdown to legend panel", "date": "Mar 13, 2026"},
-  {"message": "Wire foreign track toggle to build commit with network-aware connectivity", "date": "Mar 13, 2026"},
-  {"message": "Wire foreign track toggle to hover preview and cost label", "date": "Mar 13, 2026"}
+  {"message": "Wire foreign track toggle to build commit with network-aware connectivity", "date": "Mar 13, 2026"}
 ]

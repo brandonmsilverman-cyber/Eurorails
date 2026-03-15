@@ -11,15 +11,6 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 - [ ] **AI: Hard difficulty** — Intelligent human-level play: opportunistic route batching, payout/cost build scoring with network awareness, situational upgrades, active hand evaluation, deliberate ferry investment
 - [ ] **AI: Brutal difficulty** — Near-optimal play: systematic multi-delivery planning, expected-value build calculations over future hands, optimal upgrade timing, EV-based discard decisions, full landmass access modeling for ferries
 
-## AI Players in Multiplayer
-
-Allow the host to fill empty multiplayer slots with AI opponents so games can start without a full human lobby. The AI engine already exists — this is mostly lobby wiring and turn routing. Full plan in [`AI_MULTIPLAYER_PLAN.md`](AI_MULTIPLAYER_PLAN.md).
-
-- [ ] **AI player slots in lobby** — Host can add/remove AI players to open slots, choosing color and difficulty
-- [ ] **Turn routing** — Server detects AI turns and calls `executeAITurn()` instead of waiting for socket input; skip turn timer for AI
-- [ ] **Client UI** — Show AI players distinctly in lobby and in-game, with add/remove controls for the host
-- [ ] **Edge cases** — Room cleanup when all humans leave, skip disconnect/reconnect logic for AI
-
 ## Gameplay
 
 - [ ] **Borrowing** — A player may borrow up to ECU 20 from the bank at any time and immediately spend it on building or hold it in reserve. The player must pay back **double** the borrowed amount from all future delivery payoffs until the doubled debt is fully repaid. Per the official rules (p. 26, "Money" section), borrowing is intended as a safety valve for players who become trapped or unable to make progress. The loan is taken voluntarily; there is no forced borrowing.
@@ -27,9 +18,9 @@ Allow the host to fill empty multiplayer slots with AI opponents so games can st
 - [ ] **Backtracking** — A player may reverse their train's direction on any milepost (not just at cities) at a cost of losing 1 full turn. Per the official rules (p. 26, "Backtracking" section): a train which backtracks can move in any direction on its next turn. A train may not backtrack when the player has discarded their cards during the same turn. A train may backtrack if it cannot move for any other reason (e.g., Derailment or Rail Strike). A player whose train backtracks while on an opponent's track is assessed the use fee for that turn.
 - [ ] **Discard pile reshuffle** — When the demand card deck runs out, reshuffle fulfilled/discarded demand cards back into the deck so the game never runs dry
 - [ ] **Economy difficulty setting** — Add a pre-game room option with three economy modes (Standard, Constrained, Generous) that adjust demand card payout amounts and route length mix
-- [ ] **Configurable victory conditions** — Allow the game room to customize win conditions before the game starts
+- [ ] **Configurable victory conditions** — Allow the game room to customize win conditions before the game starts. Full plan in [`CONFIGURABLE_WIN_CONDITIONS_PLAN.md`](CONFIGURABLE_WIN_CONDITIONS_PLAN.md).
 - [ ] **Set train destination** — Player selects a city as their destination; the train automatically moves toward it each operate phase until it arrives, the player undoes movement, or the mode is turned off
-- [ ] **Faster train tier** — Add a 20+ speed train option to reduce late-game drag when players have long routes
+- [ ] **Faster train tier** — Add a 20+ speed train option to reduce late-game drag when players have long routes. Full plan in [`EXPRESS_TRAIN_PLAN.md`](EXPRESS_TRAIN_PLAN.md).
 - [ ] **Turn countdown clock** — Optional time pressure element with a visible countdown timer per turn
 
 ## UI / Visual
@@ -53,8 +44,6 @@ Allow the host to fill empty multiplayer slots with AI opponents so games can st
 - [ ] **Build turn budget overstates available ECU** — Turn budget in actions panel shows 20 ECU even when the player has less money available in total ECU reserve
 - [ ] **London-Amsterdam ferry endpoint misplaced** — The London-Amsterdam ferry endpoint appears in the middle of the UK (visual only); move it to a milepost on the east coast of the UK
 - [ ] **AI builds into major cities instead of out from them** — AI pathfinding sometimes builds toward a major city (paying the 5M city entry cost) instead of building outward from it (1M for the adjacent milepost). Example: AI 1 spent 5M for 4 mileposts building into Praha, when reversing the build direction would cost only 1M for the same connection
-- [x] **AI movement costs drastically undercharged** — AI trains move far more mileposts than their movement points should allow. Root cause: `findCheapestBuildPath` returned reversed paths, and callers that combined paths created non-adjacent track segments ("wormholes") that let trains teleport. Also: owned ferry edges broke `buildPath` contiguity. Fixed by normalizing path direction, maintaining ferry contiguity, and adding adjacency validation in `applyCommitBuild`.
-- [x] **AI builds inefficient looping track** — AI players build rail that doubles back and reconnects to their own pre-existing track. Same root cause as the movement bug: reversed paths from `findCheapestBuildPath` caused `computeBuildActions` to walk from the destination end, building back toward already-owned track instead of outward.
 
 ## Balance / Gameplay Feedback
 
@@ -98,3 +87,6 @@ Allow the host to fill empty multiplayer slots with AI opponents so games can st
 - [x] In-game tutorial (guided walkthrough of core mechanics)
 - [x] Save & Resume (decouple game from room, server-side save/load, resume lobby flow, localStorage convenience layer)
 - [x] Zoom-out hover twitching fix (Chrome scroll-bar related)
+- [x] AI Players in Multiplayer (lobby slots, turn routing, client UI, edge cases)
+- [x] AI movement costs drastically undercharged (reversed paths / wormhole fix)
+- [x] AI builds inefficient looping track (reversed path direction fix)

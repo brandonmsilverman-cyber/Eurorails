@@ -1138,6 +1138,11 @@
             <div id="lobbyColorPicker" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
         </div>
 
+        <div class="setup-section" id="lobbyGameSettings">
+            <label>Game Settings:</label>
+            <div id="lobbyGameSettingsContent"></div>
+        </div>
+
         <div class="setup-buttons" style="gap: 10px;">
             <button onclick="leaveRoom()" style="padding: 12px 24px; font-size: 14px; background: #555; border: 1px solid #666;">Back</button>
             <button id="lobbyStartBtn" onclick="lobbyStartGame()" style="display: none; padding: 12px 40px; font-size: 16px;">Start Game</button>
@@ -1205,7 +1210,7 @@
         <div class="sidebar-section">
             <h3>Win Condition</h3>
             <div class="win-condition">
-                Connect 7 of 8 major cities + 250M ECU cash
+                <span id="winConditionText">Connect 7 of 8 major cities + 250M ECU cash</span>
             </div>
         </div>
 
@@ -1497,9 +1502,10 @@ function getConnectedMajorCities(playerColor) {
 }
 
 function checkWinCondition(player) {
-    if (player.cash < 250) return false;
+    const settings = gameState.gameSettings || { winCashThreshold: 250, winMajorCitiesRequired: 7 };
+    if (player.cash < settings.winCashThreshold) return false;
     const connectedCities = getConnectedMajorCities(player.color);
-    return connectedCities.length >= 7;
+    return connectedCities.length >= settings.winMajorCitiesRequired;
 }
 
 function addLog(message) {
@@ -4633,7 +4639,7 @@ function updateUI() {
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; background:#1a1a2e; padding:6px 8px; border-radius:4px; border:1px solid #333;">
                     <span style="color:#ffd700; font-size:16px; font-weight:bold;">ECU ${p.cash}M</span>
-                    <span style="font-size:11px;">Major Cities: <span style="color:${connectedCount >= 7 ? '#4a9e4a' : '#ff8800'}; font-weight:bold;">${connectedCount}/7</span></span>
+                    <span style="font-size:11px;">Major Cities: <span style="color:${connectedCount >= (gameState.gameSettings?.winMajorCitiesRequired || 7) ? '#4a9e4a' : '#ff8800'}; font-weight:bold;">${connectedCount}/${gameState.gameSettings?.winMajorCitiesRequired || 7}</span></span>
                 </div>
             </div>`;
         } else {
@@ -4641,7 +4647,7 @@ function updateUI() {
             return `<div class="player-info">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <strong style="color:${COLOR_MAP[p.color]};">${p.name}${p.isAI ? ' <span style="color:#2ecc71;font-size:10px;">(AI)</span>' : ''}</strong>
-                    <span style="font-size:11px;"><span style="color:#ffd700; font-weight:bold;">ECU ${p.cash}M</span> | <span style="color:${inactiveConnected >= 7 ? '#4a9e4a' : '#ff8800'}; font-weight:bold;">${inactiveConnected}/7</span> Major Cities</span>
+                    <span style="font-size:11px;"><span style="color:#ffd700; font-weight:bold;">ECU ${p.cash}M</span> | <span style="color:${inactiveConnected >= (gameState.gameSettings?.winMajorCitiesRequired || 7) ? '#4a9e4a' : '#ff8800'}; font-weight:bold;">${inactiveConnected}/${gameState.gameSettings?.winMajorCitiesRequired || 7}</span> Major Cities</span>
                 </div>
             </div>`;
         }
@@ -5076,8 +5082,8 @@ function showWinCelebration(player) {
 
     requestAnimationFrame(() => { modal.style.opacity = "1"; });
 
-    // Spawn 250 falling coins
-    const coinCount = 250;
+    // Spawn falling coins matching the win cash threshold
+    const coinCount = gameState.gameSettings?.winCashThreshold || 250;
     const columns = 10;
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
@@ -6577,6 +6583,37 @@ function renderLobbyRoom(info) {
         pickerEl.appendChild(btn);
     }
 
+    // Game settings
+    const settingsEl = document.getElementById("lobbyGameSettingsContent");
+    const gs = info.gameSettings || { winCashThreshold: 250, winMajorCitiesRequired: 7 };
+    if (isCurrentHost) {
+        settingsEl.innerHTML = `
+            <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+                <label style="font-size:13px;color:#ccc;">Cash to win:
+                    <select id="settingCashThreshold" style="margin-left:4px;padding:4px 8px;font-size:13px;">
+                        ${[100,150,200,250,300,350,400,450,500].map(v => `<option value="${v}"${v === gs.winCashThreshold ? ' selected' : ''}>${v}M ECU</option>`).join('')}
+                    </select>
+                </label>
+                <label style="font-size:13px;color:#ccc;">Major cities:
+                    <select id="settingMajorCities" style="margin-left:4px;padding:4px 8px;font-size:13px;">
+                        ${[1,2,3,4,5,6,7,8].map(v => `<option value="${v}"${v === gs.winMajorCitiesRequired ? ' selected' : ''}>${v} of 8</option>`).join('')}
+                    </select>
+                </label>
+            </div>`;
+        document.getElementById("settingCashThreshold").onchange = (e) => {
+            socket.emit('updateGameSettings', { winCashThreshold: parseInt(e.target.value) }, (res) => {
+                if (res && !res.success) console.warn('updateGameSettings:', res.error);
+            });
+        };
+        document.getElementById("settingMajorCities").onchange = (e) => {
+            socket.emit('updateGameSettings', { winMajorCitiesRequired: parseInt(e.target.value) }, (res) => {
+                if (res && !res.success) console.warn('updateGameSettings:', res.error);
+            });
+        };
+    } else {
+        settingsEl.innerHTML = `<span style="font-size:13px;color:#aaa;">Win: ${gs.winCashThreshold}M ECU + ${gs.winMajorCitiesRequired} of 8 major cities</span>`;
+    }
+
     // Host controls
     const enoughPlayers = info.players.length >= 2;
     const allHaveColors = info.players.every(p => p.color);
@@ -7029,6 +7066,14 @@ function initializeGameView(state, isRejoin) {
     gameState.trackageRightsLog = state.trackageRightsLog;
     if (state.operateHistory) gameState.operateHistory = state.operateHistory;
     if (state.buildHistory) gameState.buildHistory = state.buildHistory;
+    if (state.gameSettings) gameState.gameSettings = state.gameSettings;
+
+    // Update win condition display with configured settings
+    const winText = document.getElementById("winConditionText");
+    if (winText && gameState.gameSettings) {
+        const s = gameState.gameSettings;
+        winText.textContent = `Connect ${s.winMajorCitiesRequired} of 8 major cities + ${s.winCashThreshold}M ECU cash`;
+    }
 
     console.log(`[Client] ${isRejoin ? 'Rejoined' : 'Received'} game state from server`);
     console.log('[Client] Players:', gameState.players.map(p => p.name + '/' + p.color));

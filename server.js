@@ -255,10 +255,11 @@ function getConnectedMajorCities(gs, playerColor) {
 }
 
 function checkWinCondition(gs, player) {
-    if (player.cash < 250) return false;
+    const settings = gs.gameSettings || { winCashThreshold: 250, winMajorCitiesRequired: 7 };
+    if (player.cash < settings.winCashThreshold) return false;
     if (!gs.cityToMilepost) return false; // Can't check without hex grid data
     const connectedCities = getConnectedMajorCities(gs, player.color);
-    return connectedCities.length >= 7;
+    return connectedCities.length >= settings.winMajorCitiesRequired;
 }
 
 function getGoodsInCirculation(gs, good) {
@@ -1016,7 +1017,7 @@ function executeAIActionSequence(roomCode, room, plan, stepIndex) {
 
 // --- Game State Initialization ---
 
-function createGameState(playerList) {
+function createGameState(playerList, gameSettings) {
     const deck = generateDeck();
 
     const players = playerList.map(p => {
@@ -1114,7 +1115,8 @@ function createGameState(playerList) {
         cityToMilepost: grid.cityToMilepost,
         ferryConnections: grid.ferryConnections,
         coastDistance,
-        eventZones
+        eventZones,
+        gameSettings: gameSettings || { winCashThreshold: 250, winMajorCitiesRequired: 7 }
     };
 }
 
@@ -1418,7 +1420,8 @@ function getStateForPlayer(gameState, playerId, disconnectedPlayers) {
         trackageRightsPaidThisTurn: gameState.trackageRightsPaidThisTurn,
         trackageRightsLog: gameState.trackageRightsLog,
         operateHistory: gameState.operateHistory,
-        buildHistory: gameState.buildHistory
+        buildHistory: gameState.buildHistory,
+        gameSettings: gameState.gameSettings
     };
 }
 
@@ -1468,7 +1471,8 @@ io.on('connection', (socket) => {
             gameState: null,
             maxPlayers: playerCount,
             password: password || null,
-            lastActivity: Date.now()
+            lastActivity: Date.now(),
+            gameSettings: { winCashThreshold: 250, winMajorCitiesRequired: 7 }
         };
         room.players.set(socket.id, { name: playerName, color: null, sessionToken });
         room.sessionToSocketId.set(sessionToken, socket.id);
@@ -1700,6 +1704,37 @@ io.on('connection', (socket) => {
         broadcastRoomList();
     });
 
+    socket.on('updateGameSettings', (settings, callback) => {
+        const room = rooms.get(socket.roomCode);
+        if (!room) return callback && callback({ success: false, error: 'Room not found' });
+        if (room.gameStarted) return callback && callback({ success: false, error: 'Game already started' });
+
+        // Host-only check
+        const caller = room.players.get(socket.id);
+        if (!caller || caller.sessionToken !== room.hostSessionToken) {
+            return callback && callback({ success: false, error: 'Only the host can change settings' });
+        }
+
+        if (settings && typeof settings.winCashThreshold === 'number') {
+            const v = settings.winCashThreshold;
+            if (!Number.isInteger(v) || v < 100 || v > 500 || v % 50 !== 0) {
+                return callback && callback({ success: false, error: 'winCashThreshold must be an integer 100–500 in steps of 50' });
+            }
+            room.gameSettings.winCashThreshold = v;
+        }
+
+        if (settings && typeof settings.winMajorCitiesRequired === 'number') {
+            const v = settings.winMajorCitiesRequired;
+            if (!Number.isInteger(v) || v < 1 || v > 8) {
+                return callback && callback({ success: false, error: 'winMajorCitiesRequired must be an integer 1–8' });
+            }
+            room.gameSettings.winMajorCitiesRequired = v;
+        }
+
+        io.to(socket.roomCode).emit('roomUpdate', getRoomInfo(socket.roomCode));
+        callback && callback({ success: true });
+    });
+
     socket.on('startGame', () => {
         const room = rooms.get(socket.roomCode);
         if (!room) return;
@@ -1730,7 +1765,7 @@ io.on('connection', (socket) => {
         }
 
         // Create authoritative game state on server
-        room.gameState = createGameState(playerList);
+        room.gameState = createGameState(playerList, room.gameSettings);
 
         const humanCount = playerList.filter(p => !p.isAI).length;
         const aiCount = playerList.filter(p => p.isAI).length;
@@ -2721,7 +2756,7 @@ function getRoomInfo(roomCode) {
         if (p.isAI) entry.difficulty = p.difficulty;
         players.push(entry);
     }
-    return { roomCode, players, hostSessionToken: room.hostSessionToken, maxPlayers: room.maxPlayers, password: room.password || null };
+    return { roomCode, players, hostSessionToken: room.hostSessionToken, maxPlayers: room.maxPlayers, password: room.password || null, gameSettings: room.gameSettings };
 }
 
 function getRoomList() {
