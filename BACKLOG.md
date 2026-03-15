@@ -52,6 +52,9 @@ Allow the host to fill empty multiplayer slots with AI opponents so games can st
 - [ ] **Event banner text not vertically centered** — Text on map event title banners (e.g. "Snow: Torino") is not centered vertically within the banner
 - [ ] **Build turn budget overstates available ECU** — Turn budget in actions panel shows 20 ECU even when the player has less money available in total ECU reserve
 - [ ] **London-Amsterdam ferry endpoint misplaced** — The London-Amsterdam ferry endpoint appears in the middle of the UK (visual only); move it to a milepost on the east coast of the UK
+- [ ] **AI builds into major cities instead of out from them** — AI pathfinding sometimes builds toward a major city (paying the 5M city entry cost) instead of building outward from it (1M for the adjacent milepost). Example: AI 1 spent 5M for 4 mileposts building into Praha, when reversing the build direction would cost only 1M for the same connection
+- [x] **AI movement costs drastically undercharged** — AI trains move far more mileposts than their movement points should allow. Root cause: `findCheapestBuildPath` returned reversed paths, and callers that combined paths created non-adjacent track segments ("wormholes") that let trains teleport. Also: owned ferry edges broke `buildPath` contiguity. Fixed by normalizing path direction, maintaining ferry contiguity, and adding adjacency validation in `applyCommitBuild`.
+- [x] **AI builds inefficient looping track** — AI players build rail that doubles back and reconnects to their own pre-existing track. Same root cause as the movement bug: reversed paths from `findCheapestBuildPath` caused `computeBuildActions` to walk from the destination end, building back toward already-owned track instead of outward.
 
 ## Balance / Gameplay Feedback
 

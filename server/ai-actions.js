@@ -271,8 +271,29 @@ module.exports = function(deps) {
         let newSegments = 0;
         const logs = [];
         for (let i = 0; i < buildPath.length - 1; i++) {
-            const edgeKey = buildPath[i] + "|" + buildPath[i + 1];
-            const ferryKey = getFerryKey(buildPath[i], buildPath[i + 1]);
+            const fromId = buildPath[i];
+            const toId = buildPath[i + 1];
+
+            // Defensive: skip non-adjacent milepost pairs that aren't ferry edges.
+            // These can arise from bugs in build path computation (e.g. reversed
+            // path joins).  Without this guard the bad segment becomes a "wormhole"
+            // in the track graph, letting trains teleport across the map.
+            const ferryKey = getFerryKey(fromId, toId);
+            let isFerryConnection = false;
+            if (ferryKey) {
+                for (const fc of gs.ferryConnections) {
+                    if (getFerryKey(fc.fromId, fc.toId) === ferryKey) { isFerryConnection = true; break; }
+                }
+            }
+            if (!isFerryConnection) {
+                const fromMp = gs.mileposts_by_id && gs.mileposts_by_id[fromId];
+                if (fromMp && fromMp.neighbors && !fromMp.neighbors.includes(toId)) {
+                    console.warn(`applyCommitBuild: skipping non-adjacent segment ${fromId} → ${toId}`);
+                    continue;
+                }
+            }
+
+            const edgeKey = fromId + "|" + toId;
 
             // Check if this is a ferry edge by checking ferryConnections directly
             // (not just the client-provided ferries array, which excludes already-owned ferries)
@@ -295,12 +316,12 @@ module.exports = function(deps) {
             if (otherEdges.has(edgeKey)) continue;
             if (!ownedEdges.has(edgeKey)) {
                 gs.tracks.push({
-                    from: buildPath[i],
-                    to: buildPath[i + 1],
+                    from: fromId,
+                    to: toId,
                     color: player.color
                 });
                 ownedEdges.add(edgeKey);
-                ownedEdges.add(buildPath[i + 1] + "|" + buildPath[i]);
+                ownedEdges.add(toId + "|" + fromId);
                 newSegments++;
             }
         }

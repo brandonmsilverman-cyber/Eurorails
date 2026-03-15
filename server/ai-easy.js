@@ -18,9 +18,13 @@ const getPlayerOwnedMileposts = gl.getPlayerOwnedMileposts;
 function findCheapestBuildPath(ctx, idA, idB, playerColor) {
     const fwd = findPath(ctx, idA, idB, playerColor, "cheapest");
     const rev = findPath(ctx, idB, idA, playerColor, "cheapest");
-    if (!fwd) return rev;
+    if (!fwd && !rev) return null;
+    if (!fwd) return { path: [...rev.path].reverse(), cost: rev.cost, foreignSegments: rev.foreignSegments };
     if (!rev) return fwd;
-    return rev.cost < fwd.cost ? rev : fwd;
+    if (rev.cost < fwd.cost) {
+        return { path: [...rev.path].reverse(), cost: rev.cost, foreignSegments: rev.foreignSegments };
+    }
+    return fwd;
 }
 
 // 3a: Demand selection — picks the demand with the best profit margin
@@ -185,7 +189,13 @@ function computeBuildActions(gs, playerIndex, ctx, fullPathResult, reversed = fa
         const isFerry = ferryEdgeKeys.has(ferryKey);
 
         if (isFerry) {
-            if (ownedFerries.has(ferryKey)) continue; // already own it
+            if (ownedFerries.has(ferryKey)) {
+                // Already own this ferry — no cost, but keep path contiguous
+                if (started) {
+                    buildPath.push(to);
+                }
+                continue;
+            }
 
             // Compute ferry cost
             let ferryCost = 0;

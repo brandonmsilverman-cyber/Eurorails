@@ -2477,10 +2477,28 @@ io.on('connection', (socket) => {
             playerName: player.name,
         });
 
-        // Step 7: Transfer host if host disconnected in-game
+        // If no human players remain connected, clean up immediately
+        let hasConnectedHumans = false;
+        for (const [, p] of room.players) {
+            if (!p.isAI) { hasConnectedHumans = true; break; }
+        }
+        if (!hasConnectedHumans) {
+            for (const timer of room.graceTimers.values()) clearTimeout(timer);
+            for (const timer of room.turnTimers.values()) clearTimeout(timer);
+            if (room.aiTurnTimer) { clearTimeout(room.aiTurnTimer); room.aiTurnTimer = null; }
+            rooms.delete(roomCode);
+            console.log(`Room ${roomCode} deleted (all human players disconnected)`);
+            broadcastRoomList();
+            return;
+        }
+
+        // Transfer host if host disconnected in-game (to next connected human)
         if (room.hostSessionToken === player.sessionToken && room.players.size > 0) {
-            // Pick the next connected player (from room.players, not disconnectedPlayers)
-            const nextHost = room.players.values().next().value;
+            let nextHost = null;
+            for (const [, p] of room.players) {
+                if (!p.isAI) { nextHost = p; break; }
+            }
+            if (!nextHost) nextHost = room.players.values().next().value; // fallback
             const oldHostToken = room.hostSessionToken;
             room.hostSessionToken = nextHost.sessionToken;
 
@@ -2717,11 +2735,13 @@ function getRoomList() {
                 break;
             }
         }
+        // For started games, show total game players; for lobbies, show current/max
+        const totalGamePlayers = room.gameState ? room.gameState.players.length : null;
         list.push({
             roomCode,
             hostName,
             hasPassword: !!room.password,
-            maxPlayers: room.maxPlayers,
+            maxPlayers: totalGamePlayers || room.maxPlayers,
             playerCount: room.players.size,
             gameStarted: room.gameStarted
         });
