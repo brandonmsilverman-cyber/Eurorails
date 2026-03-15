@@ -14,6 +14,7 @@ const DISCONNECT_GRACE_MS = parseInt(process.env.DISCONNECT_GRACE_MS) || 300000;
 const TURN_TIMER_MS = parseInt(process.env.TURN_TIMER_MS) || 90000; // 90 seconds
 const AI_ACTION_DELAY_MS = parseInt(process.env.AI_ACTION_DELAY_MS) || 1500; // delay between AI actions so human can watch
 const SAVES_DIR = process.env.SAVES_DIR || path.join(__dirname, 'saves');
+const ROOM_IDLE_MS = parseInt(process.env.ROOM_IDLE_MS) || 2 * 60 * 60 * 1000; // 2 hours
 
 // --- Shared Game Logic Module ---
 const gl = require('./shared/game-logic');
@@ -760,6 +761,7 @@ function serverEndTurn(gs, depth = 0) {
 
 // Broadcast state update to all players in a room
 function broadcastStateUpdate(roomCode, room, uiEvent) {
+    room.lastActivity = Date.now();
     for (const [socketId, p] of room.players) {
         const state = getStateForPlayer(room.gameState, p.sessionToken, room.disconnectedPlayers);
         io.to(socketId).emit('stateUpdate', { state, uiEvent });
@@ -811,7 +813,10 @@ function maybeScheduleAITurn(roomCode, room) {
         const gsPlayer = gs.players.find(gp => gp.id === p.sessionToken);
         return gsPlayer && !gsPlayer.isAI;
     });
-    if (!hasConnectedHuman) return;
+    if (!hasConnectedHuman) {
+        console.log(`Room ${roomCode}: AI turn skipped for ${player.name} — no human players connected`);
+        return;
+    }
 
     // Cancel any existing AI timer for this room
     if (room.aiTurnTimer) {
@@ -885,9 +890,12 @@ function executeAITurn(roomCode, room) {
         plan = [{ type: 'endTurn' }];
     }
     if (!plan || plan.length === 0) {
+        console.warn(`Room ${roomCode}: ${player.name} planTurn returned empty plan, falling back to endTurn`);
         plan = [{ type: 'endTurn' }];
     }
-    console.log(`Room ${roomCode}: ${player.name} plan (phase=${gs.phase}): [${plan.map(a => a.type).join(', ')}]`);
+    const hasSubstantiveAction = plan.some(a => !['endTurn', 'endOperatePhase'].includes(a.type));
+    const logLevel = hasSubstantiveAction ? 'log' : 'warn';
+    console[logLevel](`Room ${roomCode}: ${player.name} plan (phase=${gs.phase}, cash=${player.cash}, loads=${player.loads.length}): [${plan.map(a => a.type).join(', ')}]`);
     executeAIActionSequence(roomCode, room, plan, 0);
 }
 
@@ -935,6 +943,35 @@ function executeAIActionSequence(roomCode, room, plan, stepIndex) {
 
     broadcastStateUpdate(roomCode, room, result.uiEvent);
 
+    // After a successful deliverGood by an AI with movement remaining,
+    // re-plan the operate phase with fresh state. The delivery replaced a
+    // demand card and cleared the AI target, so the pre-computed plan is stale.
+    if (action.type === 'deliverGood' && player.isAI && player.movement > 0) {
+        room.aiTurnTimer = setTimeout(() => {
+            room.aiTurnTimer = null;
+            if (!rooms.has(roomCode)) return;
+            const freshGs = room.gameState;
+            if (!freshGs) return;
+            const pi = freshGs.currentPlayerIndex;
+            const p = freshGs.players[pi];
+            if (!p || !p.isAI) return;
+            let operatePlan;
+            try {
+                const freshCtx = buildPathfindingCtx(freshGs);
+                operatePlan = aiEasy.planTurn(freshGs, pi, freshCtx);
+            } catch (err) {
+                console.warn(`Room ${roomCode}: AI planTurn error (post-delivery re-plan): ${err.message}`);
+                operatePlan = [{ type: 'endOperatePhase' }];
+            }
+            if (!operatePlan || operatePlan.length === 0) {
+                operatePlan = [{ type: 'endOperatePhase' }];
+            }
+            console.log(`Room ${roomCode}: ${p.name} post-delivery re-plan (movement=${p.movement}): [${operatePlan.map(a => a.type).join(', ')}]`);
+            executeAIActionSequence(roomCode, room, operatePlan, 0);
+        }, AI_ACTION_DELAY_MS);
+        return;
+    }
+
     if (action.type === 'endTurn' || action.type === 'discardHand') {
         if (result.uiEvent?.gameOver) return;
         maybeScheduleAITurn(roomCode, room);
@@ -950,10 +987,21 @@ function executeAIActionSequence(roomCode, room, plan, stepIndex) {
             if (!rooms.has(roomCode)) return;
             const freshGs = room.gameState;
             if (!freshGs) return;
-            const freshCtx = buildPathfindingCtx(freshGs);
-            const buildPlan = aiEasy.planTurn(freshGs, freshGs.currentPlayerIndex, freshCtx);
+            let buildPlan;
+            try {
+                const freshCtx = buildPathfindingCtx(freshGs);
+                buildPlan = aiEasy.planTurn(freshGs, freshGs.currentPlayerIndex, freshCtx);
+            } catch (err) {
+                console.warn(`Room ${roomCode}: AI planTurn error (build re-plan): ${err.message}`);
+                buildPlan = [{ type: 'endTurn' }];
+            }
+            if (!buildPlan || buildPlan.length === 0) {
+                console.warn(`Room ${roomCode}: AI build re-plan returned empty, falling back to endTurn`);
+                buildPlan = [{ type: 'endTurn' }];
+            }
             const bp = freshGs.players[freshGs.currentPlayerIndex];
-            console.log(`Room ${roomCode}: ${bp.name} plan (phase=${freshGs.phase}): [${buildPlan.map(a => a.type).join(', ')}]`);
+            const hasBuild = buildPlan.some(a => !['endTurn', 'endOperatePhase'].includes(a.type));
+            console[hasBuild ? 'log' : 'warn'](`Room ${roomCode}: ${bp.name} plan (phase=${freshGs.phase}, cash=${bp.cash}): [${buildPlan.map(a => a.type).join(', ')}]`);
             executeAIActionSequence(roomCode, room, buildPlan, 0);
         }, AI_ACTION_DELAY_MS);
         return;
@@ -1435,7 +1483,8 @@ io.on('connection', (socket) => {
             gameState: null,
             maxPlayers: totalPlayers,
             password: null,
-            solo: true
+            solo: true,
+            lastActivity: Date.now()
         };
 
         room.players.set(socket.id, { name: playerName.trim(), color: playerColor, sessionToken });
@@ -1501,7 +1550,8 @@ io.on('connection', (socket) => {
             gameStarted: false,
             gameState: null,
             maxPlayers: playerCount,
-            password: password || null
+            password: password || null,
+            lastActivity: Date.now()
         };
         room.players.set(socket.id, { name: playerName, color: null, sessionToken });
         room.sessionToSocketId.set(sessionToken, socket.id);
@@ -1535,6 +1585,7 @@ io.on('connection', (socket) => {
         const sessionToken = randomUUID();
         room.players.set(socket.id, { name: playerName, color: null, sessionToken });
         room.sessionToSocketId.set(sessionToken, socket.id);
+        room.lastActivity = Date.now();
         socket.join(code);
         socket.roomCode = code;
 
@@ -2085,7 +2136,8 @@ io.on('connection', (socket) => {
                 password: null,
                 resuming: true, // flag to indicate this room is in resume-waiting state
                 saveData: saveData, // keep save data for seat code validation
-                seatedPlayers: new Map() // color -> sessionToken (tracks who has claimed which seat)
+                seatedPlayers: new Map(), // color -> sessionToken (tracks who has claimed which seat)
+                lastActivity: Date.now()
             };
 
             rooms.set(roomCode, room);
@@ -2596,6 +2648,29 @@ function getRoomList() {
 function broadcastRoomList() {
     io.emit('roomListUpdate', getRoomList());
 }
+
+// --- Idle Room Cleanup ---
+
+setInterval(() => {
+    const now = Date.now();
+    for (const [roomCode, room] of rooms) {
+        if (now - (room.lastActivity || 0) < ROOM_IDLE_MS) continue;
+
+        console.log(`Room ${roomCode} deleted (idle for ${Math.round((now - (room.lastActivity || 0)) / 60000)} minutes)`);
+
+        // Clean up timers
+        if (room.graceTimers) {
+            for (const timer of room.graceTimers.values()) clearTimeout(timer);
+        }
+        if (room.turnTimers) {
+            for (const timer of room.turnTimers.values()) clearTimeout(timer);
+        }
+        if (room.aiTurnTimer) clearTimeout(room.aiTurnTimer);
+
+        rooms.delete(roomCode);
+    }
+    if (rooms.size > 0) broadcastRoomList();
+}, ROOM_IDLE_MS);
 
 // --- Start Server ---
 
