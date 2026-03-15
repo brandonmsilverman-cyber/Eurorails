@@ -24,8 +24,6 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 - [ ] **Event modal text should list all effects** — The persistent event banner at the top of the screen doesn't always describe every impact of the event (e.g. missing that rail building is disallowed in the affected area). Update event descriptions to fully enumerate all gameplay effects
 - [ ] **Improved trackage rights payment animation** — Replace falling coins with a more polished visual for trackage rights transfers
 - [ ] **AI hints system** — "What would an expert do?" suggestion feature for learning players
-- [ ] **Add ferry building and usage to tutorial** — Explain how ferry routes work (building, costs, shared ownership, crossing) in the in-game tutorial
-
 ## Reconnection Improvement
 
 - [ ] **localStorage fallback for tab closure recovery** — Add localStorage as a fallback so reconnection credentials survive tab closure and incognito mode, while preserving multi-tab play. Full plan in [`LOCALSTORAGE_FALLBACK_PLAN.md`](LOCALSTORAGE_FALLBACK_PLAN.md).
@@ -83,3 +81,4 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 - [x] London-Amsterdam ferry endpoint repositioned
 - [x] Spain access restricted (Pyrenees alpine region, eastern pass, Cantabrian mountains, Madrid area cleared)
 - [x] Turn duration clock (count-up timer on train card, minimizable)
+- [x] Add ferry building and usage to tutorial

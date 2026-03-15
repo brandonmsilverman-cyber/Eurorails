@@ -1,4 +1,5 @@
 [
+  {"message": "Add ferry section to How to Play tutorial", "date": "Mar 15, 2026"},
   {"message": "Add turn duration clock to train card", "date": "Mar 15, 2026"},
   {"message": "UI fixes, terrain balance, and demand card improvements", "date": "Mar 15, 2026"},
   {"message": "Add configurable train speed tiers (Standard/Faster/Fastest)", "date": "Mar 15, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Fix solo game save/resume by excluding AI players from waiting room", "date": "Mar 14, 2026"},
   {"message": "Fix zoom-out hover twitching by caching container dimensions", "date": "Mar 14, 2026"},
   {"message": "Add resume lobby flow and save button UI (Save & Resume Phase 2)", "date": "Mar 14, 2026"},
-  {"message": "Add server-side save/resume infrastructure (Phase 0 + Phase 1)", "date": "Mar 14, 2026"},
-  {"message": "Add toggle to hide city goods icons on map", "date": "Mar 13, 2026"}
+  {"message": "Add server-side save/resume infrastructure (Phase 0 + Phase 1)", "date": "Mar 14, 2026"}
 ]
