@@ -433,16 +433,17 @@
         }
 
         .demand-card-overlay .deliver-btn {
-            width: 100%;
-            padding: 4px;
-            margin-top: 2px;
-            font-size: 10px;
+            display: inline-block;
+            padding: 1px 4px;
+            margin-left: 4px;
+            font-size: 9px;
             font-weight: bold;
             background: #3a8a3a;
             color: #fff;
             border: 1px solid #4a9e4a;
             border-radius: 3px;
             cursor: pointer;
+            vertical-align: middle;
         }
 
         .demand-card-overlay .deliver-btn:hover {
@@ -1240,7 +1241,7 @@ const RIVERS = {
 // Ferry routes (dashed lines across water)
 const FERRY_ROUTES = [
     { from: [33.2, 30], to: [34.5, 30], name: "Dover-Calais", cost: 4 },
-    { from: [31, 30], to: [37, 27], name: "London-Amsterdam", cost: 4 },
+    { from: [33, 28.5], to: [37, 27], name: "London-Amsterdam", cost: 4 },
     { from: [27, 33], to: [26, 35.5], name: "Plymouth-Brest", cost: 4 },
     { from: [30.5, 21], to: [42, 17], name: "Newcastle-Århus", cost: 14 },
     { from: [45.5, 20.5], to: [47, 19], name: "Germany-Copenhagen", cost: 4 },
@@ -3975,12 +3976,15 @@ function drawMap() {
             // Place label above the top of the hull near this center
             const topY = Math.min(...zoneScreenPoints.map(p => p[1]));
             const labelY = topY - Math.max(8, 10 * uiScale);
+            const bannerH = Math.max(14, 16 * uiScale);
+            const bannerTop = labelY - Math.max(9, 10 * uiScale);
             ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
             ctx.beginPath();
-            ctx.roundRect(scx - labelW / 2, labelY - Math.max(9, 10 * uiScale), labelW, Math.max(14, 16 * uiScale), 3);
+            ctx.roundRect(scx - labelW / 2, bannerTop, labelW, bannerH, 3);
             ctx.fill();
             ctx.fillStyle = labelColor;
-            ctx.fillText(labelText, scx, labelY);
+            ctx.textBaseline = "middle";
+            ctx.fillText(labelText, scx, bannerTop + bannerH / 2);
         }
 
         // Snow: mark blocked mountain/alpine mileposts in zone with red X
@@ -5441,7 +5445,7 @@ function updateUI() {
                                    currentPlayer.loads.includes(demand.good) &&
                                    !isEventBlocking("deliver", { milepostId: currentPlayer.trainLocation });
                 const deliverBtn = canDeliver
-                    ? `<button class="deliver-btn" onclick="event.stopPropagation(); deliverGood(${cardIdx}, ${dIdx})">💰 Deliver ECU ${demand.payout}M</button>`
+                    ? ` <button class="deliver-btn" onclick="event.stopPropagation(); deliverGood(${cardIdx}, ${dIdx})">💰 ${demand.payout}M</button>`
                     : "";
 
                 const isSelected = dIdx === selectedIdx;
@@ -5460,9 +5464,8 @@ function updateUI() {
                     <div class="source-cities">From: ${sourcesHtml}</div>
                     <div class="dest-city">To: <span
                         onmouseenter="highlightCities(['${demand.to}'])"
-                        onmouseleave="clearHighlight()">${demand.to}</span>
+                        onmouseleave="clearHighlight()">${demand.to}</span>${deliverBtn}
                     </div>
-                    ${deliverBtn}
                 </div>`;
             }).join("");
 

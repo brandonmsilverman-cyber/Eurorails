@@ -504,20 +504,39 @@
         }
 
         .demand-card-overlay .deliver-btn {
-            width: 100%;
-            padding: 4px;
-            margin-top: 2px;
-            font-size: 10px;
+            display: inline-block;
+            padding: 1px 4px;
+            margin-left: 4px;
+            font-size: 9px;
             font-weight: bold;
             background: #3a8a3a;
             color: #fff;
             border: 1px solid #4a9e4a;
             border-radius: 3px;
             cursor: pointer;
+            vertical-align: middle;
         }
 
         .demand-card-overlay .deliver-btn:hover {
             background: #4aaa4a;
+        }
+
+        .demand-card-overlay .pickup-badge {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: bold;
+            color: #4a9e4a;
+            background: rgba(74,158,74,0.15);
+            border: 1px solid rgba(74,158,74,0.3);
+            border-radius: 3px;
+            padding: 1px 4px;
+            margin-left: 4px;
+            vertical-align: middle;
+            cursor: pointer;
+        }
+
+        .demand-card-overlay .pickup-badge:hover {
+            background: rgba(74,158,74,0.3);
         }
 
         .sidebar {
@@ -3018,12 +3037,15 @@ function drawMap() {
             // Place label above the top of the hull near this center
             const topY = Math.min(...zoneScreenPoints.map(p => p[1]));
             const labelY = topY - Math.max(8, 10 * uiScale);
+            const bannerH = Math.max(14, 16 * uiScale);
+            const bannerTop = labelY - Math.max(9, 10 * uiScale);
             ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
             ctx.beginPath();
-            ctx.roundRect(scx - labelW / 2, labelY - Math.max(9, 10 * uiScale), labelW, Math.max(14, 16 * uiScale), 3);
+            ctx.roundRect(scx - labelW / 2, bannerTop, labelW, bannerH, 3);
             ctx.fill();
             ctx.fillStyle = labelColor;
-            ctx.fillText(labelText, scx, labelY);
+            ctx.textBaseline = "middle";
+            ctx.fillText(labelText, scx, bannerTop + bannerH / 2);
         }
 
         // Snow: mark blocked mountain/alpine mileposts in zone with red X
@@ -4699,7 +4721,7 @@ function updateUI() {
                                    myPlayer.loads.includes(demand.good) &&
                                    !isEventBlocking("deliver", { milepostId: myPlayer.trainLocation });
                 const deliverBtn = canDeliver
-                    ? `<button class="deliver-btn" onclick="event.stopPropagation(); deliverGood(${cardIdx}, ${dIdx})">💰 Deliver ECU ${demand.payout}M</button>`
+                    ? ` <button class="deliver-btn" onclick="event.stopPropagation(); deliverGood(${cardIdx}, ${dIdx})">💰 ${demand.payout}M</button>`
                     : "";
 
                 // Check if this good can be picked up at the current city
@@ -4711,7 +4733,7 @@ function updateUI() {
                     (GOODS[demand.good] ? (GOODS[demand.good].chips - getGoodsInCirculation(demand.good)) > 0 : false) &&
                     !isEventBlocking("load", { milepostId: myPlayer.trainLocation });
                 const pickupBadge = pickupAvailable
-                    ? `<div><span style="display:inline-block; font-size:9px; font-weight:bold; color:#4a9e4a; background:rgba(74,158,74,0.15); border:1px solid rgba(74,158,74,0.3); border-radius:3px; padding:1px 4px; margin-top:2px;">📦 Available here</span></div>`
+                    ? ` <span class="pickup-badge" onclick="event.stopPropagation(); pickupGood('${demand.good}')" style="cursor:pointer;">📦 Pickup</span>`
                     : "";
 
                 const isSelected = dIdx === selectedIdx;
@@ -4730,10 +4752,8 @@ function updateUI() {
                     <div class="source-cities">From: ${sourcesHtml}</div>
                     <div class="dest-city">To: <span
                         onmouseenter="highlightCities(['${demand.to}'])"
-                        onmouseleave="clearHighlight()">${demand.to}</span>
+                        onmouseleave="clearHighlight()">${demand.to}</span>${pickupBadge}${deliverBtn}
                     </div>
-                    ${pickupBadge}
-                    ${deliverBtn}
                 </div>`;
             }).join("");
 
@@ -4765,9 +4785,12 @@ function updateUI() {
                 <div style="font-size:12px; color:#666;">${phaseLabel} Phase</div>
             </div>`;
     } else if (gameState.phase === "initialBuilding") {
-        const remainingBudget = 20 - gameState.buildingThisTurn;
-        const budgetPct = Math.round((remainingBudget / 20) * 100);
-        const budgetColor = remainingBudget > 10 ? "#4a9e4a" : remainingBudget > 5 ? "#ffcc00" : "#ff4444";
+        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+        const rawRemainingBudget = 20 - gameState.buildingThisTurn;
+        const effectiveBudget = Math.min(rawRemainingBudget, currentPlayer.cash);
+        const effectiveTotal = Math.min(20, currentPlayer.cash + gameState.buildingThisTurn);
+        const budgetPct = effectiveTotal > 0 ? Math.round((effectiveBudget / effectiveTotal) * 100) : 0;
+        const budgetColor = effectiveBudget > 10 ? "#4a9e4a" : effectiveBudget > 5 ? "#ffcc00" : "#ff4444";
         const cheapestActive = gameState.buildPathMode === "cheapest";
         const shortestActive = gameState.buildPathMode === "shortest";
         const foreignActive = gameState.useForeignTrackInBuild;
@@ -4776,7 +4799,7 @@ function updateUI() {
             <div style="font-size:11px; margin-bottom:8px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                     <span>Turn Budget:</span>
-                    <strong style="color:${budgetColor};">${remainingBudget}M / 20M</strong>
+                    <strong style="color:${budgetColor};">${effectiveBudget}M / ${effectiveTotal}M</strong>
                 </div>
                 <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
                     <div style="background:${budgetColor}; height:100%; width:${budgetPct}%; transition:width 0.3s;"></div>
@@ -4952,9 +4975,12 @@ function updateUI() {
         `;
         actionButtons.innerHTML = operateHtml;
     } else { // build phase
-        const remainingBudget = 20 - gameState.buildingThisTurn;
-        const budgetPct = Math.round((remainingBudget / 20) * 100);
-        const budgetColor = remainingBudget > 10 ? "#4a9e4a" : remainingBudget > 5 ? "#ffcc00" : "#ff4444";
+        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+        const rawRemainingBudget = 20 - gameState.buildingThisTurn;
+        const effectiveBudget = Math.min(rawRemainingBudget, currentPlayer.cash);
+        const effectiveTotal = Math.min(20, currentPlayer.cash + gameState.buildingThisTurn);
+        const budgetPct = effectiveTotal > 0 ? Math.round((effectiveBudget / effectiveTotal) * 100) : 0;
+        const budgetColor = effectiveBudget > 10 ? "#4a9e4a" : effectiveBudget > 5 ? "#ffcc00" : "#ff4444";
         const cheapestActive = gameState.buildPathMode === "cheapest";
         const shortestActive = gameState.buildPathMode === "shortest";
         const foreignActive = gameState.useForeignTrackInBuild;
@@ -4963,7 +4989,7 @@ function updateUI() {
             <div style="font-size:11px; margin-bottom:8px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                     <span>Turn Budget:</span>
-                    <strong style="color:${budgetColor};">${remainingBudget}M / 20M</strong>
+                    <strong style="color:${budgetColor};">${effectiveBudget}M / ${effectiveTotal}M</strong>
                 </div>
                 <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
                     <div style="background:${budgetColor}; height:100%; width:${budgetPct}%; transition:width 0.3s;"></div>

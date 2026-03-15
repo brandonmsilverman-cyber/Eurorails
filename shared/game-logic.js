@@ -303,22 +303,24 @@ var LANDMASSES = {
 var MOUNTAIN_PASSES = [
     { from: [39.5, 37], to: [41, 44], radius: 1.3 },   // Mont Cenis — France to Torino
     { from: [44, 35.5], to: [43.5, 43], radius: 1.3 },  // Gotthard — Switzerland to Milano
-    { from: [49, 36], to: [48.5, 43], radius: 1.3 }     // Brenner — Austria to Venezia
+    { from: [49, 36], to: [48.5, 43], radius: 1.3 },    // Brenner — Austria to Venezia
+    { from: [33, 49], to: [33, 55], radius: 1.3 }       // Eastern Pyrenees — Toulouse to Barcelona
 ];
 
 var TERRAIN_REGIONS = {
     alpine: [
-        [[39,37], [45,35], [49,36], [53,36], [55,38], [53,41], [50,43], [48,44], [44,48], [39,48], [37,44], [39,37]]
+        [[39,37], [45,35], [49,36], [53,36], [55,38], [53,41], [50,43], [48,44], [44,48], [39,48], [37,44], [39,37]],
+        [[21,47], [35,48], [36,52], [34,54], [20,51], [19,49], [21,47]]  // Pyrenees
     ],
     mountain: [
-        [[27,48], [31,47], [34,50], [36,53], [34,55], [31,53], [28,51], [27,48]],
+        [[19,49], [27,48], [28,52], [22,53], [20,56], [18,55], [18,52], [19,49]],  // Cantabrian Mountains (northern Spain coast to Porto)
         [[27,11], [31,11], [32,15], [30,17], [27,15], [27,11]],
         [[38,4], [43,4], [45,7], [43,11], [41,10], [39,7], [38,4]],
-        [[48,29], [53,28], [54,31], [53,34], [49,34], [48,31], [48,29]],
+        [[49,29], [53,28], [54,31], [53,34], [50,34], [49,31], [49,29]],  // Central Europe (shrunk around Praha)
         [[54,29], [58,27], [61,31], [61,38], [59,40], [57,38], [55,34], [54,29]],
         [[54,43], [58,44], [60,48], [57,51], [54,49], [53,45], [54,43]],
         [[44,47], [47,49], [49,53], [51,57], [49,59], [47,55], [45,51], [44,47]],
-        [[22,55], [28,53], [31,56], [30,60], [26,63], [22,61], [22,55]]
+        [[27,55], [31,56], [30,60], [27,63], [25,62], [26,58], [27,55]]  // Iberian interior (east of Madrid)
     ]
 };
 
@@ -339,7 +341,7 @@ var RIVERS = {
 // Ferry routes (dashed lines across water)
 var FERRY_ROUTES = [
     { from: [33.2, 30], to: [34.5, 30], name: "Dover-Calais", cost: 4 },
-    { from: [31, 30], to: [37, 27], name: "London-Amsterdam", cost: 4 },
+    { from: [33, 28.5], to: [37, 27], name: "London-Amsterdam", cost: 4 },
     { from: [27, 33], to: [26, 35.5], name: "Plymouth-Brest", cost: 4 },
     { from: [30.5, 21], to: [42, 17], name: "Newcastle-Århus", cost: 14 },
     { from: [45.5, 20.5], to: [47, 19], name: "Germany-Copenhagen", cost: 4 },

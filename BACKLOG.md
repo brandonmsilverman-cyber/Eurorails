@@ -18,9 +18,9 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 - [ ] **Backtracking** — A player may reverse their train's direction on any milepost (not just at cities) at a cost of losing 1 full turn. Per the official rules (p. 26, "Backtracking" section): a train which backtracks can move in any direction on its next turn. A train may not backtrack when the player has discarded their cards during the same turn. A train may backtrack if it cannot move for any other reason (e.g., Derailment or Rail Strike). A player whose train backtracks while on an opponent's track is assessed the use fee for that turn.
 - [ ] **Discard pile reshuffle** — When the demand card deck runs out, reshuffle fulfilled/discarded demand cards back into the deck so the game never runs dry
 - [ ] **Economy difficulty setting** — Add a pre-game room option with three economy modes (Standard, Constrained, Generous) that adjust demand card payout amounts and route length mix
-- [ ] **Set train destination** — Player selects a city as their destination; the train automatically moves toward it each operate phase until it arrives, the player undoes movement, or the mode is turned off
+- [ ] **Set train destination** — Player selects a city as their destination; the train automatically moves toward it each operate phase until it arrives, the player undoes movement, an event card disrupts it (i.e. derail or broken track), or the mode is turned off
 - [ ] **Faster train tier** — Add a 20+ speed train option to reduce late-game drag when players have long routes. Full plan in [`EXPRESS_TRAIN_PLAN.md`](EXPRESS_TRAIN_PLAN.md).
-- [ ] **Turn countdown clock** — Optional time pressure element with a visible countdown timer per turn
+- [ ] **Turn duration clock** — Optional time pressure element with a visible timer per turn counting up from 0. player should be able to minimize/hide this from view
 
 ## UI / Visual
 
@@ -38,17 +38,7 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 
 ## Bug Fixes
 
-- [ ] **Demand card text overflow** — Text in the bottom row of the demand card can extend past the bottom edge of the card due to "available here" banners pushing content down
-- [ ] **Event banner text not vertically centered** — Text on map event title banners (e.g. "Snow: Torino") is not centered vertically within the banner
-- [ ] **Build turn budget overstates available ECU** — Turn budget in actions panel shows 20 ECU even when the player has less money available in total ECU reserve
-- [ ] **London-Amsterdam ferry endpoint misplaced** — The London-Amsterdam ferry endpoint appears in the middle of the UK (visual only); move it to a milepost on the east coast of the UK
 - [ ] **AI builds into major cities instead of out from them** — AI pathfinding sometimes builds toward a major city (paying the 5M city entry cost) instead of building outward from it (1M for the adjacent milepost). Example: AI 1 spent 5M for 4 mileposts building into Praha, when reversing the build direction would cost only 1M for the same connection
-
-## Balance / Gameplay Feedback
-
-- [ ] **Small trip payouts too generous** — Early-game short deliveries may pay too much, making the opening phase too easy; consider tuning payout curves
-- [ ] **Spain access too open** — Access routes into Spain could be more strategically restrictive to create meaningful geographic chokepoints
-- [ ] **Faster train speed option** — Add a game room option for faster train speeds (12/16 MP instead of 9/12) for quicker games
 
 ## Completed
 
@@ -90,3 +80,9 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 - [x] AI movement costs drastically undercharged (reversed paths / wormhole fix)
 - [x] AI builds inefficient looping track (reversed path direction fix)
 - [x] Configurable victory conditions (lobby UI, server validation, dynamic in-game display)
+- [x] Configurable train speed tiers (Standard/Faster/Fastest lobby setting, dynamic MP lookup)
+- [x] Build turn budget overstates available ECU fix
+- [x] Demand card text overflow fix (inline pickup badge + deliver button)
+- [x] Event banner text vertical centering fix
+- [x] London-Amsterdam ferry endpoint repositioned
+- [x] Spain access restricted (Pyrenees alpine region, eastern pass, Cantabrian mountains, Madrid area cleared)
