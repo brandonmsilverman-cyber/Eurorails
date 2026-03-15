@@ -546,7 +546,7 @@ var EVENT_CARDS = [
         id: 138,
         type: "gale",
         title: "Gale! North Sea & English Channel",
-        description: "All trains within 6 mileposts of the North Sea or English Channel move at half rate. No railbuilding or ferry movement allowed in this area.",
+        description: "All trains within 6 mileposts of the North Sea or English Channel move at half rate. No railbuilding, ferry building, or ferry movement allowed. Trains at ferry ports in this area are derailed (lose 1 turn and 1 load).",
         seaAreas: ["North Sea", "English Channel"],
         radius: 6,
         persistent: true
@@ -555,7 +555,7 @@ var EVENT_CARDS = [
         id: 139,
         type: "gale",
         title: "Gale! Baltic & Mediterranean",
-        description: "All trains within 4 mileposts of the Baltic Sea or Mediterranean move at half rate. No railbuilding allowed in this area.",
+        description: "All trains within 4 mileposts of the Baltic Sea or Mediterranean move at half rate. No railbuilding or ferry building allowed in this area.",
         seaAreas: ["Baltic Sea", "Mediterranean"],
         radius: 4,
         persistent: true
@@ -564,7 +564,7 @@ var EVENT_CARDS = [
         id: 140,
         type: "gale",
         title: "Gale! Atlantic & Bay of Biscay",
-        description: "All trains within 4 mileposts of the Atlantic or Bay of Biscay move at half rate. No railbuilding allowed in this area.",
+        description: "All trains within 4 mileposts of the Atlantic or Bay of Biscay move at half rate. No railbuilding or ferry building allowed in this area.",
         seaAreas: ["Atlantic", "Bay of Biscay"],
         radius: 4,
         persistent: true

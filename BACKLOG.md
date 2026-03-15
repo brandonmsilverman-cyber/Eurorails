@@ -21,7 +21,6 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 ## UI / Visual
 
 - [ ] **Overhaul demand card row hover effect** — When hovering a demand card row, highlight origin and destination cities simultaneously on the map using distinct colors (e.g. one color for origin cities, another for the destination)
-- [ ] **Event modal text should list all effects** — The persistent event banner at the top of the screen doesn't always describe every impact of the event (e.g. missing that rail building is disallowed in the affected area). Update event descriptions to fully enumerate all gameplay effects
 - [ ] **Improved trackage rights payment animation** — Replace falling coins with a more polished visual for trackage rights transfers
 - [ ] **AI hints system** — "What would an expert do?" suggestion feature for learning players
 ## Reconnection Improvement
@@ -82,3 +81,4 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 - [x] Spain access restricted (Pyrenees alpine region, eastern pass, Cantabrian mountains, Madrid area cleared)
 - [x] Turn duration clock (count-up timer on train card, minimizable)
 - [x] Add ferry building and usage to tutorial
+- [x] Event descriptions list all effects (ferry building, gale derailment at ports)
