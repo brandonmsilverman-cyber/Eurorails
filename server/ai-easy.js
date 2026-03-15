@@ -15,7 +15,7 @@ const getPlayerOwnedMileposts = gl.getPlayerOwnedMileposts;
 // 3a: Demand selection — picks the demand with the best profit margin
 // (payout - build cost) that the AI can afford. Strongly prefers affordable
 // demands to avoid burning cash on unfinishable routes.
-function selectTargetDemand(gs, playerIndex, ctx, { excludeFullyBuilt = false } = {}) {
+function selectTargetDemand(gs, playerIndex, ctx, { excludeFullyBuilt = false, excludeCardIndex = -1, excludeDemandIndex = -1 } = {}) {
     const player = gs.players[playerIndex];
     let bestAffordable = null;
     let bestAffordableScore = -Infinity;
@@ -42,6 +42,7 @@ function selectTargetDemand(gs, playerIndex, ctx, { excludeFullyBuilt = false } 
         const card = player.demandCards[ci];
         if (!card || !card.demands) continue;
         for (let di = 0; di < card.demands.length; di++) {
+            if (ci === excludeCardIndex && di === excludeDemandIndex) continue;
             const demand = card.demands[di];
             const sources = GOODS[demand.good] ? GOODS[demand.good].sources : [];
             for (const sourceCity of sources) {
@@ -692,13 +693,13 @@ function planTurn(gs, playerIndex, ctx) {
 
         // Build toward target demand
         const target = selectTargetFromState(gs, playerIndex, ctx);
+        let buildAction = null;
         if (target) {
             console.log(`AI ${playerIndex} build: target=${target.good} from ${target.sourceCity}→${target.destCity} (buildCost=${target.cost}) cash=${player.cash}`);
             const srcId = ctx.cityToMilepost[target.sourceCity];
             const destId = ctx.cityToMilepost[target.destCity];
             const demand = player.demandCards[target.cardIndex]?.demands[target.demandIndex];
             const payout = demand ? demand.payout : 0;
-            let buildAction = null;
 
             // First try: build along the src→dest path
             const fullPath = findPath(ctx, srcId, destId, player.color, "cheapest");
@@ -717,10 +718,38 @@ function planTurn(gs, playerIndex, ctx) {
                 // Allow if the demand is profitable enough to justify the investment.
                 buildAction = findConnectorBuild(gs, playerIndex, ctx, srcId, destId, payout);
             }
+        }
 
-            if (buildAction) {
-                actions.push({ type: 'commitBuild', ...buildAction });
+        // If primary target's route is already fully built (nothing to build),
+        // look ahead: pick the next-best demand and build toward it now so the
+        // AI has track ready after the current delivery.
+        if (!buildAction) {
+            const secondary = selectTargetDemand(gs, playerIndex, ctx, {
+                excludeCardIndex: target ? target.cardIndex : -1,
+                excludeDemandIndex: target ? target.demandIndex : -1
+            });
+            if (secondary) {
+                const card2 = player.demandCards[secondary.cardIndex];
+                const demand2 = card2?.demands[secondary.demandIndex];
+                const srcId2 = ctx.cityToMilepost[secondary.sourceCity];
+                const destId2 = demand2 ? ctx.cityToMilepost[demand2.to] : undefined;
+                if (srcId2 && destId2 && demand2) {
+                    const payout2 = demand2.payout;
+                    console.log(`AI ${playerIndex} build: lookahead target=${demand2?.good} from ${secondary.sourceCity}→${demand2?.to} (buildCost=${secondary.cost}) cash=${player.cash}`);
+
+                    const fullPath2 = findPath(ctx, srcId2, destId2, player.color, "cheapest");
+                    if (fullPath2 && (fullPath2.cost <= player.cash || payout2 > fullPath2.cost)) {
+                        buildAction = computeBuildActions(gs, playerIndex, ctx, fullPath2);
+                    }
+                    if (!buildAction) {
+                        buildAction = findConnectorBuild(gs, playerIndex, ctx, srcId2, destId2, payout2);
+                    }
+                }
             }
+        }
+
+        if (buildAction) {
+            actions.push({ type: 'commitBuild', ...buildAction });
         }
 
         // Track idle turns for deadlock detection
