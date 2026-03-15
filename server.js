@@ -24,6 +24,8 @@ const GOODS = gl.GOODS;
 const EVENT_CARDS = gl.EVENT_CARDS;
 const RIVERS = gl.RIVERS;
 const TRAIN_TYPES = gl.TRAIN_TYPES;
+const SPEED_TIERS = gl.SPEED_TIERS;
+const getTrainMovement = gl.getTrainMovement;
 const crossesRiver = gl.crossesRiver;
 const getFerryKey = gl.getFerryKey;
 const playerOwnsFerry = gl.playerOwnsFerry;
@@ -255,7 +257,7 @@ function getConnectedMajorCities(gs, playerColor) {
 }
 
 function checkWinCondition(gs, player) {
-    const settings = gs.gameSettings || { winCashThreshold: 250, winMajorCitiesRequired: 7 };
+    const settings = gs.gameSettings || { winCashThreshold: 250, winMajorCitiesRequired: 7, speedTier: "Standard" };
     if (player.cash < settings.winCashThreshold) return false;
     if (!gs.cityToMilepost) return false; // Can't check without hex grid data
     const connectedCities = getConnectedMajorCities(gs, player.color);
@@ -711,7 +713,7 @@ function serverEndTurn(gs, depth = 0) {
             if (gs.buildingPhaseCount >= gs.initialBuildingRounds) {
                 gs.phase = "operate";
                 for (const player of gs.players) {
-                    player.movement = TRAIN_TYPES[player.trainType].movement;
+                    player.movement = getTrainMovement(player.trainType, gs.gameSettings.speedTier);
                 }
             }
         }
@@ -723,7 +725,7 @@ function serverEndTurn(gs, depth = 0) {
     } else if (gs.phase === "build" || gs.phase === "operate") {
         gs.phase = "operate";
         const player = gs.players[gs.currentPlayerIndex];
-        const baseMovement = TRAIN_TYPES[player.trainType].movement;
+        const baseMovement = getTrainMovement(player.trainType, gs.gameSettings.speedTier);
 
         if (player.ferryState) {
             // TODO: gale ferry blocking check requires hex grid (isMilepostInEventZone)
@@ -1116,7 +1118,7 @@ function createGameState(playerList, gameSettings) {
         ferryConnections: grid.ferryConnections,
         coastDistance,
         eventZones,
-        gameSettings: gameSettings || { winCashThreshold: 250, winMajorCitiesRequired: 7 }
+        gameSettings: gameSettings || { winCashThreshold: 250, winMajorCitiesRequired: 7, speedTier: "Standard" }
     };
 }
 
@@ -1191,7 +1193,8 @@ function serializeForSave(gameState, gameName) {
             halfSpeedActive: gs.halfSpeedActive,
             trackageRightsPaidThisTurn: gs.trackageRightsPaidThisTurn,
             trackageRightsLog: gs.trackageRightsLog,
-            gameLog: gs.gameLog
+            gameLog: gs.gameLog,
+            gameSettings: gs.gameSettings
         }
     };
 
@@ -1345,7 +1348,8 @@ function loadGameStateFromSave(saveData) {
         cityToMilepost: grid.cityToMilepost,
         ferryConnections: grid.ferryConnections,
         coastDistance,
-        eventZones
+        eventZones,
+        gameSettings: Object.assign({ winCashThreshold: 250, winMajorCitiesRequired: 7, speedTier: "Standard" }, s.gameSettings || {})
     };
 }
 
@@ -1472,7 +1476,7 @@ io.on('connection', (socket) => {
             maxPlayers: playerCount,
             password: password || null,
             lastActivity: Date.now(),
-            gameSettings: { winCashThreshold: 250, winMajorCitiesRequired: 7 }
+            gameSettings: { winCashThreshold: 250, winMajorCitiesRequired: 7, speedTier: "Standard" }
         };
         room.players.set(socket.id, { name: playerName, color: null, sessionToken });
         room.sessionToSocketId.set(sessionToken, socket.id);
@@ -1729,6 +1733,13 @@ io.on('connection', (socket) => {
                 return callback && callback({ success: false, error: 'winMajorCitiesRequired must be an integer 1–8' });
             }
             room.gameSettings.winMajorCitiesRequired = v;
+        }
+
+        if (settings && typeof settings.speedTier === 'string') {
+            if (!SPEED_TIERS[settings.speedTier]) {
+                return callback && callback({ success: false, error: 'Invalid speed tier' });
+            }
+            room.gameSettings.speedTier = settings.speedTier;
         }
 
         io.to(socket.roomCode).emit('roomUpdate', getRoomInfo(socket.roomCode));

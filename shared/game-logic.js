@@ -105,12 +105,24 @@ var GOODS = {
     "Wood": { chips: 3, sources: ["Oslo", "Sarajevo"] }
 };
 
-var TRAIN_TYPES = {
-    "Freight": { movement: 9, capacity: 2 },
-    "Fast Freight": { movement: 12, capacity: 2 },
-    "Heavy Freight": { movement: 9, capacity: 3 },
-    "Superfreight": { movement: 12, capacity: 3 }
+var SPEED_TIERS = {
+    "Standard":  { slow: 9,  fast: 12 },
+    "Faster":    { slow: 12, fast: 16 },
+    "Fastest":   { slow: 15, fast: 20 }
 };
+
+var TRAIN_TYPES = {
+    "Freight":       { category: "slow", capacity: 2 },
+    "Fast Freight":  { category: "fast", capacity: 2 },
+    "Heavy Freight": { category: "slow", capacity: 3 },
+    "Superfreight":  { category: "fast", capacity: 3 }
+};
+
+function getTrainMovement(trainType, speedTier) {
+    var tier = SPEED_TIERS[speedTier] || SPEED_TIERS["Standard"];
+    var cat = TRAIN_TYPES[trainType].category;
+    return tier[cat];
+}
 
 var EVENT_TYPES = {
     "Derailment": "Lose 1 turn and 1 load",
@@ -1540,7 +1552,9 @@ var exports = {
     MAJOR_CITIES: MAJOR_CITIES,
     CITIES: CITIES,
     GOODS: GOODS,
+    SPEED_TIERS: SPEED_TIERS,
     TRAIN_TYPES: TRAIN_TYPES,
+    getTrainMovement: getTrainMovement,
     EVENT_TYPES: EVENT_TYPES,
     COLOR_MAP: COLOR_MAP,
     LANDMASSES: LANDMASSES,

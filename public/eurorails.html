@@ -3604,7 +3604,7 @@ function drawMap() {
                 <div class="train-content">
                     <div class="train-info-col">
                         <div class="train-stat"><span>Type:</span><strong>${myPlayer.trainType}</strong></div>
-                        <div class="train-stat"><span>Speed:</span><strong>${tt ? tt.movement : "?"}mp</strong></div>
+                        <div class="train-stat"><span>Speed:</span><strong>${tt ? getTrainMovement(myPlayer.trainType, gameState.gameSettings?.speedTier) : "?"}mp</strong></div>
                         <div class="train-stat"><span>Location:</span><strong>${locationName}</strong></div>
                     </div>
                     <div class="train-loads-col">
@@ -4093,14 +4093,15 @@ function upgradeTo(trainType) {
 }
 
 function getUpgradeOptions(player) {
+    const tier = gameState.gameSettings?.speedTier;
     if (player.trainType === "Freight") {
         return [
-            { type: "Fast Freight", desc: "12mp speed, 2 loads" },
-            { type: "Heavy Freight", desc: "9mp speed, 3 loads" }
+            { type: "Fast Freight", desc: `${getTrainMovement("Fast Freight", tier)}mp speed, 2 loads` },
+            { type: "Heavy Freight", desc: `${getTrainMovement("Heavy Freight", tier)}mp speed, 3 loads` }
         ];
     } else if (player.trainType === "Fast Freight" || player.trainType === "Heavy Freight") {
         return [
-            { type: "Superfreight", desc: "12mp speed, 3 loads" }
+            { type: "Superfreight", desc: `${getTrainMovement("Superfreight", tier)}mp speed, 3 loads` }
         ];
     }
     return []; // Already max
@@ -4557,7 +4558,7 @@ function endTurnLocal() {
                 gameState.phase = "operate";
                 // Set movement for first time
                 for (let player of gameState.players) {
-                    player.movement = TRAIN_TYPES[player.trainType].movement;
+                    player.movement = getTrainMovement(player.trainType, gameState.gameSettings?.speedTier);
                 }
             }
         }
@@ -4568,7 +4569,7 @@ function endTurnLocal() {
         // After build or operate phase (e.g. discard hand skips build), start next player's operate
         gameState.phase = "operate";
         const player = gameState.players[gameState.currentPlayerIndex];
-        const baseMovement = TRAIN_TYPES[player.trainType].movement;
+        const baseMovement = getTrainMovement(player.trainType, gameState.gameSettings?.speedTier);
 
         // Check if player is crossing a ferry from last turn
         if (player.ferryState) {
@@ -4827,7 +4828,7 @@ function updateUI() {
         buildHtml += `<button onclick="endTurn()" style="width: 100%; margin-bottom: 5px;">End Building Turn</button>`;
         actionButtons.innerHTML = buildHtml;
     } else if (gameState.phase === "operate") {
-        const maxMovement = TRAIN_TYPES[currentPlayer.trainType] ? TRAIN_TYPES[currentPlayer.trainType].movement : 9;
+        const maxMovement = TRAIN_TYPES[currentPlayer.trainType] ? getTrainMovement(currentPlayer.trainType, gameState.gameSettings?.speedTier) : 9;
         const inHalfSpeed = currentPlayer.trainLocation && isInHalfSpeedZone(currentPlayer.trainLocation);
         const effectiveMax = inHalfSpeed ? Math.floor(maxMovement / 2) : maxMovement;
         const movePct = effectiveMax > 0 ? Math.round((currentPlayer.movement / effectiveMax) * 100) : 0;
@@ -6599,6 +6600,11 @@ function renderLobbyRoom(info) {
                         ${[1,2,3,4,5,6,7,8].map(v => `<option value="${v}"${v === gs.winMajorCitiesRequired ? ' selected' : ''}>${v} of 8</option>`).join('')}
                     </select>
                 </label>
+                <label style="font-size:13px;color:#ccc;">Train speed:
+                    <select id="settingSpeedTier" style="margin-left:4px;padding:4px 8px;font-size:13px;">
+                        ${[["Standard","Standard (9/12 mp)"],["Faster","Faster (12/16 mp)"],["Fastest","Fastest (15/20 mp)"]].map(([val,label]) => `<option value="${val}"${val === (gs.speedTier || "Standard") ? ' selected' : ''}>${label}</option>`).join('')}
+                    </select>
+                </label>
             </div>`;
         document.getElementById("settingCashThreshold").onchange = (e) => {
             socket.emit('updateGameSettings', { winCashThreshold: parseInt(e.target.value) }, (res) => {
@@ -6610,8 +6616,14 @@ function renderLobbyRoom(info) {
                 if (res && !res.success) console.warn('updateGameSettings:', res.error);
             });
         };
+        document.getElementById("settingSpeedTier").onchange = (e) => {
+            socket.emit('updateGameSettings', { speedTier: e.target.value }, (res) => {
+                if (res && !res.success) console.warn('updateGameSettings:', res.error);
+            });
+        };
     } else {
-        settingsEl.innerHTML = `<span style="font-size:13px;color:#aaa;">Win: ${gs.winCashThreshold}M ECU + ${gs.winMajorCitiesRequired} of 8 major cities</span>`;
+        const tierLabel = {"Standard":"Standard (9/12 mp)","Faster":"Faster (12/16 mp)","Fastest":"Fastest (15/20 mp)"}[gs.speedTier || "Standard"];
+        settingsEl.innerHTML = `<span style="font-size:13px;color:#aaa;">Win: ${gs.winCashThreshold}M ECU + ${gs.winMajorCitiesRequired} of 8 major cities · Speed: ${tierLabel}</span>`;
     }
 
     // Host controls

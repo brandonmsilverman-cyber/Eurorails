@@ -18,7 +18,6 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 - [ ] **Backtracking** — A player may reverse their train's direction on any milepost (not just at cities) at a cost of losing 1 full turn. Per the official rules (p. 26, "Backtracking" section): a train which backtracks can move in any direction on its next turn. A train may not backtrack when the player has discarded their cards during the same turn. A train may backtrack if it cannot move for any other reason (e.g., Derailment or Rail Strike). A player whose train backtracks while on an opponent's track is assessed the use fee for that turn.
 - [ ] **Discard pile reshuffle** — When the demand card deck runs out, reshuffle fulfilled/discarded demand cards back into the deck so the game never runs dry
 - [ ] **Economy difficulty setting** — Add a pre-game room option with three economy modes (Standard, Constrained, Generous) that adjust demand card payout amounts and route length mix
-- [ ] **Configurable victory conditions** — Allow the game room to customize win conditions before the game starts. Full plan in [`CONFIGURABLE_WIN_CONDITIONS_PLAN.md`](CONFIGURABLE_WIN_CONDITIONS_PLAN.md).
 - [ ] **Set train destination** — Player selects a city as their destination; the train automatically moves toward it each operate phase until it arrives, the player undoes movement, or the mode is turned off
 - [ ] **Faster train tier** — Add a 20+ speed train option to reduce late-game drag when players have long routes. Full plan in [`EXPRESS_TRAIN_PLAN.md`](EXPRESS_TRAIN_PLAN.md).
 - [ ] **Turn countdown clock** — Optional time pressure element with a visible countdown timer per turn
@@ -90,3 +89,4 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 - [x] AI Players in Multiplayer (lobby slots, turn routing, client UI, edge cases)
 - [x] AI movement costs drastically undercharged (reversed paths / wormhole fix)
 - [x] AI builds inefficient looping track (reversed path direction fix)
+- [x] Configurable victory conditions (lobby UI, server validation, dynamic in-game display)
