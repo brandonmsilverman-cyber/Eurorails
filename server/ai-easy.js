@@ -5,7 +5,6 @@
 
 const gl = require('../shared/game-logic');
 const GOODS = gl.GOODS;
-const TRAIN_TYPES = gl.TRAIN_TYPES;
 const MAJOR_CITIES = gl.MAJOR_CITIES;
 const findPath = gl.findPath;
 const findPathOnTrack = gl.findPathOnTrack;
@@ -13,13 +12,31 @@ const getMileppostCost = gl.getMileppostCost;
 const getFerryKey = gl.getFerryKey;
 const getPlayerOwnedMileposts = gl.getPlayerOwnedMileposts;
 
-// 3a: Greedy demand selection — picks whichever demand has the cheapest
-// total build cost (source → destination). Owned track costs 0.
-// Does NOT consider payout — key Easy AI weakness.
+// 3a: Demand selection — picks the demand with the best profit margin
+// (payout - build cost) that the AI can afford. Strongly prefers affordable
+// demands to avoid burning cash on unfinishable routes.
 function selectTargetDemand(gs, playerIndex, ctx, { excludeFullyBuilt = false } = {}) {
     const player = gs.players[playerIndex];
-    let best = null;
-    let bestCost = Infinity;
+    let bestAffordable = null;
+    let bestAffordableScore = -Infinity;
+    let bestUnaffordable = null;
+    let bestUnaffordableCost = Infinity;
+
+    // Precompute owned mileposts and owned city mileposts for connector cost checks
+    const ownedMileposts = getPlayerOwnedMileposts(ctx, player.color);
+    const ownedCities = [];
+    for (const mpId of ownedMileposts) {
+        const mp = ctx.mileposts_by_id[mpId];
+        if (mp && mp.city) ownedCities.push(mpId);
+    }
+    // Fallback: train location or any owned milepost
+    if (ownedCities.length === 0 && ownedMileposts.size > 0) {
+        if (player.trainLocation && ownedMileposts.has(player.trainLocation)) {
+            ownedCities.push(player.trainLocation);
+        } else {
+            ownedCities.push(ownedMileposts.values().next().value);
+        }
+    }
 
     for (let ci = 0; ci < player.demandCards.length; ci++) {
         const card = player.demandCards[ci];
@@ -38,158 +55,61 @@ function selectTargetDemand(gs, playerIndex, ctx, { excludeFullyBuilt = false } 
                 // Skip routes that are already fully built (nothing to build)
                 if (excludeFullyBuilt && result.cost === 0) continue;
 
-                if (result.cost < bestCost) {
-                    bestCost = result.cost;
-                    best = {
-                        cardIndex: ci,
-                        demandIndex: di,
-                        sourceCity: sourceCity,
-                        cost: result.cost
-                    };
+                // Compute the true buildable cost: if the src→dest path doesn't
+                // intersect owned track, add the cheapest connector cost.
+                let totalCost = result.cost;
+                if (ownedMileposts.size > 0 && totalCost > 0) {
+                    const pathIntersectsOwned = result.path.some(mpId => ownedMileposts.has(mpId));
+                    if (!pathIntersectsOwned) {
+                        let connectorCost = Infinity;
+                        for (const ownedId of ownedCities) {
+                            for (const goalId of [srcId, destId]) {
+                                if (goalId === ownedId) continue;
+                                const conn = findPath(ctx, ownedId, goalId, player.color, "cheapest");
+                                if (conn && conn.cost < connectorCost) {
+                                    connectorCost = conn.cost;
+                                }
+                            }
+                        }
+                        if (connectorCost < Infinity) {
+                            totalCost += connectorCost;
+                        } else {
+                            continue; // can't reach this route at all
+                        }
+                    }
                 }
-            }
-        }
-    }
 
-    return best;
-}
+                const score = demand.payout - totalCost;
 
-// 3b: Returns the minimum cost to complete ANY single delivery on the
-// current hand. Used by Layer 1 bankruptcy protection.
-function computeReserveFloor(gs, playerIndex, ctx) {
-    const player = gs.players[playerIndex];
-    let minCost = Infinity;
-
-    for (let ci = 0; ci < player.demandCards.length; ci++) {
-        const card = player.demandCards[ci];
-        if (!card || !card.demands) continue;
-        for (let di = 0; di < card.demands.length; di++) {
-            const demand = card.demands[di];
-            const sources = GOODS[demand.good] ? GOODS[demand.good].sources : [];
-            for (const sourceCity of sources) {
-                const srcId = ctx.cityToMilepost[sourceCity];
-                const destId = ctx.cityToMilepost[demand.to];
-                if (srcId === undefined || destId === undefined) continue;
-
-                const result = findPath(ctx, srcId, destId, player.color, "cheapest");
-                if (result && result.cost < minCost) {
-                    minCost = result.cost;
-                }
-            }
-        }
-    }
-
-    return minCost === Infinity ? 0 : minCost;
-}
-
-// 3c: Stuck check — can the AI complete at least one delivery given
-// current track + cash?
-function isStuck(gs, playerIndex, ctx) {
-    const player = gs.players[playerIndex];
-
-    // Check if carrying a good that can be delivered on existing track
-    if (player.loads.length > 0 && player.trainLocation) {
-        for (let ci = 0; ci < player.demandCards.length; ci++) {
-            const card = player.demandCards[ci];
-            if (!card || !card.demands) continue;
-            for (let di = 0; di < card.demands.length; di++) {
-                const demand = card.demands[di];
-                if (player.loads.includes(demand.good)) {
-                    const destId = ctx.cityToMilepost[demand.to];
-                    if (destId === undefined) continue;
-                    const trackPath = findPathOnTrack(ctx, player.trainLocation, destId, player.color, false);
-                    if (trackPath) return false;
-                }
-            }
-        }
-    }
-
-    // Check if any delivery is completable (source reachable + dest reachable + can afford gap)
-    for (let ci = 0; ci < player.demandCards.length; ci++) {
-        const card = player.demandCards[ci];
-        if (!card || !card.demands) continue;
-        for (let di = 0; di < card.demands.length; di++) {
-            const demand = card.demands[di];
-            const sources = GOODS[demand.good] ? GOODS[demand.good].sources : [];
-            for (const sourceCity of sources) {
-                const srcId = ctx.cityToMilepost[sourceCity];
-                const destId = ctx.cityToMilepost[demand.to];
-                if (srcId === undefined || destId === undefined) continue;
-
-                const result = findPath(ctx, srcId, destId, player.color, "cheapest");
-                if (result && result.cost <= player.cash) {
-                    return false;
-                }
-            }
-        }
-    }
-
-    return true;
-}
-
-// 3c: Recovery plan when stuck. Returns array of action descriptors.
-// Follows 4-priority sequence from plan.
-function getRecoveryPlan(gs, playerIndex, ctx) {
-    const player = gs.players[playerIndex];
-
-    // Priority 1: Carrying a good that can be delivered on existing track
-    if (player.loads.length > 0 && player.trainLocation) {
-        for (let ci = 0; ci < player.demandCards.length; ci++) {
-            const card = player.demandCards[ci];
-            if (!card || !card.demands) continue;
-            for (let di = 0; di < card.demands.length; di++) {
-                const demand = card.demands[di];
-                if (player.loads.includes(demand.good)) {
-                    const destId = ctx.cityToMilepost[demand.to];
-                    if (destId === undefined) continue;
-                    const trackPath = findPathOnTrack(ctx, player.trainLocation, destId, player.color, false);
-                    if (trackPath) {
-                        const actions = [];
-                        actions.push({ type: 'commitMove', path: trackPath.path });
-                        actions.push({ type: 'deliverGood', cardIndex: ci, demandIndex: di });
-                        return actions;
+                if (totalCost <= player.cash) {
+                    // Affordable — pick best profit margin
+                    if (score > bestAffordableScore) {
+                        bestAffordableScore = score;
+                        bestAffordable = {
+                            cardIndex: ci,
+                            demandIndex: di,
+                            sourceCity: sourceCity,
+                            cost: totalCost
+                        };
+                    }
+                } else {
+                    // Unaffordable — track cheapest as fallback
+                    if (totalCost < bestUnaffordableCost) {
+                        bestUnaffordableCost = totalCost;
+                        bestUnaffordable = {
+                            cardIndex: ci,
+                            demandIndex: di,
+                            sourceCity: sourceCity,
+                            cost: totalCost
+                        };
                     }
                 }
             }
         }
     }
 
-    // Priority 2: A good can be picked up and delivered entirely on existing track
-    if (player.trainLocation) {
-        for (let ci = 0; ci < player.demandCards.length; ci++) {
-            const card = player.demandCards[ci];
-            if (!card || !card.demands) continue;
-            for (let di = 0; di < card.demands.length; di++) {
-                const demand = card.demands[di];
-                const sources = GOODS[demand.good] ? GOODS[demand.good].sources : [];
-                for (const sourceCity of sources) {
-                    const srcId = ctx.cityToMilepost[sourceCity];
-                    const destId = ctx.cityToMilepost[demand.to];
-                    if (srcId === undefined || destId === undefined) continue;
-
-                    // Can we reach source on track?
-                    const toSource = findPathOnTrack(ctx, player.trainLocation, srcId, player.color, false);
-                    if (!toSource) continue;
-                    // Can we reach dest from source on track?
-                    const toDest = findPathOnTrack(ctx, srcId, destId, player.color, false);
-                    if (!toDest) continue;
-
-                    const actions = [];
-                    actions.push({ type: 'commitMove', path: toSource.path });
-                    actions.push({ type: 'pickupGood', good: demand.good });
-                    actions.push({ type: 'commitMove', path: toDest.path });
-                    actions.push({ type: 'deliverGood', cardIndex: ci, demandIndex: di });
-                    return actions;
-                }
-            }
-        }
-    }
-
-    // Priority 3: Can build a short extension that connects source/dest
-    // (Skip for now — Priority 3 is a refinement; Priority 4 handles the fallback)
-
-    // Priority 4: Discard hand as last resort
-    return [{ type: 'discardHand' }];
+    // Prefer affordable demands; fall back to cheapest unaffordable
+    return bestAffordable || bestUnaffordable;
 }
 
 // Helper: compute the build path for AI given a full findPath result.
@@ -226,12 +146,8 @@ function computeBuildActions(gs, playerIndex, ctx, fullPathResult, reversed = fa
         ferryEdgeKeys.add(getFerryKey(fc.fromId, fc.toId));
     }
 
-    // Find the first unbuilt segment and accumulate from there
-    const reserveFloor = computeReserveFloor(gs, playerIndex, ctx);
     const remainingBudget = 20 - gs.buildingThisTurn;
-    const availableCash = player.cash - reserveFloor;
-
-    if (availableCash <= 0 || remainingBudget <= 0) return null;
+    if (remainingBudget <= 0) return null;
 
     // Helper: check if a milepost is a valid build origin (owned track or major city)
     function canStartFrom(mpId) {
@@ -270,7 +186,7 @@ function computeBuildActions(gs, playerIndex, ctx, fullPathResult, reversed = fa
             }
 
             if (buildCost + ferryCost > remainingBudget) break;
-            if (buildCost + ferryCost > availableCash) break;
+            if (buildCost + ferryCost > player.cash) break;
 
             if (!started) {
                 if (!canStartFrom(from)) continue; // skip — invalid build origin
@@ -305,7 +221,7 @@ function computeBuildActions(gs, playerIndex, ctx, fullPathResult, reversed = fa
         if (gs.majorCitiesThisTurn + majorCityCount + majorCities > 2) break;
 
         if (buildCost + segCost > remainingBudget) break;
-        if (buildCost + segCost > availableCash) break;
+        if (buildCost + segCost > player.cash) break;
 
         if (!started) {
             if (!canStartFrom(from)) continue; // skip — invalid build origin
@@ -331,7 +247,7 @@ function computeBuildActions(gs, playerIndex, ctx, fullPathResult, reversed = fa
 
 // Helper: when the src→dest path doesn't intersect owned track, find a path
 // from the nearest owned milepost to either src or dest and build along it.
-function findConnectorBuild(gs, playerIndex, ctx, srcId, destId) {
+function findConnectorBuild(gs, playerIndex, ctx, srcId, destId, payout = 0) {
     const player = gs.players[playerIndex];
     const ownedMileposts = getPlayerOwnedMileposts(ctx, player.color);
     if (ownedMileposts.size === 0) return null;
@@ -365,6 +281,10 @@ function findConnectorBuild(gs, playerIndex, ctx, srcId, destId) {
     }
 
     if (!bestPath) return null;
+
+    // Block connector builds for unprofitable routes the AI can't afford
+    if (bestPath.cost > player.cash && payout <= bestPath.cost) return null;
+
     return computeBuildActions(gs, playerIndex, ctx, bestPath);
 }
 
@@ -453,8 +373,8 @@ function chooseDeploy(gs, playerIndex, ctx, target) {
         if (mp.city) return mpId;
     }
 
-    // Fallback: any milepost on preferred component
-    return preferredComponent.values().next().value;
+    // No city milepost found on preferred component — cannot deploy
+    return null;
 }
 
 // Helper: find the city name at a milepost (from ctx, not gs)
@@ -463,6 +383,36 @@ function getCityNameAt(ctx, milepostId) {
         if (mpId === milepostId) return cityName;
     }
     return null;
+}
+
+// Helper: when the target milepost isn't reachable on own track, find the
+// owned milepost closest (Euclidean) to the target and return a track path
+// from the current location to that frontier milepost. This lets the AI
+// move toward an unconnected target by advancing along existing track.
+function findFrontierMove(ctx, fromId, targetId, playerColor) {
+    const targetMp = ctx.mileposts_by_id[targetId];
+    if (!targetMp) return null;
+
+    const ownedMileposts = getPlayerOwnedMileposts(ctx, playerColor);
+    if (ownedMileposts.size === 0) return null;
+
+    // Find the owned milepost closest to the target
+    let bestId = null;
+    let bestDist = Infinity;
+    for (const mpId of ownedMileposts) {
+        const mp = ctx.mileposts_by_id[mpId];
+        if (!mp) continue;
+        const dist = Math.hypot(mp.x - targetMp.x, mp.y - targetMp.y);
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestId = mpId;
+        }
+    }
+
+    if (!bestId || bestId === fromId) return null;
+
+    // Path from current location to the frontier milepost
+    return findPathOnTrack(ctx, fromId, bestId, playerColor, false);
 }
 
 // 3d: Main entry point. Returns array of action descriptors.
@@ -513,7 +463,8 @@ function planTurn(gs, playerIndex, ctx) {
             }
             // Fallback: build connector from owned track toward src or dest
             if (!buildAction) {
-                buildAction = findConnectorBuild(gs, playerIndex, ctx, srcId, destId);
+                const demand = player.demandCards[target.cardIndex]?.demands[target.demandIndex];
+                buildAction = findConnectorBuild(gs, playerIndex, ctx, srcId, destId, demand ? demand.payout : 0);
             }
         }
 
@@ -527,24 +478,24 @@ function planTurn(gs, playerIndex, ctx) {
 
     // --- Operate phase ---
     if (gs.phase === 'operate') {
-        // Layer 2: stuck check
-        if (isStuck(gs, playerIndex, ctx)) {
-            const recovery = getRecoveryPlan(gs, playerIndex, ctx);
-            // If recovery is just discardHand, do it
-            if (recovery.length === 1 && recovery[0].type === 'discardHand') {
-                return recovery;
-            }
-            // Otherwise execute recovery actions then end operate
-            actions.push(...recovery);
-            actions.push({ type: 'endOperatePhase' });
-            return actions;
+        const aiState = player.aiState || {};
+
+        // If the AI has been idle for 2+ consecutive turns, discard hand to get fresh cards
+        if ((aiState.idleTurns || 0) >= 2 && player.loads.length === 0) {
+            console.warn(`AI ${playerIndex} idle for ${aiState.idleTurns} turns — discarding hand`);
+            aiState.targetCardIndex = null;
+            aiState.targetDemandIndex = null;
+            aiState.targetSourceCity = null;
+            aiState.idleTurns = 0;
+            return [{ type: 'discardHand' }];
         }
 
-        // Select target first so deploy can use it for component preference
+        // Select target — prefers affordable demands
         const target = selectTargetFromState(gs, playerIndex, ctx);
+
+        // No target at all — discard hand to draw fresh cards
         if (!target) {
-            actions.push({ type: 'endOperatePhase' });
-            return actions;
+            return [{ type: 'discardHand' }];
         }
 
         // Deploy train if not deployed
@@ -572,7 +523,11 @@ function planTurn(gs, playerIndex, ctx) {
         // If carrying the target good, move toward destination
         if (player.loads.includes(target.good)) {
             const destId = ctx.cityToMilepost[target.destCity];
-            const trackPath = findPathOnTrack(ctx, effectiveLocation, destId, player.color, false);
+            let trackPath = findPathOnTrack(ctx, effectiveLocation, destId, player.color, false);
+            if (!trackPath) {
+                // Destination not connected — move to frontier closest to it
+                trackPath = findFrontierMove(ctx, effectiveLocation, destId, player.color);
+            }
             if (trackPath) {
                 actions.push({ type: 'commitMove', path: trackPath.path });
                 // Check if we arrived at destination
@@ -591,7 +546,10 @@ function planTurn(gs, playerIndex, ctx) {
             actions.push({ type: 'pickupGood', good: target.good });
             // Try to move toward destination
             const destId = ctx.cityToMilepost[target.destCity];
-            const trackPath = findPathOnTrack(ctx, effectiveLocation, destId, player.color, false);
+            let trackPath = findPathOnTrack(ctx, effectiveLocation, destId, player.color, false);
+            if (!trackPath) {
+                trackPath = findFrontierMove(ctx, effectiveLocation, destId, player.color);
+            }
             if (trackPath) {
                 actions.push({ type: 'commitMove', path: trackPath.path });
                 const arrived = trackPath.path[trackPath.path.length - 1];
@@ -606,7 +564,11 @@ function planTurn(gs, playerIndex, ctx) {
 
         // Move toward source city
         const srcId = ctx.cityToMilepost[target.sourceCity];
-        const trackPath = findPathOnTrack(ctx, effectiveLocation, srcId, player.color, false);
+        let trackPath = findPathOnTrack(ctx, effectiveLocation, srcId, player.color, false);
+        if (!trackPath) {
+            // Source not connected — move to the frontier of own track closest to source
+            trackPath = findFrontierMove(ctx, effectiveLocation, srcId, player.color);
+        }
         if (trackPath) {
             actions.push({ type: 'commitMove', path: trackPath.path });
             const arrived = trackPath.path[trackPath.path.length - 1];
@@ -637,23 +599,47 @@ function planTurn(gs, playerIndex, ctx) {
         if (target) {
             const srcId = ctx.cityToMilepost[target.sourceCity];
             const destId = ctx.cityToMilepost[target.destCity];
+            const demand = player.demandCards[target.cardIndex]?.demands[target.demandIndex];
+            const payout = demand ? demand.payout : 0;
             let buildAction = null;
 
             // First try: build along the src→dest path
             const fullPath = findPath(ctx, srcId, destId, player.color, "cheapest");
             if (fullPath) {
-                buildAction = computeBuildActions(gs, playerIndex, ctx, fullPath);
+                // Allow partial building if the route is profitable (payout > cost).
+                // Block only unprofitable routes the AI can't afford outright.
+                if (fullPath.cost <= player.cash || payout > fullPath.cost) {
+                    buildAction = computeBuildActions(gs, playerIndex, ctx, fullPath);
+                }
             }
 
             // Fallback: if src→dest path doesn't connect to owned track,
             // build a connector from owned track toward src or dest
             if (!buildAction) {
-                buildAction = findConnectorBuild(gs, playerIndex, ctx, srcId, destId);
+                // For connectors, check total cost (connector + remaining route).
+                // Allow if the demand is profitable enough to justify the investment.
+                buildAction = findConnectorBuild(gs, playerIndex, ctx, srcId, destId, payout);
             }
 
             if (buildAction) {
                 actions.push({ type: 'commitBuild', ...buildAction });
             }
+        }
+
+        // Track idle turns for deadlock detection
+        const hasBuild = actions.some(a => a.type === 'commitBuild');
+        const aiStateBuild = player.aiState || {};
+        if (!hasBuild && player.loads.length === 0) {
+            // No build, no loads in transit — this turn was unproductive
+            aiStateBuild.idleTurns = (aiStateBuild.idleTurns || 0) + 1;
+            // Clear persisted target so the AI tries a different demand next turn
+            if (aiStateBuild.idleTurns >= 1) {
+                aiStateBuild.targetCardIndex = null;
+                aiStateBuild.targetDemandIndex = null;
+                aiStateBuild.targetSourceCity = null;
+            }
+        } else {
+            aiStateBuild.idleTurns = 0;
         }
 
         actions.push({ type: 'endTurn' });
@@ -695,17 +681,22 @@ function selectTargetFromState(gs, playerIndex, ctx, { excludeFullyBuilt = false
                             demandIndex: aiState.targetDemandIndex,
                             sourceCity: aiState.targetSourceCity,
                             destCity: demand.to,
-                            good: demand.good
+                            good: demand.good,
+                            cost: fullPath ? fullPath.cost : Infinity
                         };
                     }
                 }
             } else {
+                const srcId = ctx.cityToMilepost[aiState.targetSourceCity];
+                const destId = ctx.cityToMilepost[demand.to];
+                const pathResult = (srcId && destId) ? findPath(ctx, srcId, destId, player.color, "cheapest") : null;
                 return {
                     cardIndex: aiState.targetCardIndex,
                     demandIndex: aiState.targetDemandIndex,
                     sourceCity: aiState.targetSourceCity,
                     destCity: demand.to,
-                    good: demand.good
+                    good: demand.good,
+                    cost: pathResult ? pathResult.cost : Infinity
                 };
             }
         }
@@ -730,16 +721,15 @@ function selectTargetFromState(gs, playerIndex, ctx, { excludeFullyBuilt = false
         demandIndex: selected.demandIndex,
         sourceCity: selected.sourceCity,
         destCity: demand.to,
-        good: demand.good
+        good: demand.good,
+        cost: selected.cost
     };
 }
 
 module.exports = {
     selectTargetDemand,
-    computeReserveFloor,
-    isStuck,
-    getRecoveryPlan,
     planTurn,
     computeBuildActions,
-    selectTargetFromState
+    selectTargetFromState,
+    findFrontierMove
 };

@@ -976,3 +976,226 @@ describe('Demand Card Highlights: Selections survive state updates', () => {
         }
     });
 });
+
+// ===========================================================================
+// POST-DELIVERY RE-PLAN TESTS
+// ===========================================================================
+
+describe('Post-Delivery Re-plan: AI uses remaining movement after delivery', () => {
+    const gl = require('../shared/game-logic');
+
+    it('AI re-plans after delivery and produces additional actions', async () => {
+        const client = await createClient();
+        const { roomCode, state } = await createSoloGame(client);
+
+        // Advance to operate phase
+        let updatePromise = waitForStateUpdate(client, (data) =>
+            data.state?.currentPlayerIndex === 0 && data.state?.turn > 1
+        );
+        await emit(client, 'action', { type: 'endTurn' });
+        await updatePromise;
+
+        updatePromise = waitForStateUpdate(client, (data) =>
+            data.state?.phase === 'operate' && data.state?.currentPlayerIndex === 0
+        );
+        await emit(client, 'action', { type: 'endTurn' });
+        await updatePromise;
+
+        // Now manipulate the AI's game state on the server to set up a delivery scenario
+        const room = rooms.get(roomCode);
+        const gs = room.gameState;
+        const ai = gs.players[1]; // AI is player 1
+        const grid = gl.generateHexGrid();
+
+        // Build track between two cities the AI can use
+        const wrocId = grid.cityToMilepost['Wroclaw'];
+        const leipId = grid.cityToMilepost['Leipzig'];
+        const berlinId = grid.cityToMilepost['Berlin'];
+
+        // Build track Wroclaw → Leipzig → Berlin for the AI
+        const path1 = gl.findPath(
+            { ...grid, tracks: gs.tracks, ferryOwnership: gs.ferryOwnership, activeEvents: gs.activeEvents },
+            wrocId, leipId, ai.color, 'cheapest'
+        );
+        if (path1) {
+            for (let i = 0; i < path1.path.length - 1; i++) {
+                gs.tracks.push({ from: path1.path[i], to: path1.path[i + 1], color: ai.color });
+            }
+        }
+        const path2 = gl.findPath(
+            { ...grid, tracks: gs.tracks, ferryOwnership: gs.ferryOwnership, activeEvents: gs.activeEvents },
+            leipId, berlinId, ai.color, 'cheapest'
+        );
+        if (path2) {
+            for (let i = 0; i < path2.path.length - 1; i++) {
+                gs.tracks.push({ from: path2.path[i], to: path2.path[i + 1], color: ai.color });
+            }
+        }
+
+        // Place AI at Leipzig carrying Coal, with a demand for Coal→Leipzig
+        ai.trainLocation = leipId;
+        ai.loads = ['Coal'];
+        ai.movement = 9;
+        ai.demandCards = [
+            {
+                id: 'test-card-1', type: 'demand',
+                demands: [
+                    { good: 'Coal', to: 'Leipzig', payout: 15 },
+                    { good: 'Beer', to: 'Paris', payout: 25 },
+                    { good: 'Wine', to: 'Madrid', payout: 30 }
+                ]
+            },
+            {
+                id: 'test-card-2', type: 'demand',
+                demands: [
+                    { good: 'Coal', to: 'Berlin', payout: 20 },
+                    { good: 'Beer', to: 'Wien', payout: 18 },
+                    { good: 'Wine', to: 'Roma', payout: 28 }
+                ]
+            },
+            {
+                id: 'test-card-3', type: 'demand',
+                demands: [
+                    { good: 'Coal', to: 'Praha', payout: 14 },
+                    { good: 'Beer', to: 'London', payout: 22 },
+                    { good: 'Wine', to: 'Marseille', payout: 26 }
+                ]
+            }
+        ];
+        ai.aiState = { targetCardIndex: null, targetDemandIndex: null, targetSourceCity: null };
+        gs.phase = 'operate';
+        gs.currentPlayerIndex = 0; // still human's turn
+
+        // End human turn so AI takes over
+        // Collect ALL stateUpdates to look for a delivery event followed by more actions
+        const updates = [];
+        const donePromise = new Promise((resolve, reject) => {
+            const timer = setTimeout(
+                () => reject(new Error(`Timeout: got ${updates.length} stateUpdates. Events: ${updates.map(u => u.uiEvent?.type).join(', ')}`)),
+                10000
+            );
+            function handler(data) {
+                updates.push(data);
+                // Done when it's back to human's turn
+                if (data.state?.currentPlayerIndex === 0 &&
+                    data.state?.phase === 'operate' &&
+                    updates.length > 1) {
+                    clearTimeout(timer);
+                    client.off('stateUpdate', handler);
+                    resolve();
+                }
+            }
+            client.on('stateUpdate', handler);
+        });
+
+        await emit(client, 'action', { type: 'endTurn' });
+        await donePromise;
+
+        // Check that a delivery event occurred
+        const deliveryUpdate = updates.find(u => u.uiEvent?.type === 'delivery');
+        assert.ok(deliveryUpdate, 'Should have a delivery event in stateUpdates');
+
+        // After the delivery, there should be additional action events
+        // (the re-plan producing movement or at least endOperatePhase)
+        const deliveryIdx = updates.indexOf(deliveryUpdate);
+        const postDeliveryUpdates = updates.slice(deliveryIdx + 1);
+        assert.ok(postDeliveryUpdates.length >= 1,
+            `Expected at least 1 post-delivery update, got ${postDeliveryUpdates.length}`);
+    });
+
+    it('no re-plan when AI has 0 movement after delivery', async () => {
+        const client = await createClient();
+        const { roomCode, state } = await createSoloGame(client);
+
+        // Advance to operate phase
+        let updatePromise = waitForStateUpdate(client, (data) =>
+            data.state?.currentPlayerIndex === 0 && data.state?.turn > 1
+        );
+        await emit(client, 'action', { type: 'endTurn' });
+        await updatePromise;
+
+        updatePromise = waitForStateUpdate(client, (data) =>
+            data.state?.phase === 'operate' && data.state?.currentPlayerIndex === 0
+        );
+        await emit(client, 'action', { type: 'endTurn' });
+        await updatePromise;
+
+        // Set up delivery scenario with 0 movement remaining
+        const room = rooms.get(roomCode);
+        const gs = room.gameState;
+        const ai = gs.players[1];
+        const grid = gl.generateHexGrid();
+        const leipId = grid.cityToMilepost['Leipzig'];
+
+        ai.trainLocation = leipId;
+        ai.loads = ['Coal'];
+        ai.movement = 0;  // no movement left
+        ai.demandCards = [
+            {
+                id: 'test-card-1', type: 'demand',
+                demands: [
+                    { good: 'Coal', to: 'Leipzig', payout: 15 },
+                    { good: 'Beer', to: 'Paris', payout: 25 },
+                    { good: 'Wine', to: 'Madrid', payout: 30 }
+                ]
+            },
+            {
+                id: 'test-card-2', type: 'demand',
+                demands: [
+                    { good: 'Coal', to: 'Berlin', payout: 20 },
+                    { good: 'Beer', to: 'Wien', payout: 18 },
+                    { good: 'Wine', to: 'Roma', payout: 28 }
+                ]
+            },
+            {
+                id: 'test-card-3', type: 'demand',
+                demands: [
+                    { good: 'Coal', to: 'Praha', payout: 14 },
+                    { good: 'Beer', to: 'London', payout: 22 },
+                    { good: 'Wine', to: 'Marseille', payout: 26 }
+                ]
+            }
+        ];
+        ai.aiState = { targetCardIndex: null, targetDemandIndex: null, targetSourceCity: null };
+        gs.phase = 'operate';
+        gs.currentPlayerIndex = 0;
+
+        // Collect updates — delivery should NOT be followed by a re-plan movement
+        const updates = [];
+        const donePromise = new Promise((resolve, reject) => {
+            const timer = setTimeout(
+                () => reject(new Error(`Timeout: got ${updates.length} stateUpdates`)),
+                10000
+            );
+            function handler(data) {
+                updates.push(data);
+                if (data.state?.currentPlayerIndex === 0 &&
+                    data.state?.phase === 'operate' &&
+                    updates.length > 1) {
+                    clearTimeout(timer);
+                    client.off('stateUpdate', handler);
+                    resolve();
+                }
+            }
+            client.on('stateUpdate', handler);
+        });
+
+        await emit(client, 'action', { type: 'endTurn' });
+        await donePromise;
+
+        // Should still deliver
+        const deliveryUpdate = updates.find(u => u.uiEvent?.type === 'delivery');
+        assert.ok(deliveryUpdate, 'Should have a delivery event');
+
+        // After delivery, the next action should be endOperatePhase (from original plan),
+        // NOT a re-plan movement — because movement was 0
+        const deliveryIdx = updates.indexOf(deliveryUpdate);
+        const postDeliveryActions = updates.slice(deliveryIdx + 1);
+        const hasReplanMovement = postDeliveryActions.some(u =>
+            u.uiEvent?.type === 'action' &&
+            u.uiEvent?.logs?.some(l => l.includes('Moved to') || l.includes('Partial move'))
+        );
+        assert.equal(hasReplanMovement, false,
+            'Should NOT re-plan movement when AI has 0 movement points');
+    });
+});

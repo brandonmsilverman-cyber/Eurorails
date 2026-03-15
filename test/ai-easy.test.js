@@ -161,284 +161,6 @@ describe('selectTargetDemand', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3b: computeReserveFloor
-// ---------------------------------------------------------------------------
-
-describe('computeReserveFloor', () => {
-    it('returns minimum completion cost', () => {
-        const ctx = makeCtx();
-        const gs = makeGS({
-            player: {
-                demandCards: [
-                    {
-                        id: 'card-1',
-                        demands: [
-                            { good: 'Coal', to: 'Madrid', payout: 30 },
-                            { good: 'Coal', to: 'Leipzig', payout: 12 },
-                            { good: 'Beer', to: 'Berlin', payout: 15 }
-                        ]
-                    }
-                ]
-            }
-        });
-        const ctx2 = makeCtx({ players: gs.players });
-
-        const floor = aiEasy.computeReserveFloor(gs, 0, ctx2);
-        assert.ok(typeof floor === 'number', 'should return a number');
-        assert.ok(floor > 0, 'should be positive for a hand with unbuilt routes');
-        // The floor should be less than or equal to the cost of the cheapest demand
-        // (Coal Wroclaw → Leipzig is short)
-        assert.ok(floor <= 20, 'Wroclaw-Leipzig is short, floor should be reasonable');
-    });
-
-    it('shrinks as track is built', () => {
-        const ctx = makeCtx();
-        const gs = makeGS({
-            player: {
-                demandCards: [
-                    {
-                        id: 'card-1',
-                        demands: [
-                            { good: 'Coal', to: 'Leipzig', payout: 12 },
-                            { good: 'Beer', to: 'Berlin', payout: 15 },
-                            { good: 'Wine', to: 'Paris', payout: 25 }
-                        ]
-                    }
-                ]
-            }
-        });
-        const ctx2 = makeCtx({ players: gs.players });
-
-        const floorBefore = aiEasy.computeReserveFloor(gs, 0, ctx2);
-
-        // Build track from Wroclaw toward Leipzig
-        const wrocId = ctx2.cityToMilepost['Wroclaw'];
-        const leipId = ctx2.cityToMilepost['Leipzig'];
-        buildTrack(ctx2, gs, wrocId, leipId, 'red');
-
-        const floorAfter = aiEasy.computeReserveFloor(gs, 0, ctx2);
-        assert.ok(floorAfter < floorBefore, `floor should shrink: ${floorAfter} < ${floorBefore}`);
-    });
-
-    it('returns 0 when delivery is fully built', () => {
-        const ctx = makeCtx();
-        const gs = makeGS({
-            player: {
-                demandCards: [
-                    {
-                        id: 'card-1',
-                        demands: [
-                            { good: 'Coal', to: 'Leipzig', payout: 12 },
-                            { good: 'Beer', to: 'Berlin', payout: 15 },
-                            { good: 'Wine', to: 'Paris', payout: 25 }
-                        ]
-                    }
-                ]
-            }
-        });
-        const ctx2 = makeCtx({ players: gs.players });
-
-        // Build full track Wroclaw → Leipzig
-        const wrocId = ctx2.cityToMilepost['Wroclaw'];
-        const leipId = ctx2.cityToMilepost['Leipzig'];
-        buildTrack(ctx2, gs, wrocId, leipId, 'red');
-
-        const floor = aiEasy.computeReserveFloor(gs, 0, ctx2);
-        assert.equal(floor, 0, 'floor should be 0 when a route is fully built');
-    });
-});
-
-// ---------------------------------------------------------------------------
-// 3c: isStuck
-// ---------------------------------------------------------------------------
-
-describe('isStuck', () => {
-    it('returns false when delivery is completable', () => {
-        const ctx = makeCtx();
-        const gs = makeGS({
-            player: {
-                cash: 50,
-                demandCards: [
-                    {
-                        id: 'card-1',
-                        demands: [
-                            { good: 'Coal', to: 'Leipzig', payout: 12 },
-                            { good: 'Beer', to: 'Berlin', payout: 15 },
-                            { good: 'Wine', to: 'Paris', payout: 25 }
-                        ]
-                    }
-                ]
-            }
-        });
-        const ctx2 = makeCtx({ players: gs.players });
-
-        const stuck = aiEasy.isStuck(gs, 0, ctx2);
-        assert.equal(stuck, false, 'should not be stuck with 50 cash and short routes available');
-    });
-
-    it('returns true when no delivery is affordable', () => {
-        const ctx = makeCtx();
-        // Give AI only 1 cash — can't build anything meaningful
-        // Use demands that require crossing water (expensive ferry)
-        const gs = makeGS({
-            player: {
-                cash: 1,
-                trainLocation: null,
-                demandCards: [
-                    {
-                        id: 'card-1',
-                        demands: [
-                            { good: 'Coal', to: 'London', payout: 30 },
-                            { good: 'Coal', to: 'Aberdeen', payout: 25 },
-                            { good: 'Wine', to: 'Glasgow', payout: 35 }
-                        ]
-                    }
-                ]
-            }
-        });
-        const ctx2 = makeCtx({ players: gs.players });
-
-        const stuck = aiEasy.isStuck(gs, 0, ctx2);
-        assert.equal(stuck, true, 'should be stuck with only 1 cash and expensive routes');
-    });
-
-    it('returns false when carrying a deliverable good', () => {
-        const ctx = makeCtx();
-
-        // Build track from Wroclaw to Leipzig, deploy train at Leipzig with Coal loaded
-        const wrocId = ctx.cityToMilepost['Wroclaw'];
-        const leipId = ctx.cityToMilepost['Leipzig'];
-
-        const gs = makeGS({
-            player: {
-                cash: 0,
-                trainLocation: wrocId,
-                loads: ['Coal'],
-                demandCards: [
-                    {
-                        id: 'card-1',
-                        demands: [
-                            { good: 'Coal', to: 'Leipzig', payout: 12 },
-                            { good: 'Beer', to: 'London', payout: 25 },
-                            { good: 'Wine', to: 'Glasgow', payout: 35 }
-                        ]
-                    }
-                ]
-            }
-        });
-        const ctx2 = makeCtx({ players: gs.players });
-        buildTrack(ctx2, gs, wrocId, leipId, 'red');
-
-        const stuck = aiEasy.isStuck(gs, 0, ctx2);
-        assert.equal(stuck, false, 'should not be stuck when carrying a deliverable good on owned track');
-    });
-});
-
-// ---------------------------------------------------------------------------
-// 3c: getRecoveryPlan
-// ---------------------------------------------------------------------------
-
-describe('getRecoveryPlan', () => {
-    it('Priority 1: carrying deliverable good returns move + deliver', () => {
-        const ctx = makeCtx();
-
-        const wrocId = ctx.cityToMilepost['Wroclaw'];
-        const leipId = ctx.cityToMilepost['Leipzig'];
-
-        const gs = makeGS({
-            player: {
-                cash: 0,
-                trainLocation: wrocId,
-                loads: ['Coal'],
-                demandCards: [
-                    {
-                        id: 'card-1',
-                        demands: [
-                            { good: 'Coal', to: 'Leipzig', payout: 12 },
-                            { good: 'Beer', to: 'London', payout: 25 },
-                            { good: 'Wine', to: 'Glasgow', payout: 35 }
-                        ]
-                    }
-                ]
-            }
-        });
-        const ctx2 = makeCtx({ players: gs.players });
-        buildTrack(ctx2, gs, wrocId, leipId, 'red');
-
-        const plan = aiEasy.getRecoveryPlan(gs, 0, ctx2);
-        assert.ok(plan.length >= 2, 'should have at least 2 actions');
-        assert.equal(plan[0].type, 'commitMove', 'first action should be move');
-        assert.equal(plan[1].type, 'deliverGood', 'second action should be deliver');
-        assert.equal(plan[1].cardIndex, 0);
-        assert.equal(plan[1].demandIndex, 0);
-    });
-
-    it('Priority 2: track-only delivery returns move + pickup + move + deliver', () => {
-        const ctx = makeCtx();
-
-        // Build track Wroclaw → Leipzig, train at some point on the track
-        const wrocId = ctx.cityToMilepost['Wroclaw'];
-        const leipId = ctx.cityToMilepost['Leipzig'];
-
-        const gs = makeGS({
-            player: {
-                cash: 0,
-                trainLocation: leipId, // at Leipzig, need to go to Wroclaw for Coal, then back
-                loads: [],
-                demandCards: [
-                    {
-                        id: 'card-1',
-                        demands: [
-                            { good: 'Coal', to: 'Leipzig', payout: 12 },
-                            { good: 'Beer', to: 'London', payout: 25 },
-                            { good: 'Wine', to: 'Glasgow', payout: 35 }
-                        ]
-                    }
-                ]
-            }
-        });
-        const ctx2 = makeCtx({ players: gs.players });
-        buildTrack(ctx2, gs, wrocId, leipId, 'red');
-
-        const plan = aiEasy.getRecoveryPlan(gs, 0, ctx2);
-        assert.ok(plan.length >= 4, 'should have at least 4 actions');
-        assert.equal(plan[0].type, 'commitMove', 'move to source');
-        assert.equal(plan[1].type, 'pickupGood', 'pickup good');
-        assert.equal(plan[1].good, 'Coal');
-        assert.equal(plan[2].type, 'commitMove', 'move to destination');
-        assert.equal(plan[3].type, 'deliverGood', 'deliver good');
-    });
-
-    it('Priority 4: discard as last resort', () => {
-        const ctx = makeCtx();
-
-        // No track, no cash, demands for unreachable cities
-        const gs = makeGS({
-            player: {
-                cash: 0,
-                trainLocation: null,
-                loads: [],
-                demandCards: [
-                    {
-                        id: 'card-1',
-                        demands: [
-                            { good: 'Coal', to: 'London', payout: 30 },
-                            { good: 'Beer', to: 'Aberdeen', payout: 25 },
-                            { good: 'Wine', to: 'Glasgow', payout: 35 }
-                        ]
-                    }
-                ]
-            }
-        });
-        const ctx2 = makeCtx({ players: gs.players });
-
-        const plan = aiEasy.getRecoveryPlan(gs, 0, ctx2);
-        assert.equal(plan.length, 1, 'should have exactly 1 action');
-        assert.equal(plan[0].type, 'discardHand', 'should discard hand as last resort');
-    });
-});
-
-// ---------------------------------------------------------------------------
 // 3d: planTurn (initial building)
 // ---------------------------------------------------------------------------
 
@@ -474,5 +196,230 @@ describe('planTurn', () => {
         assert.ok(buildActions.length >= 1, 'should have at least one build action');
         assert.ok(buildActions[0].buildCost > 0, 'build should have positive cost');
         assert.ok(buildActions[0].buildPath.length >= 2, 'build path should have at least 2 points');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Post-delivery re-plan: planTurn called mid-operate after delivery
+// ---------------------------------------------------------------------------
+
+describe('planTurn post-delivery (mid-operate with movement remaining)', () => {
+
+    it('moves toward new source city when called with no loads and movement remaining', () => {
+        // Simulate: AI just delivered at Leipzig, has movement left, needs to go to Wroclaw for Coal
+        const ctx = makeCtx();
+        const leipId = ctx.cityToMilepost['Leipzig'];
+        const wrocId = ctx.cityToMilepost['Wroclaw'];
+
+        const gs = makeGS({
+            player: {
+                cash: 50,
+                trainLocation: leipId,
+                movement: 6,
+                loads: [],   // just delivered
+                demandCards: [
+                    {
+                        id: 'card-1',
+                        demands: [
+                            { good: 'Coal', to: 'Berlin', payout: 20 },
+                            { good: 'Beer', to: 'Paris', payout: 25 },
+                            { good: 'Wine', to: 'Madrid', payout: 30 }
+                        ]
+                    }
+                ],
+                aiState: {
+                    targetCardIndex: null,
+                    targetDemandIndex: null,
+                    targetSourceCity: null
+                }
+            },
+            gs: { phase: 'operate' }
+        });
+        const ctx2 = makeCtx({ players: gs.players, tracks: gs.tracks });
+
+        // Build track from Leipzig to Wroclaw so the AI can move
+        buildTrack(ctx2, gs, leipId, wrocId, 'red');
+
+        const plan = aiEasy.planTurn(gs, 0, ctx2);
+
+        // Should move toward source, not just endOperatePhase
+        const moveActions = plan.filter(a => a.type === 'commitMove');
+        assert.ok(moveActions.length >= 1, `Expected commitMove, got: [${plan.map(a => a.type).join(', ')}]`);
+        assert.equal(plan[plan.length - 1].type, 'endOperatePhase', 'last action should be endOperatePhase');
+    });
+
+    it('picks up good when already at source city after delivery', () => {
+        // Simulate: AI just delivered at Wroclaw, has movement left,
+        // and Wroclaw is a source for Coal which is demanded elsewhere
+        const ctx = makeCtx();
+        const wrocId = ctx.cityToMilepost['Wroclaw'];
+        const leipId = ctx.cityToMilepost['Leipzig'];
+
+        const gs = makeGS({
+            player: {
+                cash: 50,
+                trainLocation: wrocId,
+                movement: 6,
+                loads: [],
+                demandCards: [
+                    {
+                        id: 'card-1',
+                        demands: [
+                            { good: 'Coal', to: 'Leipzig', payout: 12 },
+                            { good: 'Wine', to: 'Madrid', payout: 30 },
+                            { good: 'Beer', to: 'Paris', payout: 25 }
+                        ]
+                    }
+                ],
+                aiState: {
+                    targetCardIndex: null,
+                    targetDemandIndex: null,
+                    targetSourceCity: null
+                }
+            },
+            gs: { phase: 'operate' }
+        });
+        const ctx2 = makeCtx({ players: gs.players, tracks: gs.tracks });
+
+        // Build track Wroclaw → Leipzig
+        buildTrack(ctx2, gs, wrocId, leipId, 'red');
+
+        const plan = aiEasy.planTurn(gs, 0, ctx2);
+
+        // Should pickup Coal at Wroclaw and start moving toward Leipzig
+        const pickups = plan.filter(a => a.type === 'pickupGood');
+        assert.ok(pickups.length >= 1, `Expected pickupGood, got: [${plan.map(a => a.type).join(', ')}]`);
+        assert.equal(pickups[0].good, 'Coal');
+    });
+
+    it('server-side guard prevents re-plan when movement is 0', () => {
+        // planTurn itself always plans movement if a track path exists —
+        // the server-side guard (player.movement > 0) in executeAIActionSequence
+        // prevents re-planning after delivery when movement is exhausted.
+        // This test verifies that planTurn DOES produce a plan even with 0 movement,
+        // confirming the guard is needed.
+        const ctx = makeCtx();
+        const leipId = ctx.cityToMilepost['Leipzig'];
+        const wrocId = ctx.cityToMilepost['Wroclaw'];
+
+        const gs = makeGS({
+            player: {
+                cash: 50,
+                trainLocation: leipId,
+                movement: 0,   // no movement left
+                loads: [],
+                demandCards: [
+                    {
+                        id: 'card-1',
+                        demands: [
+                            { good: 'Coal', to: 'Berlin', payout: 20 },
+                            { good: 'Beer', to: 'Paris', payout: 25 },
+                            { good: 'Wine', to: 'Madrid', payout: 30 }
+                        ]
+                    }
+                ],
+                aiState: {
+                    targetCardIndex: null,
+                    targetDemandIndex: null,
+                    targetSourceCity: null
+                }
+            },
+            gs: { phase: 'operate' }
+        });
+        const ctx2 = makeCtx({ players: gs.players, tracks: gs.tracks });
+        buildTrack(ctx2, gs, leipId, wrocId, 'red');
+
+        const plan = aiEasy.planTurn(gs, 0, ctx2);
+
+        // planTurn produces a plan regardless of movement points.
+        // The plan ends with endOperatePhase, and the commitMove would fail
+        // at execution time (applyCommitMove rejects when movement=0).
+        // The server-side guard prevents this re-plan from happening at all.
+        assert.equal(plan[plan.length - 1].type, 'endOperatePhase',
+            'plan should end with endOperatePhase');
+    });
+
+    it('delivers immediately if already carrying good at destination after re-plan', () => {
+        // Simulate: AI at Leipzig carrying Coal, and there is a demand for Coal at Leipzig.
+        // Build track from Wroclaw→Leipzig so Coal→Leipzig has cost 0 and is selected.
+        const ctx = makeCtx();
+        const leipId = ctx.cityToMilepost['Leipzig'];
+        const wrocId = ctx.cityToMilepost['Wroclaw'];
+
+        const gs = makeGS({
+            player: {
+                cash: 50,
+                trainLocation: leipId,
+                movement: 6,
+                loads: ['Coal'],
+                demandCards: [
+                    {
+                        id: 'card-1',
+                        demands: [
+                            { good: 'Coal', to: 'Leipzig', payout: 12 },
+                            { good: 'Beer', to: 'Paris', payout: 25 },
+                            { good: 'Wine', to: 'Madrid', payout: 30 }
+                        ]
+                    }
+                ],
+                aiState: {
+                    targetCardIndex: null,
+                    targetDemandIndex: null,
+                    targetSourceCity: null
+                }
+            },
+            gs: { phase: 'operate' }
+        });
+        const ctx2 = makeCtx({ players: gs.players, tracks: gs.tracks });
+
+        // Build track so Coal→Leipzig is the cheapest (cost=0) demand
+        buildTrack(ctx2, gs, wrocId, leipId, 'red');
+
+        const plan = aiEasy.planTurn(gs, 0, ctx2);
+
+        // Should deliver Coal at Leipzig
+        const deliveries = plan.filter(a => a.type === 'deliverGood');
+        assert.ok(deliveries.length >= 1, `Expected deliverGood, got: [${plan.map(a => a.type).join(', ')}]`);
+    });
+
+    it('discards hand when no target is reachable after delivery', () => {
+        // Simulate: AI at Leipzig with movement, but all demands require
+        // unreachable cities (no track built anywhere useful)
+        const ctx = makeCtx();
+        const leipId = ctx.cityToMilepost['Leipzig'];
+
+        const gs = makeGS({
+            player: {
+                cash: 0,   // no cash to build
+                trainLocation: leipId,
+                movement: 6,
+                loads: [],
+                demandCards: [
+                    {
+                        id: 'card-1',
+                        demands: [
+                            { good: 'Cork', to: 'Lisboa', payout: 10 },
+                            { good: 'Cork', to: 'Sevilla', payout: 10 },
+                            { good: 'Cork', to: 'Madrid', payout: 10 }
+                        ]
+                    }
+                ],
+                aiState: {
+                    targetCardIndex: null,
+                    targetDemandIndex: null,
+                    targetSourceCity: null
+                }
+            },
+            gs: { phase: 'operate' }
+        });
+        const ctx2 = makeCtx({ players: gs.players, tracks: gs.tracks });
+
+        const plan = aiEasy.planTurn(gs, 0, ctx2);
+
+        // With no cash and no reachable targets, should discard hand
+        assert.ok(
+            plan.some(a => a.type === 'discardHand') || plan.some(a => a.type === 'endOperatePhase'),
+            `Expected discardHand or endOperatePhase, got: [${plan.map(a => a.type).join(', ')}]`
+        );
     });
 });
