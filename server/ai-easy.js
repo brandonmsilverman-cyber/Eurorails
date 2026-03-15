@@ -12,6 +12,17 @@ const getMileppostCost = gl.getMileppostCost;
 const getFerryKey = gl.getFerryKey;
 const getPlayerOwnedMileposts = gl.getPlayerOwnedMileposts;
 
+// Helper: find the cheapest build path between two points by trying both
+// directions.  Building OUT of an expensive city (major=5, minor=3) is much
+// cheaper than building INTO it, so the cheaper direction can save significant ECU.
+function findCheapestBuildPath(ctx, idA, idB, playerColor) {
+    const fwd = findPath(ctx, idA, idB, playerColor, "cheapest");
+    const rev = findPath(ctx, idB, idA, playerColor, "cheapest");
+    if (!fwd) return rev;
+    if (!rev) return fwd;
+    return rev.cost < fwd.cost ? rev : fwd;
+}
+
 // 3a: Demand selection — picks the demand with the best profit margin
 // (payout - build cost) that the AI can afford. Strongly prefers affordable
 // demands to avoid burning cash on unfinishable routes.
@@ -50,7 +61,7 @@ function selectTargetDemand(gs, playerIndex, ctx, { excludeFullyBuilt = false, e
                 const destId = ctx.cityToMilepost[demand.to];
                 if (srcId === undefined || destId === undefined) continue;
 
-                const result = findPath(ctx, srcId, destId, player.color, "cheapest");
+                const result = findCheapestBuildPath(ctx, srcId, destId, player.color);
                 if (!result) continue;
 
                 // Skip routes that are already fully built (nothing to build)
@@ -66,7 +77,7 @@ function selectTargetDemand(gs, playerIndex, ctx, { excludeFullyBuilt = false, e
                         for (const ownedId of ownedCities) {
                             for (const goalId of [srcId, destId]) {
                                 if (goalId === ownedId) continue;
-                                const conn = findPath(ctx, ownedId, goalId, player.color, "cheapest");
+                                const conn = findCheapestBuildPath(ctx, ownedId, goalId, player.color);
                                 if (conn && conn.cost < connectorCost) {
                                     connectorCost = conn.cost;
                                 }
@@ -277,7 +288,7 @@ function findConnectorBuild(gs, playerIndex, ctx, srcId, destId, payout = 0) {
     for (const ownedId of ownedCities) {
         for (const goalId of [srcId, destId]) {
             if (goalId === undefined || goalId === ownedId) continue;
-            const result = findPath(ctx, ownedId, goalId, player.color, "cheapest");
+            const result = findCheapestBuildPath(ctx, ownedId, goalId, player.color);
             if (result && result.cost > 0 && result.cost < bestCost) {
                 bestCost = result.cost;
                 bestPath = result;
@@ -295,7 +306,7 @@ function findConnectorBuild(gs, playerIndex, ctx, srcId, destId, payout = 0) {
     // first connecting city if budget allows (connector → src/dest → other end).
     const otherEnd = (bestGoal === srcId) ? destId : srcId;
     if (otherEnd !== undefined) {
-        const mainRoute = findPath(ctx, bestGoal, otherEnd, player.color, "cheapest");
+        const mainRoute = findCheapestBuildPath(ctx, bestGoal, otherEnd, player.color);
         if (mainRoute && mainRoute.path.length > 1) {
             const combinedPath = [...bestPath.path, ...mainRoute.path.slice(1)];
             const combinedResult = { path: combinedPath, cost: bestPath.cost + mainRoute.cost };
@@ -507,7 +518,7 @@ function planTurn(gs, playerIndex, ctx) {
             if (bestPath) {
                 // Extend past source toward destination
                 if (destId !== undefined) {
-                    const mainRoute = findPath(ctx, srcId, destId, player.color, "cheapest");
+                    const mainRoute = findCheapestBuildPath(ctx, srcId, destId, player.color);
                     if (mainRoute && mainRoute.path.length > 1) {
                         const combinedPath = [...bestPath.path, ...mainRoute.path.slice(1)];
                         const combinedResult = { path: combinedPath, cost: bestPath.cost + mainRoute.cost };
@@ -530,7 +541,7 @@ function planTurn(gs, playerIndex, ctx) {
                 }
                 if (bestPath) {
                     if (srcId !== undefined) {
-                        const mainRoute = findPath(ctx, destId, srcId, player.color, "cheapest");
+                        const mainRoute = findCheapestBuildPath(ctx, destId, srcId, player.color);
                         if (mainRoute && mainRoute.path.length > 1) {
                             const combinedPath = [...bestPath.path, ...mainRoute.path.slice(1)];
                             const combinedResult = { path: combinedPath, cost: bestPath.cost + mainRoute.cost };
@@ -544,7 +555,7 @@ function planTurn(gs, playerIndex, ctx) {
             }
         } else {
             // Subsequent builds: extend from existing track toward target
-            const fullPath = findPath(ctx, srcId, destId, player.color, "cheapest");
+            const fullPath = findCheapestBuildPath(ctx, srcId, destId, player.color);
             if (fullPath) {
                 buildAction = computeBuildActions(gs, playerIndex, ctx, fullPath);
             }
@@ -717,8 +728,8 @@ function planTurn(gs, playerIndex, ctx) {
             const demand = player.demandCards[target.cardIndex]?.demands[target.demandIndex];
             const payout = demand ? demand.payout : 0;
 
-            // First try: build along the src→dest path
-            const fullPath = findPath(ctx, srcId, destId, player.color, "cheapest");
+            // First try: build along the src→dest path (try both directions for cheaper cost)
+            const fullPath = findCheapestBuildPath(ctx, srcId, destId, player.color);
             if (fullPath) {
                 // Allow partial building if the route is profitable (payout > cost).
                 // Block only unprofitable routes the AI can't afford outright.
@@ -753,7 +764,7 @@ function planTurn(gs, playerIndex, ctx) {
                     const payout2 = demand2.payout;
                     console.log(`AI ${playerIndex} build: lookahead target=${demand2?.good} from ${secondary.sourceCity}→${demand2?.to} (buildCost=${secondary.cost}) cash=${player.cash}`);
 
-                    const fullPath2 = findPath(ctx, srcId2, destId2, player.color, "cheapest");
+                    const fullPath2 = findCheapestBuildPath(ctx, srcId2, destId2, player.color);
                     if (fullPath2 && (fullPath2.cost <= player.cash || payout2 > fullPath2.cost)) {
                         buildAction = computeBuildActions(gs, playerIndex, ctx, fullPath2);
                     }
@@ -810,7 +821,7 @@ function selectTargetFromState(gs, playerIndex, ctx, { excludeFullyBuilt = false
                 const srcId = ctx.cityToMilepost[aiState.targetSourceCity];
                 const destId = ctx.cityToMilepost[demand.to];
                 if (srcId && destId) {
-                    const fullPath = findPath(ctx, srcId, destId, player.color, "cheapest");
+                    const fullPath = findCheapestBuildPath(ctx, srcId, destId, player.color);
                     if (fullPath && fullPath.cost === 0) {
                         // Route fully built — clear persisted target and pick a new one
                         aiState.targetCardIndex = null;
@@ -831,7 +842,7 @@ function selectTargetFromState(gs, playerIndex, ctx, { excludeFullyBuilt = false
             } else {
                 const srcId = ctx.cityToMilepost[aiState.targetSourceCity];
                 const destId = ctx.cityToMilepost[demand.to];
-                const pathResult = (srcId && destId) ? findPath(ctx, srcId, destId, player.color, "cheapest") : null;
+                const pathResult = (srcId && destId) ? findCheapestBuildPath(ctx, srcId, destId, player.color) : null;
                 return {
                     cardIndex: aiState.targetCardIndex,
                     demandIndex: aiState.targetDemandIndex,
