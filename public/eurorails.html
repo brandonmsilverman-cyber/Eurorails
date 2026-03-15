@@ -382,6 +382,40 @@
             color: #888;
         }
 
+        .turn-timer {
+            position: absolute;
+            top: 6px;
+            right: 8px;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .turn-timer-display {
+            font-size: 11px;
+            font-weight: normal;
+            color: #998866;
+            letter-spacing: 0.5px;
+        }
+
+        .turn-timer-toggle {
+            background: none;
+            border: none;
+            color: #665544;
+            cursor: pointer;
+            font-size: 10px;
+            padding: 0 2px;
+            line-height: 1;
+            opacity: 0.7;
+            transition: opacity 0.15s;
+        }
+
+        .turn-timer-toggle:hover {
+            opacity: 1;
+            color: #998866;
+        }
+
         #demandCardsOverlay {
             display: flex;
             gap: 6px;
@@ -1322,6 +1356,45 @@ let gameState = {
     zoom: 1.0,                             // map zoom level (1 = fit to viewport)
     showCityGoods: true                     // toggle city goods icons on map
 };
+
+// Turn duration clock (client-side UI only)
+let turnTimerStartTime = null;   // Date.now() when current turn started
+let turnTimerHidden = false;     // player preference to hide the timer
+let turnTimerInterval = null;    // setInterval id for updating the display
+
+function formatTurnTimer(elapsedMs) {
+    const totalSec = Math.floor(elapsedMs / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return `${min}:${sec.toString().padStart(2, '0')}`;
+}
+
+function startTurnTimer() {
+    turnTimerStartTime = Date.now();
+    if (turnTimerInterval) clearInterval(turnTimerInterval);
+    turnTimerInterval = setInterval(() => {
+        const el = document.getElementById("turnTimerDisplay");
+        if (el && turnTimerStartTime && !turnTimerHidden) {
+            el.textContent = formatTurnTimer(Date.now() - turnTimerStartTime);
+        }
+    }, 1000);
+}
+
+function stopTurnTimer() {
+    if (turnTimerInterval) {
+        clearInterval(turnTimerInterval);
+        turnTimerInterval = null;
+    }
+    turnTimerStartTime = null;
+}
+
+function toggleTurnTimer() {
+    turnTimerHidden = !turnTimerHidden;
+    const timerDisplay = document.getElementById("turnTimerDisplay");
+    const toggleBtn = document.getElementById("turnTimerToggle");
+    if (timerDisplay) timerDisplay.style.display = turnTimerHidden ? "none" : "";
+    if (toggleBtn) toggleBtn.title = turnTimerHidden ? "Show timer" : "Hide timer";
+}
 
 
 // ============================================================================
@@ -3613,9 +3686,21 @@ function drawMap() {
             statusRightHtml = `<span class="waiting">Waiting for <span style="color:${activeColor}; font-style:normal; font-weight:bold;">${activePlayer.name}</span> to finish</span>`;
         }
 
+        // Turn timer HTML (only visible during this player's turn)
+        let turnTimerHtml = '';
+        if (isMyTurn && turnTimerStartTime) {
+            const elapsed = formatTurnTimer(Date.now() - turnTimerStartTime);
+            turnTimerHtml = `
+                <div class="turn-timer">
+                    <span id="turnTimerDisplay" class="turn-timer-display" style="${turnTimerHidden ? 'display:none' : ''}">${elapsed}</span>
+                    <button id="turnTimerToggle" class="turn-timer-toggle" onclick="toggleTurnTimer()" title="${turnTimerHidden ? 'Show timer' : 'Hide timer'}">${turnTimerHidden ? '&#9719;' : '&minus;'}</button>
+                </div>`;
+        }
+
         trainCardEl.innerHTML = `
             <div class="train-status-card" style="border-color:${pColor}40;">
                 ${trainSvg}
+                ${turnTimerHtml}
                 <div class="train-header" style="color:${pColor}; border-bottom-color:${pColor}40;">
                     ${myPlayer.name}'s Train
                 </div>
@@ -3876,6 +3961,9 @@ function startGame() {
     updateZoomButtons();
 
     addLog("Game started! Initial building phase (2 rounds)");
+
+    // Start the turn timer for the first turn
+    startTurnTimer();
 
     // Animate the first player's initial 3 demand cards being dealt
     const firstPlayer = gameState.players[0];
@@ -4619,6 +4707,9 @@ function endTurnLocal() {
 
     gameState.turn++;
 
+    // Reset turn timer for the new turn
+    startTurnTimer();
+
     // Show turn change overlay
     let phaseLabel = "";
     if (gameState.phase === "initialBuilding") phaseLabel = "Initial Building Phase";
@@ -5067,6 +5158,7 @@ function updateUI() {
 
 
 function endGame(player) {
+    stopTurnTimer();
     const isMultiplayer = typeof socket !== 'undefined' && myPlayerId;
     const isWinner = !isMultiplayer || (player.id === myPlayerId);
     const playerDisplayColor = COLOR_MAP[player.color] || player.color;
@@ -7142,6 +7234,9 @@ function initializeGameView(state, isRejoin) {
     document.getElementById("zoomControls").style.display = "flex";
     updateZoomButtons();
 
+    // Start the turn timer
+    startTurnTimer();
+
     // Render server log entries to the DOM (clear first to avoid duplicates on repeated reconnects)
     const logDiv = document.getElementById("gameLog");
     if (logDiv) {
@@ -7371,6 +7466,7 @@ socket.on('stateUpdate', ({ state, uiEvent }) => {
     }
 
     if (uiEvent?.type === 'turnChanged' && uiEvent.overlay) {
+        startTurnTimer();
         showTurnOverlay(uiEvent.overlay.playerName, uiEvent.overlay.playerColor, uiEvent.overlay.phaseLabel);
     }
 

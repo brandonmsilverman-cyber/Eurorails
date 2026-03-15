@@ -15,13 +15,9 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 
 - [ ] **Borrowing** — A player may borrow up to ECU 20 from the bank at any time and immediately spend it on building or hold it in reserve. The player must pay back **double** the borrowed amount from all future delivery payoffs until the doubled debt is fully repaid. Per the official rules (p. 26, "Money" section), borrowing is intended as a safety valve for players who become trapped or unable to make progress. The loan is taken voluntarily; there is no forced borrowing.
 - [ ] **Reset** — A player may completely restart their position at the beginning of their turn. Per the official rules (p. 26, "Reset" section): the player discards all Demand cards, removes all loads, returns all money to the bank, and erases all their track. They then receive a fresh Freight Loco card, ECU 50, and 3 new Demand cards. They may build up to ECU 20 on the reset turn and restart their train at any city at the beginning of their turn. Other players' track that was protected (from riding the resetting player's track) is not erased and remains for the rest of the game.
-- [ ] **Backtracking** — A player may reverse their train's direction on any milepost (not just at cities) at a cost of losing 1 full turn. Per the official rules (p. 26, "Backtracking" section): a train which backtracks can move in any direction on its next turn. A train may not backtrack when the player has discarded their cards during the same turn. A train may backtrack if it cannot move for any other reason (e.g., Derailment or Rail Strike). A player whose train backtracks while on an opponent's track is assessed the use fee for that turn.
 - [ ] **Discard pile reshuffle** — When the demand card deck runs out, reshuffle fulfilled/discarded demand cards back into the deck so the game never runs dry
-- [ ] **Economy difficulty setting** — Add a pre-game room option with three economy modes (Standard, Constrained, Generous) that adjust demand card payout amounts and route length mix
 - [ ] **Set train destination** — Player selects a city as their destination; the train automatically moves toward it each operate phase until it arrives, the player undoes movement, an event card disrupts it (i.e. derail or broken track), or the mode is turned off
 - [ ] **Faster train tier** — Add a 20+ speed train option to reduce late-game drag when players have long routes. Full plan in [`EXPRESS_TRAIN_PLAN.md`](EXPRESS_TRAIN_PLAN.md).
-- [ ] **Turn duration clock** — Optional time pressure element with a visible timer per turn counting up from 0. player should be able to minimize/hide this from view
-
 ## UI / Visual
 
 - [ ] **Overhaul demand card row hover effect** — When hovering a demand card row, highlight origin and destination cities simultaneously on the map using distinct colors (e.g. one color for origin cities, another for the destination)
@@ -86,3 +82,4 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 - [x] Event banner text vertical centering fix
 - [x] London-Amsterdam ferry endpoint repositioned
 - [x] Spain access restricted (Pyrenees alpine region, eastern pass, Cantabrian mountains, Madrid area cleared)
+- [x] Turn duration clock (count-up timer on train card, minimizable)
