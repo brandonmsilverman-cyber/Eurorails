@@ -6523,7 +6523,7 @@ function renderLobbyRoom(info) {
             ? `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${COLOR_DISPLAY[p.color] || p.color};"></span>`
             : `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#555;"></span>`;
 
-        div.innerHTML = `${colorDot} <span>${p.name}</span>${p.isHost ? ' <span style="color:#f1c40f;font-size:11px;">(host)</span>' : ''}${p.id === myPlayerId ? ' <span style="color:#888;font-size:11px;">(you)</span>' : ''}`;
+        div.innerHTML = `${colorDot} <span>${p.name}</span>${p.isAI ? ' <span style="color:#2ecc71;font-size:11px;">(AI)</span>' : ''}${p.isHost ? ' <span style="color:#f1c40f;font-size:11px;">(host)</span>' : ''}${p.id === myPlayerId ? ' <span style="color:#888;font-size:11px;">(you)</span>' : ''}`;
         listEl.appendChild(div);
     }
 

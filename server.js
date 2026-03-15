@@ -1027,7 +1027,7 @@ function createGameState(playerList) {
             }
             // Event cards drawn during initial deal are discarded
         }
-        return {
+        const player = {
             id: p.id,
             name: p.name,
             color: p.color,
@@ -1040,6 +1040,16 @@ function createGameState(playerList) {
             ferryState: null,
             selectedDemands: [null, null, null]
         };
+        if (p.isAI) {
+            player.isAI = true;
+            player.difficulty = p.difficulty || 'easy';
+            player.aiState = {
+                targetCardIndex: null,
+                targetDemandIndex: null,
+                targetSourceCity: null
+            };
+        }
+        return player;
     });
 
     // Generate hex grid server-side (no longer depends on client sending it)
@@ -1494,7 +1504,6 @@ io.on('connection', (socket) => {
         const playerList = [
             { id: sessionToken, name: playerName.trim(), color: playerColor }
         ];
-        const aiEntries = [];
         for (let i = 0; i < aiPlayers.length; i++) {
             const aiToken = `ai-${randomUUID()}`;
             const ai = aiPlayers[i];
@@ -1505,24 +1514,9 @@ io.on('connection', (socket) => {
                 isAI: true,
                 difficulty: ai.difficulty
             });
-            aiEntries.push({ id: aiToken, name: ai.name || `AI ${i + 1}`, color: ai.color, isAI: true, difficulty: ai.difficulty });
         }
 
         room.gameState = createGameState(playerList);
-
-        // Store AI metadata on game state players
-        for (const p of room.gameState.players) {
-            const aiEntry = aiEntries.find(a => a.id === p.id);
-            if (aiEntry) {
-                p.isAI = true;
-                p.difficulty = aiEntry.difficulty;
-                p.aiState = {
-                    targetCardIndex: null,
-                    targetDemandIndex: null,
-                    targetSourceCity: null
-                };
-            }
-        }
 
         rooms.set(roomCode, room);
         socket.join(roomCode);
@@ -2616,7 +2610,7 @@ function getRoomInfo(roomCode) {
 
     const players = [];
     for (const [, p] of room.players) {
-        players.push({ id: p.sessionToken, name: p.name, color: p.color, isHost: p.sessionToken === room.hostSessionToken });
+        players.push({ id: p.sessionToken, name: p.name, color: p.color, isHost: p.sessionToken === room.hostSessionToken, isAI: p.isAI || false });
     }
     return { roomCode, players, hostSessionToken: room.hostSessionToken, maxPlayers: room.maxPlayers, password: room.password || null };
 }
