@@ -373,12 +373,7 @@ function chooseDeploy(gs, playerIndex, ctx, target) {
         return targetSrcId;
     }
 
-    // 2. Deploy at target destination if on owned track
-    if (targetDestId && preferredComponent.has(targetDestId)) {
-        return targetDestId;
-    }
-
-    // 3. Deploy at the city closest (by track distance) to target source
+    // 2. Deploy at the city closest (by Euclidean distance) to target source
     if (targetSrcId) {
         let bestId = null;
         let bestDist = Infinity;
@@ -396,7 +391,7 @@ function chooseDeploy(gs, playerIndex, ctx, target) {
         if (bestId) return bestId;
     }
 
-    // 4. Any source city for any demand on preferred component
+    // 3. Any source city for any demand on preferred component
     const wantedSources = new Set();
     for (const card of player.demandCards) {
         if (!card || !card.demands) continue;
@@ -412,7 +407,7 @@ function chooseDeploy(gs, playerIndex, ctx, target) {
         }
     }
 
-    // 5. Fallback: any city on preferred component
+    // 4. Fallback: any city on preferred component
     for (const mpId of preferredComponent) {
         const mp = ctx.mileposts_by_id[mpId];
         if (mp.city) return mpId;
@@ -493,29 +488,26 @@ function planTurn(gs, playerIndex, ctx) {
 
         if (!hasTrack) {
             // First build: must start from a major city.
-            // Find the cheapest route from any major city toward source or dest.
+            // Always route through the SOURCE first so the AI can deploy there
+            // and immediately pick up goods. Path: major city → source → dest.
             let bestPath = null;
             let bestCost = Infinity;
-            let bestGoal = null;
+
+            // Primary: find cheapest major city → source
             for (const majorCity of MAJOR_CITIES) {
                 const majorId = ctx.cityToMilepost[majorCity];
-                if (majorId === undefined) continue;
-                for (const goalId of [srcId, destId]) {
-                    if (goalId === undefined || goalId === majorId) continue;
-                    const result = findPath(ctx, majorId, goalId, player.color, "cheapest");
-                    if (result && result.cost < bestCost) {
-                        bestCost = result.cost;
-                        bestPath = result;
-                        bestGoal = goalId;
-                    }
+                if (majorId === undefined || majorId === srcId) continue;
+                const result = findPath(ctx, majorId, srcId, player.color, "cheapest");
+                if (result && result.cost < bestCost) {
+                    bestCost = result.cost;
+                    bestPath = result;
                 }
             }
+
             if (bestPath) {
-                // Extend past the first city: append the main route so the AI
-                // can build major city → src/dest → other end in one action.
-                const otherEnd = (bestGoal === srcId) ? destId : srcId;
-                if (otherEnd !== undefined) {
-                    const mainRoute = findPath(ctx, bestGoal, otherEnd, player.color, "cheapest");
+                // Extend past source toward destination
+                if (destId !== undefined) {
+                    const mainRoute = findPath(ctx, srcId, destId, player.color, "cheapest");
                     if (mainRoute && mainRoute.path.length > 1) {
                         const combinedPath = [...bestPath.path, ...mainRoute.path.slice(1)];
                         const combinedResult = { path: combinedPath, cost: bestPath.cost + mainRoute.cost };
@@ -524,6 +516,30 @@ function planTurn(gs, playerIndex, ctx) {
                 }
                 if (!buildAction) {
                     buildAction = computeBuildActions(gs, playerIndex, ctx, bestPath);
+                }
+            } else {
+                // Fallback: if no path to source, try major city → dest → source
+                for (const majorCity of MAJOR_CITIES) {
+                    const majorId = ctx.cityToMilepost[majorCity];
+                    if (majorId === undefined || majorId === destId) continue;
+                    const result = findPath(ctx, majorId, destId, player.color, "cheapest");
+                    if (result && result.cost < bestCost) {
+                        bestCost = result.cost;
+                        bestPath = result;
+                    }
+                }
+                if (bestPath) {
+                    if (srcId !== undefined) {
+                        const mainRoute = findPath(ctx, destId, srcId, player.color, "cheapest");
+                        if (mainRoute && mainRoute.path.length > 1) {
+                            const combinedPath = [...bestPath.path, ...mainRoute.path.slice(1)];
+                            const combinedResult = { path: combinedPath, cost: bestPath.cost + mainRoute.cost };
+                            buildAction = computeBuildActions(gs, playerIndex, ctx, combinedResult);
+                        }
+                    }
+                    if (!buildAction) {
+                        buildAction = computeBuildActions(gs, playerIndex, ctx, bestPath);
+                    }
                 }
             }
         } else {
