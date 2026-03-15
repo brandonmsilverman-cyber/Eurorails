@@ -981,25 +981,7 @@
             color: #ffe0e0;
         }
 
-        /* Solo Mode Setup */
-        .solo-divider {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin: 20px 0 10px;
-            color: #666;
-            font-size: 13px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .solo-divider::before,
-        .solo-divider::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: #444;
-        }
-
+        /* AI Player Setup (shared by lobby) */
         .solo-ai-row {
             display: flex;
             align-items: center;
@@ -1093,7 +1075,6 @@
                             <th style="padding: 10px 12px; color: #888; font-weight: 600;">Host</th>
                             <th style="padding: 10px 8px; color: #888; font-weight: 600; text-align: center; width: 30px;" title="Password required">&#128274;</th>
                             <th style="padding: 10px 12px; color: #888; font-weight: 600; text-align: center;">Players</th>
-                            <th style="padding: 10px 12px; color: #888; font-weight: 600; text-align: center;">Mode</th>
                             <th style="padding: 10px 12px; color: #888; font-weight: 600; text-align: center;">Status</th>
                         </tr>
                     </thead>
@@ -1101,7 +1082,7 @@
                 <div style="max-height: 200px; overflow-y: auto;">
                     <table id="lobbyRoomTable" style="width: 100%; border-collapse: collapse; font-size: 14px;">
                         <tbody id="lobbyRoomTableBody">
-                            <tr><td colspan="5" style="padding: 20px; text-align: center; color: #666; font-style: italic;">No rooms available</td></tr>
+                            <tr><td colspan="4" style="padding: 20px; text-align: center; color: #666; font-style: italic;">No rooms available</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1119,29 +1100,12 @@
         <!-- Create Room -->
         <div class="setup-section" style="border-top: 1px solid #444; padding-top: 20px;">
             <label>Create a New Room:</label>
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="color: #888; font-size: 13px;">Players:</span>
-                    <div id="lobbyPlayerCountPicker" style="display: flex; gap: 4px;">
-                        <button class="player-count-btn" onclick="selectPlayerCount(1)" style="width: 32px; height: 32px; border-radius: 6px; font-size: 15px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">1</button>
-                        <button class="player-count-btn" onclick="selectPlayerCount(2)" style="width: 32px; height: 32px; border-radius: 6px; font-size: 15px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">2</button>
-                        <button class="player-count-btn selected" onclick="selectPlayerCount(3)" style="width: 32px; height: 32px; border-radius: 6px; font-size: 15px; font-weight: bold; background: #333; color: #fff; border: 2px solid #3498db; cursor: pointer;">3</button>
-                        <button class="player-count-btn" onclick="selectPlayerCount(4)" style="width: 32px; height: 32px; border-radius: 6px; font-size: 15px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">4</button>
-                        <button class="player-count-btn" onclick="selectPlayerCount(5)" style="width: 32px; height: 32px; border-radius: 6px; font-size: 15px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">5</button>
-                        <button class="player-count-btn" onclick="selectPlayerCount(6)" style="width: 32px; height: 32px; border-radius: 6px; font-size: 15px; font-weight: bold; background: #333; color: #ccc; border: 2px solid transparent; cursor: pointer;">6</button>
-                    </div>
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="color: #888; font-size: 13px;">Password:</span>
-                    <input type="password" id="lobbyRoomPassword" placeholder="Optional" autocomplete="new-password" style="width: 120px; padding: 6px 10px; margin-bottom: 0; font-size: 14px;">
-                </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="color: #888; font-size: 13px;">Password:</span>
+                <input type="password" id="lobbyRoomPassword" placeholder="Optional" autocomplete="new-password" style="width: 120px; padding: 6px 10px; margin-bottom: 0; font-size: 14px;">
             </div>
             <div style="margin-top: 25px;">
                 <button onclick="createRoom()" style="padding: 8px 24px; font-size: 15px;">Create Room</button>
-            </div>
-            <div style="margin-top: 12px; color: #666; font-size: 13px;">or</div>
-            <div style="margin-top: 12px;">
-                <button onclick="showSoloSetup()" style="padding: 8px 24px; font-size: 15px; background: #2ecc71;">Solo Mode</button>
             </div>
         </div>
 
@@ -1178,34 +1142,6 @@
             <button onclick="leaveRoom()" style="padding: 12px 24px; font-size: 14px; background: #555; border: 1px solid #666;">Back</button>
             <button id="lobbyStartBtn" onclick="lobbyStartGame()" style="display: none; padding: 12px 40px; font-size: 16px;">Start Game</button>
             <div id="lobbyWaiting" style="color: #888; font-size: 14px;">Waiting for host to start...</div>
-        </div>
-    </div>
-
-    <!-- Solo Mode Setup -->
-    <div class="setup-dialog" id="lobbySoloSetup" style="display: none; max-width: 600px; width: 90%;">
-        <h1>Solo Mode</h1>
-
-        <div class="setup-section">
-            <label>Your Name:</label>
-            <input type="text" id="soloPlayerName" placeholder="Enter your name" value="" autocomplete="off">
-        </div>
-
-        <div class="setup-section">
-            <label>Your Color:</label>
-            <div id="soloPlayerColorPicker" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
-        </div>
-
-        <div class="setup-section">
-            <label>AI Opponents:</label>
-            <div id="soloAIList"></div>
-            <button id="soloAddAIBtn" class="solo-add-ai-btn" onclick="soloAddAI()" style="margin-top: 6px;">+ Add AI Opponent</button>
-        </div>
-
-        <div id="soloError" style="color: #ff6666; text-align: center; margin-top: 10px; min-height: 20px;"></div>
-
-        <div class="setup-buttons" style="gap: 10px;">
-            <button onclick="leaveSoloSetup()" style="padding: 12px 24px; font-size: 14px; background: #555; border: 1px solid #666;">Back</button>
-            <button id="soloStartBtn" onclick="startSoloGame()" style="padding: 12px 40px; font-size: 16px; background: #2ecc71;">Start Solo Game</button>
         </div>
     </div>
 
@@ -4692,7 +4628,7 @@ function updateUI() {
             const connectedCount = getConnectedMajorCities(p.color).length;
             return `<div class="player-info active">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                    <strong style="color:${COLOR_MAP[p.color]}; font-size:14px;">${p.name}</strong>
+                    <strong style="color:${COLOR_MAP[p.color]}; font-size:14px;">${p.name}${p.isAI ? ' <span style="color:#2ecc71;font-size:10px;">(AI)</span>' : ''}</strong>
                     <span style="background:${phaseColor}22; border:1px solid ${phaseColor}; color:${phaseColor}; font-weight:bold; font-size:10px; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:0.5px;">${phaseIcon} ${phaseText}</span>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; background:#1a1a2e; padding:6px 8px; border-radius:4px; border:1px solid #333;">
@@ -4704,7 +4640,7 @@ function updateUI() {
             const inactiveConnected = getConnectedMajorCities(p.color).length;
             return `<div class="player-info">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <strong style="color:${COLOR_MAP[p.color]};">${p.name}</strong>
+                    <strong style="color:${COLOR_MAP[p.color]};">${p.name}${p.isAI ? ' <span style="color:#2ecc71;font-size:10px;">(AI)</span>' : ''}</strong>
                     <span style="font-size:11px;"><span style="color:#ffd700; font-weight:bold;">ECU ${p.cash}M</span> | <span style="color:${inactiveConnected >= 7 ? '#4a9e4a' : '#ff8800'}; font-weight:bold;">${inactiveConnected}/7</span> Major Cities</span>
                 </div>
             </div>`;
@@ -6361,23 +6297,11 @@ let myPlayerId = null;
 let myRoomCode = null;
 let isHost = false;
 
-let selectedMaxPlayers = 3;
-
 const LOBBY_COLORS = ["red", "blue", "green", "yellow", "purple", "orange"];
 const COLOR_DISPLAY = {
     red: "#ff0000", blue: "#0066ff", green: "#009900",
     yellow: "#ffcc00", purple: "#cc00ff", orange: "#ff8800"
 };
-
-function selectPlayerCount(n) {
-    selectedMaxPlayers = n;
-    const buttons = document.querySelectorAll('.player-count-btn');
-    buttons.forEach(btn => {
-        const isSelected = parseInt(btn.textContent) === n;
-        btn.style.border = isSelected ? '2px solid #3498db' : '2px solid transparent';
-        btn.style.color = isSelected ? '#fff' : '#ccc';
-    });
-}
 
 function createRoom() {
     const name = document.getElementById("lobbyPlayerName").value.trim();
@@ -6387,7 +6311,7 @@ function createRoom() {
     }
     const password = document.getElementById("lobbyRoomPassword").value.trim() || null;
     document.getElementById("lobbyError").textContent = "";
-    socket.emit('createRoom', { playerName: name, maxPlayers: selectedMaxPlayers, password }, (res) => {
+    socket.emit('createRoom', { playerName: name, password }, (res) => {
         if (res.success) {
             myPlayerId = res.sessionToken;
             myRoomCode = res.roomCode;
@@ -6433,13 +6357,13 @@ function joinRoom(roomCode, hasPassword) {
 function renderRoomList(roomList) {
     const tbody = document.getElementById("lobbyRoomTableBody");
     if (!roomList || roomList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="padding: 20px; text-align: center; color: #666; font-style: italic;">No rooms available</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="padding: 20px; text-align: center; color: #666; font-style: italic;">No rooms available</td></tr>';
         return;
     }
     tbody.innerHTML = "";
     for (const room of roomList) {
         const tr = document.createElement("tr");
-        const joinable = !room.solo && !room.gameStarted && room.playerCount < room.maxPlayers;
+        const joinable = !room.gameStarted && room.playerCount < room.maxPlayers;
         tr.style.cursor = joinable ? "pointer" : "default";
         tr.style.opacity = joinable ? "1" : "0.5";
         tr.style.borderTop = "1px solid #333";
@@ -6452,7 +6376,6 @@ function renderRoomList(roomList) {
             <td style="padding: 10px 12px;">${escapeHtml(room.hostName)}</td>
             <td style="padding: 10px 8px; text-align: center;">${room.hasPassword ? '&#128274;' : ''}</td>
             <td style="padding: 10px 12px; text-align: center;">${room.playerCount}/${room.maxPlayers}</td>
-            <td style="padding: 10px 12px; text-align: center;">${room.solo ? '<span style="color: #888;">Solo</span>' : '<span style="color: #ccc;">Multi</span>'}</td>
             <td style="padding: 10px 12px; text-align: center;">${room.gameStarted ? '<span style="color: #e74c3c;">In Progress</span>' : '<span style="color: #2ecc71;">Waiting</span>'}</td>
         `;
         tbody.appendChild(tr);
@@ -6488,6 +6411,7 @@ function renderLobbyRoom(info) {
     if (!info) return;
 
     const maxPlayers = info.maxPlayers || 6;
+    const isCurrentHost = info.hostSessionToken === myPlayerId;
 
     // Password display
     const pwDisplay = document.getElementById("lobbyPasswordDisplay");
@@ -6510,6 +6434,11 @@ function renderLobbyRoom(info) {
     for (const p of info.players) {
         if (p.color) takenColors.add(p.color);
         if (p.id === myPlayerId) myColor = p.color;
+    }
+
+    // Render human players
+    for (const p of info.players) {
+        if (p.isAI) continue;
 
         const div = document.createElement("div");
         div.className = "player-setup";
@@ -6523,23 +6452,112 @@ function renderLobbyRoom(info) {
             ? `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${COLOR_DISPLAY[p.color] || p.color};"></span>`
             : `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#555;"></span>`;
 
-        div.innerHTML = `${colorDot} <span>${p.name}</span>${p.isAI ? ' <span style="color:#2ecc71;font-size:11px;">(AI)</span>' : ''}${p.isHost ? ' <span style="color:#f1c40f;font-size:11px;">(host)</span>' : ''}${p.id === myPlayerId ? ' <span style="color:#888;font-size:11px;">(you)</span>' : ''}`;
+        div.innerHTML = `${colorDot} <span>${p.name}</span>${p.isHost ? ' <span style="color:#f1c40f;font-size:11px;">(host)</span>' : ''}${p.id === myPlayerId ? ' <span style="color:#888;font-size:11px;">(you)</span>' : ''}`;
         listEl.appendChild(div);
     }
 
-    // Empty slots
-    const emptySlots = maxPlayers - info.players.length;
-    for (let i = 0; i < emptySlots; i++) {
-        const div = document.createElement("div");
-        div.className = "player-setup";
-        div.style.display = "flex";
-        div.style.alignItems = "center";
-        div.style.gap = "10px";
-        div.style.padding = "8px 12px";
-        div.style.marginBottom = "6px";
-        div.style.opacity = "0.4";
-        div.innerHTML = `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#555;border:1px dashed #888;"></span> <span style="color:#888;font-style:italic;">Waiting for player...</span>`;
-        listEl.appendChild(div);
+    // Empty slots for non-host
+    if (!isCurrentHost) {
+        const emptySlots = maxPlayers - info.players.length;
+        for (let i = 0; i < emptySlots; i++) {
+            const div = document.createElement("div");
+            div.className = "player-setup";
+            div.style.display = "flex";
+            div.style.alignItems = "center";
+            div.style.gap = "10px";
+            div.style.padding = "8px 12px";
+            div.style.marginBottom = "6px";
+            div.style.opacity = "0.4";
+            div.innerHTML = `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#555;border:1px dashed #888;"></span> <span style="color:#888;font-style:italic;">Waiting for player...</span>`;
+            listEl.appendChild(div);
+        }
+    }
+
+    // AI players section (host sees full controls, others see read-only rows)
+    const aiPlayers = info.players.filter(p => p.isAI);
+    if (aiPlayers.length > 0 || isCurrentHost) {
+        const aiHeader = document.createElement("label");
+        aiHeader.textContent = "AI Opponents:";
+        aiHeader.style.cssText = "display:block;margin-top:12px;margin-bottom:6px;font-size:14px;color:#ccc;";
+        listEl.appendChild(aiHeader);
+    }
+
+    for (const p of aiPlayers) {
+        if (isCurrentHost) {
+            // AI control row: label, difficulty dropdown, color buttons, remove
+            const row = document.createElement("div");
+            row.className = "solo-ai-row";
+
+            const label = document.createElement("span");
+            label.className = "ai-label";
+            label.textContent = p.name;
+            row.appendChild(label);
+
+            // Difficulty select
+            const select = document.createElement("select");
+            for (const diff of AI_DIFFICULTIES) {
+                const opt = document.createElement("option");
+                opt.value = diff;
+                opt.textContent = AI_DIFFICULTY_LABELS[diff];
+                if (p.difficulty === diff) opt.selected = true;
+                select.appendChild(opt);
+            }
+            select.onchange = () => socket.emit('updateAIPlayer', { sessionToken: p.id, difficulty: select.value }, (res) => {
+                if (res && !res.success) console.warn('updateAIPlayer:', res.error);
+            });
+            row.appendChild(select);
+
+            // Color buttons
+            for (const c of LOBBY_COLORS) {
+                const btn = document.createElement("button");
+                btn.className = "solo-ai-color-btn";
+                btn.style.background = COLOR_DISPLAY[c];
+                const isMine = p.color === c;
+                const takenByOther = !isMine && takenColors.has(c);
+                if (isMine) btn.classList.add("selected");
+                btn.disabled = takenByOther;
+                btn.onclick = () => socket.emit('updateAIPlayer', { sessionToken: p.id, color: c }, (res) => {
+                    if (res && !res.success) console.warn('updateAIPlayer:', res.error);
+                });
+                row.appendChild(btn);
+            }
+
+            // Remove button
+            const removeBtn = document.createElement("button");
+            removeBtn.className = "solo-remove-btn";
+            removeBtn.textContent = "\u00d7";
+            removeBtn.title = "Remove AI";
+            removeBtn.onclick = () => socket.emit('removeAIPlayer', { sessionToken: p.id }, (res) => {
+                if (res && !res.success) console.warn('removeAIPlayer:', res.error);
+            });
+            row.appendChild(removeBtn);
+
+            listEl.appendChild(row);
+        } else {
+            // Read-only row for non-host
+            const div = document.createElement("div");
+            div.className = "player-setup";
+            div.style.display = "flex";
+            div.style.alignItems = "center";
+            div.style.gap = "10px";
+            div.style.padding = "8px 12px";
+            div.style.marginBottom = "6px";
+            const colorDot = p.color
+                ? `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${COLOR_DISPLAY[p.color] || p.color};"></span>`
+                : `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#555;"></span>`;
+            div.innerHTML = `${colorDot} <span>${p.name}</span> <span style="color:#2ecc71;font-size:11px;">(AI - ${AI_DIFFICULTY_LABELS[p.difficulty] || p.difficulty})</span>`;
+            listEl.appendChild(div);
+        }
+    }
+
+    // "+ Add AI Opponent" button for host
+    if (isCurrentHost && info.players.length < maxPlayers) {
+        const addBtn = document.createElement("button");
+        addBtn.className = "solo-add-ai-btn";
+        addBtn.textContent = "+ Add AI Opponent";
+        addBtn.style.marginTop = "6px";
+        addBtn.onclick = () => lobbyAddAI();
+        listEl.appendChild(addBtn);
     }
 
     // Color picker
@@ -6560,24 +6578,23 @@ function renderLobbyRoom(info) {
     }
 
     // Host controls
-    const isCurrentHost = info.hostSessionToken === myPlayerId;
-    const roomFull = info.players.length >= maxPlayers;
+    const enoughPlayers = info.players.length >= 2;
     const allHaveColors = info.players.every(p => p.color);
-    const canStart = roomFull && allHaveColors;
+    const canStart = enoughPlayers && allHaveColors;
     document.getElementById("lobbyStartBtn").style.display = isCurrentHost ? "inline-block" : "none";
     document.getElementById("lobbyStartBtn").disabled = !canStart;
     document.getElementById("lobbyStartBtn").style.opacity = canStart ? "1" : "0.5";
     document.getElementById("lobbyWaiting").style.display = isCurrentHost ? "none" : "block";
     if (isCurrentHost && !canStart) {
         document.getElementById("lobbyWaiting").style.display = "block";
-        document.getElementById("lobbyWaiting").textContent = !roomFull
-            ? `Waiting for ${maxPlayers - info.players.length} more player${maxPlayers - info.players.length > 1 ? 's' : ''}...`
+        document.getElementById("lobbyWaiting").textContent = !enoughPlayers
+            ? 'Need at least 2 players to start (add AI or wait for players)'
             : 'All players must pick a color';
     } else if (!isCurrentHost) {
-        document.getElementById("lobbyWaiting").textContent = roomFull && allHaveColors
+        document.getElementById("lobbyWaiting").textContent = enoughPlayers && allHaveColors
             ? 'Waiting for host to start...'
-            : !roomFull
-                ? `Waiting for ${maxPlayers - info.players.length} more player${maxPlayers - info.players.length > 1 ? 's' : ''}...`
+            : !enoughPlayers
+                ? 'Waiting for more players...'
                 : 'Waiting for all players to pick colors...';
     }
 }
@@ -6586,204 +6603,14 @@ function lobbyStartGame() {
     socket.emit('startGame');
 }
 
-// ============================================================================
-// SOLO MODE SETUP
-// ============================================================================
+function lobbyAddAI() {
+    socket.emit('addAIPlayer', { difficulty: 'easy' }, (res) => {
+        if (res && !res.success) console.warn('addAIPlayer:', res.error);
+    });
+}
 
 const AI_DIFFICULTIES = ['easy'];
 const AI_DIFFICULTY_LABELS = { easy: 'Easy' };
-
-let soloPlayerColor = null;
-let soloAIPlayers = []; // [{ difficulty: 'easy', color: null }, ...]
-
-function showSoloSetup() {
-    const nameInput = document.getElementById("lobbyPlayerName");
-    if (!nameInput.value.trim()) {
-        document.getElementById("lobbyError").textContent = "Please enter your name.";
-        nameInput.focus();
-        return;
-    }
-    document.getElementById("lobbyError").textContent = "";
-    const soloNameInput = document.getElementById("soloPlayerName");
-    soloNameInput.value = nameInput.value;
-
-    soloPlayerColor = null;
-    soloAIPlayers = [{ difficulty: 'easy', color: null }];
-
-    showScreen('lobbySoloSetup');
-    renderSoloSetup();
-}
-
-function leaveSoloSetup() {
-    showScreen('lobbyJoinCreate');
-    // Sync name back
-    const soloName = document.getElementById("soloPlayerName").value;
-    if (soloName) document.getElementById("lobbyPlayerName").value = soloName;
-    document.getElementById("soloError").textContent = "";
-}
-
-function soloAddAI() {
-    if (soloAIPlayers.length >= 5) return;
-    soloAIPlayers.push({ difficulty: 'easy', color: null });
-    renderSoloSetup();
-}
-
-function soloRemoveAI(index) {
-    if (soloAIPlayers.length <= 1) return;
-    soloAIPlayers.splice(index, 1);
-    renderSoloSetup();
-}
-
-function soloSetAIDifficulty(index, difficulty) {
-    soloAIPlayers[index].difficulty = difficulty;
-    renderSoloSetup();
-}
-
-function soloSetAIColor(index, color) {
-    soloAIPlayers[index].color = color;
-    renderSoloSetup();
-}
-
-function soloSelectPlayerColor(color) {
-    soloPlayerColor = color;
-    // Clear any AI that had this color
-    for (const ai of soloAIPlayers) {
-        if (ai.color === color) ai.color = null;
-    }
-    renderSoloSetup();
-}
-
-function getSoloUsedColors() {
-    const used = new Set();
-    if (soloPlayerColor) used.add(soloPlayerColor);
-    for (const ai of soloAIPlayers) {
-        if (ai.color) used.add(ai.color);
-    }
-    return used;
-}
-
-function renderSoloSetup() {
-    const usedColors = getSoloUsedColors();
-
-    // Player color picker
-    const pickerEl = document.getElementById("soloPlayerColorPicker");
-    pickerEl.innerHTML = "";
-    for (const c of LOBBY_COLORS) {
-        const btn = document.createElement("button");
-        btn.style.width = "40px";
-        btn.style.height = "40px";
-        btn.style.borderRadius = "50%";
-        btn.style.background = COLOR_DISPLAY[c];
-        const isMine = soloPlayerColor === c;
-        const takenByAI = !isMine && usedColors.has(c);
-        btn.style.border = isMine ? "3px solid #fff" : "3px solid transparent";
-        btn.style.cursor = takenByAI ? "not-allowed" : "pointer";
-        btn.style.opacity = takenByAI ? "0.3" : "1";
-        btn.disabled = takenByAI;
-        btn.onclick = () => soloSelectPlayerColor(c);
-        pickerEl.appendChild(btn);
-    }
-
-    // AI list
-    const listEl = document.getElementById("soloAIList");
-    listEl.innerHTML = "";
-    for (let i = 0; i < soloAIPlayers.length; i++) {
-        const ai = soloAIPlayers[i];
-        const row = document.createElement("div");
-        row.className = "solo-ai-row";
-
-        // AI label
-        const label = document.createElement("span");
-        label.className = "ai-label";
-        label.textContent = `AI ${i + 1}`;
-        row.appendChild(label);
-
-        // Difficulty select
-        const select = document.createElement("select");
-        for (const diff of AI_DIFFICULTIES) {
-            const opt = document.createElement("option");
-            opt.value = diff;
-            opt.textContent = AI_DIFFICULTY_LABELS[diff];
-            if (ai.difficulty === diff) opt.selected = true;
-            select.appendChild(opt);
-        }
-        select.onchange = () => soloSetAIDifficulty(i, select.value);
-        row.appendChild(select);
-
-        // Color buttons
-        for (const c of LOBBY_COLORS) {
-            const btn = document.createElement("button");
-            btn.className = "solo-ai-color-btn";
-            btn.style.background = COLOR_DISPLAY[c];
-            const isMine = ai.color === c;
-            const takenByOther = !isMine && usedColors.has(c);
-            if (isMine) btn.classList.add("selected");
-            btn.disabled = takenByOther;
-            btn.onclick = () => soloSetAIColor(i, c);
-            row.appendChild(btn);
-        }
-
-        // Remove button (only if more than 1 AI)
-        if (soloAIPlayers.length > 1) {
-            const removeBtn = document.createElement("button");
-            removeBtn.className = "solo-remove-btn";
-            removeBtn.textContent = "\u00d7";
-            removeBtn.title = "Remove AI";
-            removeBtn.onclick = () => soloRemoveAI(i);
-            row.appendChild(removeBtn);
-        }
-
-        listEl.appendChild(row);
-    }
-
-    // Add AI button visibility
-    document.getElementById("soloAddAIBtn").style.display = soloAIPlayers.length >= 5 ? "none" : "flex";
-
-    // Start button state
-    const allAIHaveColors = soloAIPlayers.every(ai => ai.color);
-    const canStart = soloPlayerColor && allAIHaveColors;
-    document.getElementById("soloStartBtn").disabled = !canStart;
-    document.getElementById("soloStartBtn").style.opacity = canStart ? "1" : "0.5";
-}
-
-function startSoloGame() {
-    const name = document.getElementById("soloPlayerName").value.trim();
-    if (!name) {
-        document.getElementById("soloError").textContent = "Please enter your name.";
-        return;
-    }
-    if (!soloPlayerColor) {
-        document.getElementById("soloError").textContent = "Please choose your color.";
-        return;
-    }
-    const allAIHaveColors = soloAIPlayers.every(ai => ai.color);
-    if (!allAIHaveColors) {
-        document.getElementById("soloError").textContent = "All AI opponents must have a color.";
-        return;
-    }
-
-    document.getElementById("soloError").textContent = "";
-    socket.emit('createSoloGame', {
-        playerName: name,
-        playerColor: soloPlayerColor,
-        aiPlayers: soloAIPlayers.map((ai, i) => ({
-            name: `AI ${i + 1} (${AI_DIFFICULTY_LABELS[ai.difficulty]})`,
-            difficulty: ai.difficulty,
-            color: ai.color
-        }))
-    }, (res) => {
-        if (res.success) {
-            myPlayerId = res.sessionToken;
-            myRoomCode = res.roomCode;
-            isHost = true;
-            sessionStorage.setItem('sessionToken', res.sessionToken);
-            sessionStorage.setItem('roomCode', res.roomCode);
-            initializeGameView(res.state, false);
-        } else {
-            document.getElementById("soloError").textContent = res.error;
-        }
-    });
-}
 
 // ============================================================================
 // SAVE & RESUME
@@ -6994,7 +6821,7 @@ function startResume(gameId) {
 }
 
 function showScreen(screenId) {
-    const screens = ['lobbyJoinCreate', 'lobbyRoom', 'lobbySoloSetup', 'lobbySeatCodeEntry', 'lobbyResumeWaiting'];
+    const screens = ['lobbyJoinCreate', 'lobbyRoom', 'lobbySeatCodeEntry', 'lobbyResumeWaiting'];
     for (const id of screens) {
         document.getElementById(id).style.display = id === screenId ? 'block' : 'none';
     }

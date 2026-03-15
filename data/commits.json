@@ -1,4 +1,5 @@
 [
+  {"message": "Add AI multiplayer lobby UI, remove solo mode and player count picker", "date": "Mar 15, 2026"},
   {"message": "Add AI player lobby management for multiplayer rooms", "date": "Mar 15, 2026"},
   {"message": "Add isAI flag as first-class player model property", "date": "Mar 15, 2026"},
   {"message": "Add bidirectional pathfinding to minimize AI build costs", "date": "Mar 14, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Add How to Play tutorial dropdown to legend panel", "date": "Mar 13, 2026"},
   {"message": "Wire foreign track toggle to build commit with network-aware connectivity", "date": "Mar 13, 2026"},
   {"message": "Wire foreign track toggle to hover preview and cost label", "date": "Mar 13, 2026"},
-  {"message": "Add foreign track toggle button to build phase UI", "date": "Mar 13, 2026"},
-  {"message": "Add allowForeignTrack param to findPath() with foreignSegments return", "date": "Mar 13, 2026"}
+  {"message": "Add foreign track toggle button to build phase UI", "date": "Mar 13, 2026"}
 ]

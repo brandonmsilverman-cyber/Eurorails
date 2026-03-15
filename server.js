@@ -1453,86 +1453,8 @@ io.on('connection', (socket) => {
         callback(getRoomList());
     });
 
-    socket.on('createSoloGame', ({ playerName, playerColor, aiPlayers }, callback) => {
-        if (!playerName || typeof playerName !== 'string' || !playerName.trim()) {
-            return callback({ success: false, error: 'Player name is required' });
-        }
-        if (!playerColor || !LOBBY_COLORS.includes(playerColor)) {
-            return callback({ success: false, error: 'Invalid player color' });
-        }
-        if (!Array.isArray(aiPlayers) || aiPlayers.length < 1 || aiPlayers.length > 5) {
-            return callback({ success: false, error: 'Must have 1-5 AI opponents' });
-        }
-
-        const validDifficulties = ['easy'];
-        const usedColors = new Set([playerColor]);
-        for (const ai of aiPlayers) {
-            if (!ai.color || !LOBBY_COLORS.includes(ai.color)) {
-                return callback({ success: false, error: 'All AI opponents must have a valid color' });
-            }
-            if (usedColors.has(ai.color)) {
-                return callback({ success: false, error: 'All players must have unique colors' });
-            }
-            usedColors.add(ai.color);
-            if (!validDifficulties.includes(ai.difficulty)) {
-                return callback({ success: false, error: 'Invalid AI difficulty: ' + ai.difficulty });
-            }
-        }
-
-        const roomCode = getUniqueRoomCode();
-        const sessionToken = randomUUID();
-        const totalPlayers = 1 + aiPlayers.length;
-
-        const room = {
-            players: new Map(),
-            hostSessionToken: sessionToken,
-            sessionToSocketId: new Map(),
-            disconnectedPlayers: new Map(),
-            graceTimers: new Map(),
-            turnTimers: new Map(),
-            gameStarted: true,
-            gameState: null,
-            maxPlayers: totalPlayers,
-            password: null,
-            solo: true,
-            lastActivity: Date.now()
-        };
-
-        room.players.set(socket.id, { name: playerName.trim(), color: playerColor, sessionToken });
-        room.sessionToSocketId.set(sessionToken, socket.id);
-
-        // Build player list: human first, then AI players
-        const playerList = [
-            { id: sessionToken, name: playerName.trim(), color: playerColor }
-        ];
-        for (let i = 0; i < aiPlayers.length; i++) {
-            const aiToken = `ai-${randomUUID()}`;
-            const ai = aiPlayers[i];
-            playerList.push({
-                id: aiToken,
-                name: ai.name || `AI ${i + 1}`,
-                color: ai.color,
-                isAI: true,
-                difficulty: ai.difficulty
-            });
-        }
-
-        room.gameState = createGameState(playerList);
-
-        rooms.set(roomCode, room);
-        socket.join(roomCode);
-        socket.roomCode = roomCode;
-
-        console.log(`Solo game started in room ${roomCode} by ${playerName} with ${aiPlayers.length} AI opponent(s)`);
-
-        const state = getStateForPlayer(room.gameState, sessionToken, room.disconnectedPlayers);
-        callback({ success: true, roomCode, sessionToken, state });
-        recordGame('solo');
-        broadcastRoomList();
-    });
-
-    socket.on('createRoom', ({ playerName, maxPlayers, password }, callback) => {
-        const playerCount = Math.min(6, Math.max(1, parseInt(maxPlayers) || 3));
+    socket.on('createRoom', ({ playerName, password }, callback) => {
+        const playerCount = 6;
         const roomCode = getUniqueRoomCode();
         const sessionToken = randomUUID();
         const room = {
@@ -1649,7 +1571,7 @@ io.on('connection', (socket) => {
         if (callback) callback({ success: true });
     });
 
-    socket.on('addAIPlayer', ({ color, difficulty }, callback) => {
+    socket.on('addAIPlayer', ({ difficulty }, callback) => {
         const room = rooms.get(socket.roomCode);
         if (!room || room.gameStarted) {
             return callback && callback({ success: false, error: 'Cannot add AI player' });
@@ -1664,18 +1586,6 @@ io.on('connection', (socket) => {
         // Room full check
         if (room.players.size >= room.maxPlayers) {
             return callback && callback({ success: false, error: 'Room is full' });
-        }
-
-        // Validate color
-        if (!color || !LOBBY_COLORS.includes(color)) {
-            return callback && callback({ success: false, error: 'Invalid color' });
-        }
-
-        // Check color not taken
-        for (const [, p] of room.players) {
-            if (p.color === color) {
-                return callback && callback({ success: false, error: 'Color already taken' });
-            }
         }
 
         // Validate difficulty
@@ -1694,16 +1604,68 @@ io.on('connection', (socket) => {
         const aiSessionToken = `ai-${randomUUID()}`;
         room.players.set(aiKey, {
             name: `AI ${aiCount + 1}`,
-            color,
+            color: null,
             sessionToken: aiSessionToken,
             isAI: true,
             difficulty
         });
 
-        console.log(`AI player added to room ${socket.roomCode} (${color}, ${difficulty})`);
+        console.log(`AI player added to room ${socket.roomCode} (${difficulty})`);
         io.to(socket.roomCode).emit('roomUpdate', getRoomInfo(socket.roomCode));
         callback && callback({ success: true });
         broadcastRoomList();
+    });
+
+    socket.on('updateAIPlayer', ({ sessionToken, color, difficulty }, callback) => {
+        const room = rooms.get(socket.roomCode);
+        if (!room || room.gameStarted) {
+            return callback && callback({ success: false, error: 'Cannot update AI player' });
+        }
+
+        // Host-only
+        const callerPlayer = room.players.get(socket.id);
+        if (!callerPlayer || callerPlayer.sessionToken !== room.hostSessionToken) {
+            return callback && callback({ success: false, error: 'Only the host can update AI players' });
+        }
+
+        // Find the AI player
+        let aiPlayer = null;
+        for (const [, p] of room.players) {
+            if (p.sessionToken === sessionToken && p.isAI) {
+                aiPlayer = p;
+                break;
+            }
+        }
+        if (!aiPlayer) {
+            return callback && callback({ success: false, error: 'AI player not found' });
+        }
+
+        // Update color if provided
+        if (color !== undefined) {
+            if (color !== null && !LOBBY_COLORS.includes(color)) {
+                return callback && callback({ success: false, error: 'Invalid color' });
+            }
+            if (color !== null) {
+                for (const [, p] of room.players) {
+                    if (p.sessionToken !== sessionToken && p.color === color) {
+                        return callback && callback({ success: false, error: 'Color already taken' });
+                    }
+                }
+            }
+            aiPlayer.color = color;
+        }
+
+        // Update difficulty if provided
+        if (difficulty !== undefined) {
+            const validDifficulties = ['easy'];
+            if (!validDifficulties.includes(difficulty)) {
+                return callback && callback({ success: false, error: 'Invalid difficulty' });
+            }
+            aiPlayer.difficulty = difficulty;
+        }
+
+        io.to(socket.roomCode).emit('roomUpdate', getRoomInfo(socket.roomCode));
+        callback && callback({ success: true });
     });
 
     socket.on('removeAIPlayer', ({ sessionToken }, callback) => {
@@ -2664,9 +2626,9 @@ function expirePlayer(roomCode, sessionToken) {
         playerName: disconnected.name,
     });
 
-    // If ALL players are abandoned, delete the room — no need to advance turns
-    const allAbandoned = gs.players.every(p => p.abandoned);
-    if (allAbandoned) {
+    // If all human players are abandoned, delete the room — don't let AI play alone
+    const allHumansAbandoned = gs.players.every(p => p.isAI || p.abandoned);
+    if (allHumansAbandoned) {
         for (const timer of room.graceTimers.values()) {
             clearTimeout(timer);
         }
@@ -2678,7 +2640,7 @@ function expirePlayer(roomCode, sessionToken) {
             room.aiTurnTimer = null;
         }
         rooms.delete(roomCode);
-        console.log(`Room ${roomCode} deleted (all players abandoned)`);
+        console.log(`Room ${roomCode} deleted (all human players abandoned)`);
         broadcastRoomList();
         return;
     }
@@ -2737,7 +2699,9 @@ function getRoomInfo(roomCode) {
 
     const players = [];
     for (const [, p] of room.players) {
-        players.push({ id: p.sessionToken, name: p.name, color: p.color, isHost: p.sessionToken === room.hostSessionToken, isAI: p.isAI || false });
+        const entry = { id: p.sessionToken, name: p.name, color: p.color, isHost: p.sessionToken === room.hostSessionToken, isAI: p.isAI || false };
+        if (p.isAI) entry.difficulty = p.difficulty;
+        players.push(entry);
     }
     return { roomCode, players, hostSessionToken: room.hostSessionToken, maxPlayers: room.maxPlayers, password: room.password || null };
 }
@@ -2758,9 +2722,8 @@ function getRoomList() {
             hostName,
             hasPassword: !!room.password,
             maxPlayers: room.maxPlayers,
-            playerCount: room.solo && room.gameState ? room.gameState.players.length : room.players.size,
-            gameStarted: room.gameStarted,
-            solo: room.solo || false
+            playerCount: room.players.size,
+            gameStarted: room.gameStarted
         });
     }
     return list;
