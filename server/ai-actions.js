@@ -172,8 +172,9 @@ module.exports = function(deps) {
             player.aiState.targetSourceCity = null;
         }
 
-        // Remove fulfilled card, draw replacement
-        player.demandCards.splice(cardIndex, 1);
+        // Remove fulfilled card, add to discard pile, draw replacement
+        const [removedCard] = player.demandCards.splice(cardIndex, 1);
+        gs.demandCardDiscardPile.push(removedCard);
         if (player.selectedDemands) {
             player.selectedDemands.splice(cardIndex, 1);
             player.selectedDemands.push(null);
@@ -374,6 +375,8 @@ module.exports = function(deps) {
 
     function applyDiscardHand(gs, playerIndex) {
         const player = gs.players[playerIndex];
+        // Move discarded cards to discard pile before clearing hand
+        gs.demandCardDiscardPile.push(...player.demandCards);
         player.demandCards = [];
         player.selectedDemands = [null, null, null];
 

@@ -1318,6 +1318,7 @@ let gameState = {
     initialBuildingRounds: 2,
     gameStarted: false,
     demandCardDeck: [],
+    demandCardDiscardPile: [],
     cityEntries: {},
     tracks: [],
     ferryOwnership: {},  // { "fromId|toId": [color1, color2] } — up to 2 owners per ferry
@@ -1344,7 +1345,7 @@ let gameState = {
     trackageRightsLog: [],             // [{from, to, amount}] — log of payments this operate phase for modal
     hoveredMilepost: null,
     hoverValid: null,
-    highlightedCities: [],
+    highlightedCities: { origins: [], destination: null },
     cityToMilepost: {},
     buildHistory: [],
     operateHistory: [],                  // [{type, ...data}] for undo during operate phase
@@ -1631,8 +1632,26 @@ function handleActionError(actionName, error) {
 // EVENT CARD SYSTEM
 // ============================================================================
 
+function reshuffleDemandDiscardPile() {
+    if (gameState.demandCardDiscardPile.length === 0) return;
+    for (const card of gameState.demandCardDiscardPile) {
+        card.fulfilled = [false, false, false];
+    }
+    const pile = gameState.demandCardDiscardPile;
+    for (let i = pile.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pile[i], pile[j]] = [pile[j], pile[i]];
+    }
+    gameState.demandCardDeck.push(...pile);
+    gameState.demandCardDiscardPile = [];
+    addLog("Demand card deck reshuffled from discard pile.");
+}
+
 function drawCardForPlayer(player) {
     // Draw one card for the player, handling events as needed
+    if (gameState.demandCardDeck.length === 0) {
+        reshuffleDemandDiscardPile();
+    }
     if (gameState.demandCardDeck.length === 0) {
         addLog("No more cards in deck!");
         return null;
@@ -2961,32 +2980,49 @@ function drawMap() {
         }
     }
 
-    // Draw highlighted cities (from demand card hover)
-    if (gameState.highlightedCities.length > 0) {
-        for (let cityName of gameState.highlightedCities) {
+    // Draw highlighted cities (from demand card row hover)
+    const hl = gameState.highlightedCities;
+    if (hl.origins.length > 0 || hl.destination) {
+        function drawCityHighlight(cityName, color, glowColor) {
             const mpId = gameState.cityToMilepost[cityName];
-            if (mpId !== undefined) {
-                const mp = gameState.mileposts_by_id[mpId];
-                const [sx, sy] = worldToScreen(mp.x, mp.y);
-                // Pulsing golden ring
-                ctx.strokeStyle = "#ffdd44";
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.arc(sx, sy, Math.max(10, 16 * uiScale), 0, Math.PI * 2);
-                ctx.stroke();
-                // Outer glow
-                ctx.strokeStyle = "rgba(255, 221, 68, 0.4)";
-                ctx.lineWidth = 6;
-                ctx.beginPath();
-                ctx.arc(sx, sy, Math.max(14, 20 * uiScale), 0, Math.PI * 2);
-                ctx.stroke();
-                // Label above
-                ctx.fillStyle = "#ffdd44";
-                ctx.font = `bold ${Math.max(10, 12 * uiScale)}px Arial`;
-                ctx.textAlign = "center";
-                ctx.textBaseline = "bottom";
-                ctx.fillText(cityName, sx, sy - Math.max(14, 20 * uiScale) - 2);
-            }
+            if (mpId === undefined) return;
+            const mp = gameState.mileposts_by_id[mpId];
+            const [sx, sy] = worldToScreen(mp.x, mp.y);
+            // Drop shadow for contrast
+            ctx.save();
+            ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+            ctx.shadowBlur = 4;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 1;
+            // Inner ring
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(sx, sy, Math.max(10, 16 * uiScale), 0, Math.PI * 2);
+            ctx.stroke();
+            // Outer glow (no shadow on this layer)
+            ctx.shadowColor = "transparent";
+            ctx.strokeStyle = glowColor;
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.arc(sx, sy, Math.max(14, 20 * uiScale), 0, Math.PI * 2);
+            ctx.stroke();
+            // Label above (with shadow)
+            ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+            ctx.shadowBlur = 3;
+            ctx.shadowOffsetY = 1;
+            ctx.fillStyle = color;
+            ctx.font = `bold ${Math.max(10, 12 * uiScale)}px Arial`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            ctx.fillText(cityName, sx, sy - Math.max(14, 20 * uiScale) - 2);
+            ctx.restore();
+        }
+        for (const city of hl.origins) {
+            drawCityHighlight(city, "#44bbff", "rgba(68, 187, 255, 0.5)");
+        }
+        if (hl.destination) {
+            drawCityHighlight(hl.destination, "#ffdd44", "rgba(255, 221, 68, 0.4)");
         }
     }
 
@@ -3877,14 +3913,16 @@ function toggleMapLegend() {
     }
 }
 
-function highlightCities(cityNames) {
-    gameState.highlightedCities = cityNames;
+function highlightDemandRow(good, to) {
+    const origins = GOODS[good] ? GOODS[good].sources : [];
+    gameState.highlightedCities = { origins, destination: to };
     drawMap();
 }
 
 function clearHighlight() {
-    if (gameState.highlightedCities.length > 0) {
-        gameState.highlightedCities = [];
+    const h = gameState.highlightedCities;
+    if (h.origins.length > 0 || h.destination) {
+        gameState.highlightedCities = { origins: [], destination: null };
         drawMap();
     }
 }
@@ -4118,7 +4156,8 @@ function deliverGood(cardIndex, demandIndex) {
 
     showDeliveryCelebration(demand.good, demand.to, demand.payout, () => {
         animateCardDiscard(cardIndex, () => {
-            currentPlayer.demandCards.splice(cardIndex, 1);
+            const [removedCard] = currentPlayer.demandCards.splice(cardIndex, 1);
+            gameState.demandCardDiscardPile.push(removedCard);
             if (currentPlayer.selectedDemands) {
                 currentPlayer.selectedDemands.splice(cardIndex, 1);
                 currentPlayer.selectedDemands.push(null);
@@ -4245,6 +4284,7 @@ function discardHand() {
 
     // Local fallback
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    gameState.demandCardDiscardPile.push(...currentPlayer.demandCards);
     currentPlayer.demandCards = [];
     currentPlayer.selectedDemands = [null, null, null];
     addLog(`${currentPlayer.name} discarded hand and drew 3 new cards`);
@@ -4805,8 +4845,7 @@ function updateUI() {
             const demandsHtml = card.demands.map((demand, dIdx) => {
                 const allSources = GOODS[demand.good] ? GOODS[demand.good].sources : [demand.from];
                 const sourcesHtml = allSources.map(c =>
-                    `<span onmouseenter="highlightCities(['${c}'])"
-                           onmouseleave="clearHighlight()">${c}</span>`
+                    `<span>${c}</span>`
                 ).join(", ");
 
                 const canDeliver = isMyTurnForCards &&
@@ -4837,6 +4876,8 @@ function updateUI() {
 
                 return `
                 <div class="card-demand" style="cursor:pointer; ${selectedStyle}"
+                     onmouseenter="highlightDemandRow('${demand.good}', '${demand.to}')"
+                     onmouseleave="clearHighlight()"
                      onclick="toggleDemandSelection(${cardIdx}, ${dIdx})">
                     <div>
                         <span style="font-size:14px;">${GOODS_ICONS[demand.good] || "?"}</span>
@@ -4844,9 +4885,7 @@ function updateUI() {
                         <span class="payout">${demand.payout}M</span>
                     </div>
                     <div class="source-cities">From: ${sourcesHtml}</div>
-                    <div class="dest-city">To: <span
-                        onmouseenter="highlightCities(['${demand.to}'])"
-                        onmouseleave="clearHighlight()">${demand.to}</span>${pickupBadge}${deliverBtn}
+                    <div class="dest-city">To: <span>${demand.to}</span>${pickupBadge}${deliverBtn}
                     </div>
                 </div>`;
             }).join("");

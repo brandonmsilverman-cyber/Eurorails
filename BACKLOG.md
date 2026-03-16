@@ -4,9 +4,7 @@ A running list of planned features, improvements, and known issues.
 
 ---
 
-## Solo Mode
-
-Solo mode branches from the main lobby as its own game type. The player creates a private room (accessible only to themselves and spectators, if supported). They can add up to 5 AI opponents that take turns just like human players.
+## AI Players
 
 - [ ] **AI: Hard difficulty** — Intelligent human-level play: opportunistic route batching, payout/cost build scoring with network awareness, situational upgrades, active hand evaluation, deliberate ferry investment
 - [ ] **AI: Brutal difficulty** — Near-optimal play: systematic multi-delivery planning, expected-value build calculations over future hands, optimal upgrade timing, EV-based discard decisions, full landmass access modeling for ferries
@@ -15,12 +13,10 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 
 - [ ] **Borrowing** — A player may borrow up to ECU 20 from the bank at any time and immediately spend it on building or hold it in reserve. The player must pay back **double** the borrowed amount from all future delivery payoffs until the doubled debt is fully repaid. Per the official rules (p. 26, "Money" section), borrowing is intended as a safety valve for players who become trapped or unable to make progress. The loan is taken voluntarily; there is no forced borrowing.
 - [ ] **Reset** — A player may completely restart their position at the beginning of their turn. Per the official rules (p. 26, "Reset" section): the player discards all Demand cards, removes all loads, returns all money to the bank, and erases all their track. They then receive a fresh Freight Loco card, ECU 50, and 3 new Demand cards. They may build up to ECU 20 on the reset turn and restart their train at any city at the beginning of their turn. Other players' track that was protected (from riding the resetting player's track) is not erased and remains for the rest of the game.
-- [ ] **Discard pile reshuffle** — When the demand card deck runs out, reshuffle fulfilled/discarded demand cards back into the deck so the game never runs dry
 - [ ] **Set train destination** — Player selects a city as their destination; the train automatically moves toward it each operate phase until it arrives, the player undoes movement, an event card disrupts it (i.e. derail or broken track), or the mode is turned off
 - [ ] **Faster train tier** — Add a 20+ speed train option to reduce late-game drag when players have long routes. Full plan in [`EXPRESS_TRAIN_PLAN.md`](EXPRESS_TRAIN_PLAN.md).
 ## UI / Visual
 
-- [ ] **Overhaul demand card row hover effect** — When hovering a demand card row, highlight origin and destination cities simultaneously on the map using distinct colors (e.g. one color for origin cities, another for the destination)
 - [ ] **Improved trackage rights payment animation** — Replace falling coins with a more polished visual for trackage rights transfers
 - [ ] **AI hints system** — "What would an expert do?" suggestion feature for learning players
 ## Reconnection Improvement
@@ -82,3 +78,5 @@ Solo mode branches from the main lobby as its own game type. The player creates 
 - [x] Turn duration clock (count-up timer on train card, minimizable)
 - [x] Add ferry building and usage to tutorial
 - [x] Event descriptions list all effects (ferry building, gale derailment at ports)
+- [x] Discard pile reshuffle
+- [x] Overhaul demand card row hover effect (origin/destination distinct colors)

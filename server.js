@@ -584,10 +584,32 @@ function serverApplyEventEffect(gs, eventCard, logs, drawingPlayerIndex) {
 
 // Draw one card for a player, processing events along the way.
 // Returns { card, logs } where card is the demand card drawn (or null), logs are event messages.
+function reshuffleDemandDiscardPile(gs, logs) {
+    if (gs.demandCardDiscardPile.length === 0) return;
+    // Reset fulfilled state on recycled cards
+    for (const card of gs.demandCardDiscardPile) {
+        card.fulfilled = [false, false, false];
+    }
+    // Fisher-Yates shuffle
+    const pile = gs.demandCardDiscardPile;
+    for (let i = pile.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pile[i], pile[j]] = [pile[j], pile[i]];
+    }
+    gs.demandCardDeck.push(...pile);
+    gs.demandCardDiscardPile = [];
+    const msg = "Demand card deck reshuffled from discard pile.";
+    if (logs) logs.push(msg);
+    gs.gameLog.push(msg);
+}
+
 function serverDrawCardForPlayer(gs, player, logs, drawnEvents) {
     if (!logs) logs = [];
     if (!drawnEvents) drawnEvents = [];
-    while (gs.demandCardDeck.length > 0) {
+    while (gs.demandCardDeck.length > 0 || gs.demandCardDiscardPile.length > 0) {
+        if (gs.demandCardDeck.length === 0) {
+            reshuffleDemandDiscardPile(gs, logs);
+        }
         const card = gs.demandCardDeck.pop();
 
         if (card.type === "event") {
@@ -1098,6 +1120,7 @@ function createGameState(playerList, gameSettings) {
         initialBuildingRounds: 2,
         gameStarted: true,
         demandCardDeck: deck,
+        demandCardDiscardPile: [],
         tracks: [],
         ferryOwnership: {},
         gameLog: ["Game started! Initial building phase (2 rounds)"],
@@ -1187,6 +1210,7 @@ function serializeForSave(gameState, gameName) {
             tracks: gs.tracks,
             ferryOwnership: gs.ferryOwnership,
             demandCardDeck: gs.demandCardDeck,
+            demandCardDiscardPile: gs.demandCardDiscardPile,
             activeEvents: gs.activeEvents,
             derailedPlayers: gs.derailedPlayers,
             destroyedRiverTracks: gs.destroyedRiverTracks,
@@ -1329,6 +1353,7 @@ function loadGameStateFromSave(saveData) {
         initialBuildingRounds: s.initialBuildingRounds || 2,
         gameStarted: true,
         demandCardDeck: s.demandCardDeck,
+        demandCardDiscardPile: s.demandCardDiscardPile || [],
         tracks: s.tracks,
         ferryOwnership: s.ferryOwnership || {},
         gameLog: s.gameLog,
@@ -1412,6 +1437,7 @@ function getStateForPlayer(gameState, playerId, disconnectedPlayers) {
         initialBuildingRounds: gameState.initialBuildingRounds,
         gameStarted: gameState.gameStarted,
         demandCardDeck: gameState.demandCardDeck.length, // only send count, not contents
+        demandCardDiscardPile: gameState.demandCardDiscardPile.length, // only send count
         tracks: gameState.tracks,
         ferryOwnership: gameState.ferryOwnership,
         gameLog: gameState.gameLog,
