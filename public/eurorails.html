@@ -1908,7 +1908,7 @@ function showCardDrawAnimation(cardData, isEvent, drawnBy) {
     showDemandCardFlyAnimation([cardData], () => processNextCardAnimation());
 }
 
-function showDeliveryCelebration(good, destination, payout, onComplete) {
+function showDeliveryCelebration(good, destination, payout, repaymentAmount, onComplete) {
     const overlay = document.createElement("div");
     overlay.style.cssText = `
         position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -1937,6 +1937,9 @@ function showDeliveryCelebration(good, destination, payout, onComplete) {
         <div style="font-size: 36px; font-weight: bold; color: #ffd700;">
             You earned ${payout}M ECU!
         </div>
+        ${repaymentAmount > 0 ? `<div style="font-size: 20px; color: #cc7777; margin-top: 8px;">
+            -${repaymentAmount}M to debt
+        </div>` : ''}
     `;
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
@@ -3307,6 +3310,7 @@ function drawMap() {
                 + '&bull; Crossing takes a full turn: stop at the port, arrive next turn at half speed<br><br>'
                 + '<b>ANYTIME</b><br>'
                 + '&bull; Discard Hand: replace all 3 demand cards and end your turn<br>'
+                + '&bull; Borrow: take up to ECU 20M from the bank; repay double (ECU 10M per delivery)<br>'
                 + '&bull; Events (taxes, strikes, floods, gales, derailments) are drawn automatically'
                 + '</div></div>';
 
@@ -4154,7 +4158,7 @@ function deliverGood(cardIndex, demandIndex) {
     updateUI();
     drawMap();
 
-    showDeliveryCelebration(demand.good, demand.to, demand.payout, () => {
+    showDeliveryCelebration(demand.good, demand.to, demand.payout, 0, () => {
         animateCardDiscard(cardIndex, () => {
             const [removedCard] = currentPlayer.demandCards.splice(cardIndex, 1);
             gameState.demandCardDiscardPile.push(removedCard);
@@ -4303,6 +4307,108 @@ function discardHand() {
         endTurnLocal();
     }
     flushCardAnimationQueue();
+}
+
+// ---- Borrowing ----
+let selectedBorrowAmount = 0;
+
+function showBorrowDialog() {
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    const maxBorrowable = 20 - (currentPlayer.borrowedAmount || 0);
+    const existingDebt = currentPlayer.debtRemaining || 0;
+
+    let bodyHtml = '';
+    if (existingDebt > 0) {
+        bodyHtml += `<div style="color:#ff6666; font-size:12px; margin-bottom:12px; padding:6px; background:rgba(255,100,100,0.1); border-radius:4px;">Current debt: ECU ${existingDebt}M remaining</div>`;
+    }
+    bodyHtml += `<p style="color:#ccc; font-size:13px; margin-bottom:16px; line-height:1.5;">How much do you want to borrow?<br>You must repay <strong style="color:#ff6666;">DOUBLE</strong> the borrowed amount.<br><span style="font-size:11px; color:#aaa;">ECU 10M will be automatically deducted from each delivery until your debt is fully repaid.</span></p>`;
+
+    const presets = [5, 10, 15, 20].filter(v => v <= maxBorrowable);
+    selectedBorrowAmount = presets[presets.length - 1] || maxBorrowable;
+
+    bodyHtml += `<div id="borrowAmountBtns" style="display:flex; gap:8px; justify-content:center; margin-bottom:16px;">`;
+    for (const val of presets) {
+        const sel = val === selectedBorrowAmount ? 'border-color:#4444cc; background:#2a2a5a; color:#aaaaff; font-weight:bold;' : '';
+        bodyHtml += `<button onclick="selectBorrowAmount(${val})" style="padding:8px 14px; font-size:13px; border-radius:4px; border:1px solid #555; background:#222; color:#888; cursor:pointer; ${sel}" data-borrow-val="${val}">${val}M</button>`;
+    }
+    bodyHtml += `</div>`;
+
+    const repayment = selectedBorrowAmount * 2;
+    bodyHtml += `<div id="borrowSummary" style="font-size:12px; margin-bottom:4px; padding:8px; background:#111; border-radius:4px;">`;
+    bodyHtml += `<div><span style="color:#888;">Borrowing:</span> ECU ${selectedBorrowAmount}M</div>`;
+    bodyHtml += `<div><span style="color:#888;">Repayment:</span> <span style="color:#ff6666; font-weight:bold;">ECU ${repayment}M from deliveries</span></div>`;
+    if (existingDebt > 0) {
+        bodyHtml += `<div style="margin-top:4px; border-top:1px solid #333; padding-top:4px;"><span style="color:#888;">Total debt after:</span> <span style="color:#ff6666; font-weight:bold;">ECU ${existingDebt + repayment}M</span></div>`;
+    }
+    bodyHtml += `</div>`;
+
+    document.getElementById("borrowDialogBody").innerHTML = bodyHtml;
+    document.getElementById("confirmBorrowOverlay").classList.add("show");
+}
+
+function selectBorrowAmount(val) {
+    selectedBorrowAmount = val;
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    const existingDebt = currentPlayer.debtRemaining || 0;
+    const repayment = val * 2;
+
+    // Update button highlights
+    document.querySelectorAll('#borrowAmountBtns button').forEach(btn => {
+        const bv = parseInt(btn.getAttribute('data-borrow-val'));
+        if (bv === val) {
+            btn.style.borderColor = '#4444cc';
+            btn.style.background = '#2a2a5a';
+            btn.style.color = '#aaaaff';
+            btn.style.fontWeight = 'bold';
+        } else {
+            btn.style.borderColor = '#555';
+            btn.style.background = '#222';
+            btn.style.color = '#888';
+            btn.style.fontWeight = 'normal';
+        }
+    });
+
+    // Update summary
+    let summaryHtml = `<div><span style="color:#888;">Borrowing:</span> ECU ${val}M</div>`;
+    summaryHtml += `<div><span style="color:#888;">Repayment:</span> <span style="color:#ff6666; font-weight:bold;">ECU ${repayment}M from deliveries</span></div>`;
+    if (existingDebt > 0) {
+        summaryHtml += `<div style="margin-top:4px; border-top:1px solid #333; padding-top:4px;"><span style="color:#888;">Total debt after:</span> <span style="color:#ff6666; font-weight:bold;">ECU ${existingDebt + repayment}M</span></div>`;
+    }
+    document.getElementById("borrowSummary").innerHTML = summaryHtml;
+}
+
+function cancelBorrow() {
+    document.getElementById("confirmBorrowOverlay").classList.remove("show");
+}
+
+function confirmBorrowYes() {
+    document.getElementById("confirmBorrowOverlay").classList.remove("show");
+    borrowFromBank(selectedBorrowAmount);
+}
+
+function borrowFromBank(amount) {
+    if (typeof socket !== 'undefined' && myPlayerId) {
+        socket.emit('action', { type: 'borrow', amount }, (res) => {
+            if (res && !res.success) {
+                handleActionError('borrow', res.error);
+            }
+        });
+        return;
+    }
+
+    // Local fallback
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    const maxBorrowable = 20 - (currentPlayer.borrowedAmount || 0);
+    if (amount > maxBorrowable || amount <= 0) {
+        addLog(`Cannot borrow ECU ${amount}M`);
+        return;
+    }
+    currentPlayer.borrowedAmount = (currentPlayer.borrowedAmount || 0) + amount;
+    currentPlayer.debtRemaining = (currentPlayer.debtRemaining || 0) + (amount * 2);
+    currentPlayer.cash += amount;
+    addLog(`${currentPlayer.name} borrowed ECU ${amount}M from the bank (debt: ECU ${currentPlayer.debtRemaining}M)`);
+    updateUI();
+    drawMap();
 }
 
 function showTurnOverlay(playerName, playerColor, phaseLabel) {
@@ -4795,7 +4901,7 @@ function updateUI() {
                     <span style="background:${phaseColor}22; border:1px solid ${phaseColor}; color:${phaseColor}; font-weight:bold; font-size:10px; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:0.5px;">${phaseIcon} ${phaseText}</span>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; background:#1a1a2e; padding:6px 8px; border-radius:4px; border:1px solid #333;">
-                    <span style="color:#ffd700; font-size:16px; font-weight:bold;">ECU ${p.cash}M</span>
+                    <span style="color:#ffd700; font-size:16px; font-weight:bold;">ECU ${p.cash}M</span>${p.debtRemaining ? `<span style="color:#ff6666; font-size:11px;">Debt: ${p.debtRemaining}M</span>` : ''}
                     <span style="font-size:11px; color:#aaa;">${p.trainType}</span>
                     <span style="font-size:11px;">Cities: <span style="color:${connectedCount >= (gameState.gameSettings?.winMajorCitiesRequired || 7) ? '#4a9e4a' : '#ff8800'}; font-weight:bold;">${connectedCount}/${gameState.gameSettings?.winMajorCitiesRequired || 7}</span></span>
                 </div>
@@ -4805,7 +4911,7 @@ function updateUI() {
             return `<div class="player-info">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <strong style="color:${COLOR_MAP[p.color]};">${p.name}${p.isAI ? ' <span style="color:#2ecc71;font-size:10px;">(AI)</span>' : ''}</strong>
-                    <span style="font-size:11px;"><span style="color:#ffd700; font-weight:bold;">ECU ${p.cash}M</span> | <span style="color:#aaa;">${p.trainType}</span> | <span style="color:${inactiveConnected >= (gameState.gameSettings?.winMajorCitiesRequired || 7) ? '#4a9e4a' : '#ff8800'}; font-weight:bold;">${inactiveConnected}/${gameState.gameSettings?.winMajorCitiesRequired || 7}</span> Cities</span>
+                    <span style="font-size:11px;"><span style="color:#ffd700; font-weight:bold;">ECU ${p.cash}M</span>${p.debtRemaining ? ` <span style="color:#ff6666;">Debt: ${p.debtRemaining}M</span>` : ''} | <span style="color:#aaa;">${p.trainType}</span> | Cities: <span style="color:${inactiveConnected >= (gameState.gameSettings?.winMajorCitiesRequired || 7) ? '#4a9e4a' : '#ff8800'}; font-weight:bold;">${inactiveConnected}/${gameState.gameSettings?.winMajorCitiesRequired || 7}</span></span>
                 </div>
             </div>`;
         }
@@ -5104,7 +5210,8 @@ function updateUI() {
         operateHtml += `
             <button onclick="endOperatePhase()" style="width: 100%; margin-bottom: 5px;">Proceed to Build Phase</button>
             <div style="border-top: 1px solid #555; margin-top: 8px; padding-top: 8px;">
-                <button onclick="confirmDiscardHand()" style="width: 100%; padding: 4px 8px; font-size: 11px; background: rgba(180, 60, 60, 0.15); color: #cc7777; border: 1px solid #994444; border-radius: 3px; cursor: pointer;">Discard Hand & End Turn</button>
+                <button onclick="confirmDiscardHand()" style="width: 100%; padding: 4px 8px; font-size: 11px; background: rgba(60, 60, 180, 0.15); color: #7777cc; border: 1px solid #444499; border-radius: 3px; cursor: pointer;">Discard Hand & End Turn</button>
+                ${(20 - (currentPlayer.borrowedAmount || 0)) > 0 ? '<button onclick="showBorrowDialog()" style="width: 100%; padding: 4px 8px; font-size: 11px; background: rgba(180, 60, 60, 0.15); color: #cc7777; border: 1px solid #994444; border-radius: 3px; cursor: pointer; margin-top: 4px;">Borrow from Bank (Repay Double)</button>' : ''}
             </div>
         `;
         actionButtons.innerHTML = operateHtml;
@@ -5193,7 +5300,8 @@ function updateUI() {
         buildHtml += `<button onclick="endTurn()" style="width: 100%; margin-bottom: 5px;">End Turn</button>`;
         buildHtml += `
             <div style="border-top: 1px solid #555; margin-top: 8px; padding-top: 8px;">
-                <button onclick="confirmDiscardHand()" style="width: 100%; padding: 4px 8px; font-size: 11px; background: rgba(180, 60, 60, 0.15); color: #cc7777; border: 1px solid #994444; border-radius: 3px; cursor: pointer;">Discard Hand & End Turn</button>
+                <button onclick="confirmDiscardHand()" style="width: 100%; padding: 4px 8px; font-size: 11px; background: rgba(60, 60, 180, 0.15); color: #7777cc; border: 1px solid #444499; border-radius: 3px; cursor: pointer;">Discard Hand & End Turn</button>
+                ${(20 - (currentPlayer.borrowedAmount || 0)) > 0 ? '<button onclick="showBorrowDialog()" style="width: 100%; padding: 4px 8px; font-size: 11px; background: rgba(180, 60, 60, 0.15); color: #cc7777; border: 1px solid #994444; border-radius: 3px; cursor: pointer; margin-top: 4px;">Borrow from Bank (Repay Double)</button>' : ''}
             </div>`;
         actionButtons.innerHTML = buildHtml;
     }
@@ -6436,6 +6544,17 @@ document.getElementById("zoomOutBtn")?.addEventListener("click", function() {
     </div>
 </div>
 
+<div class="turn-overlay" id="confirmBorrowOverlay">
+    <div class="turn-overlay-content" style="border-color: #994444;">
+        <h2 style="color:#fff; font-size:18px; margin-bottom:16px;">Borrow from Bank</h2>
+        <div id="borrowDialogBody"></div>
+        <div style="display: flex; gap: 12px; justify-content: center; margin-top: 16px;">
+            <button onclick="cancelBorrow()" style="padding: 10px 32px; font-size: 16px; background: #555; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+            <button onclick="confirmBorrowYes()" style="padding: 10px 32px; font-size: 16px; background: #994444; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Borrow</button>
+        </div>
+    </div>
+</div>
+
 <div class="reconnect-banner" id="reconnectBanner">
     <div class="spinner"></div>
     <div>Reconnecting to server...</div>
@@ -7477,7 +7596,7 @@ socket.on('stateUpdate', ({ state, uiEvent }) => {
             animationTriggered = true;
 
             // Show celebration overlay first; card animations happen after it finishes
-            showDeliveryCelebration(uiEvent.deliveryGood, uiEvent.deliveryTo, uiEvent.deliveryPayout, () => {
+            showDeliveryCelebration(uiEvent.deliveryGood, uiEvent.deliveryTo, uiEvent.deliveryPayout, uiEvent.deliveryRepayment || 0, () => {
                 // Set up draw animation for the new card
                 if (uiEvent.newCard) {
                     const newCard = myPlayer.demandCards[myPlayer.demandCards.length - 1];

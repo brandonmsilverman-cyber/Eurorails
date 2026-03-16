@@ -162,7 +162,22 @@ module.exports = function(deps) {
         gs.operateHistory = [];
         player.loads.splice(matchingLoadIndex, 1);
         player.cash += demand.payout;
-        const deliverMsg = `${player.name} delivered ${demand.good} to ${demand.to} for ECU ${demand.payout}M`;
+
+        // Debt repayment: fixed 10M per delivery (capped by remaining debt and payout)
+        let repaymentAmount = 0;
+        if (player.debtRemaining && player.debtRemaining > 0) {
+            repaymentAmount = Math.min(10, player.debtRemaining, demand.payout);
+            player.cash -= repaymentAmount;
+            player.debtRemaining -= repaymentAmount;
+            if (player.debtRemaining === 0) {
+                player.borrowedAmount = 0; // reset cap — player can borrow again
+            }
+        }
+
+        let deliverMsg = `${player.name} delivered ${demand.good} to ${demand.to} for ECU ${demand.payout}M`;
+        if (repaymentAmount > 0) {
+            deliverMsg += ` (ECU ${repaymentAmount}M debt repaid, ECU ${player.debtRemaining}M remaining)`;
+        }
         gs.gameLog.push(deliverMsg);
 
         // Clear AI persisted target (card is about to be replaced)
@@ -194,7 +209,8 @@ module.exports = function(deps) {
                 drawnBy: { name: player.name, color: player.color },
                 deliveryGood: demand.good,
                 deliveryTo: demand.to,
-                deliveryPayout: demand.payout
+                deliveryPayout: demand.payout,
+                deliveryRepayment: repaymentAmount
             }
         };
     }
@@ -729,6 +745,32 @@ module.exports = function(deps) {
         return { success: false, error: 'Unknown undo type' };
     }
 
+    function applyBorrow(gs, playerIndex, { amount }) {
+        const player = gs.players[playerIndex];
+
+        if (typeof amount !== 'number' || amount <= 0 || !Number.isInteger(amount)) {
+            return { success: false, error: 'Invalid borrow amount' };
+        }
+
+        const maxBorrowable = 20 - (player.borrowedAmount || 0);
+        if (amount > maxBorrowable) {
+            return { success: false, error: `Can only borrow up to ECU ${maxBorrowable}M more` };
+        }
+
+        player.borrowedAmount = (player.borrowedAmount || 0) + amount;
+        player.debtRemaining = (player.debtRemaining || 0) + (amount * 2);
+        player.cash += amount;
+
+        const msg = `${player.name} borrowed ECU ${amount}M from the bank (debt: ECU ${player.debtRemaining}M)`;
+        gs.gameLog.push(msg);
+
+        return {
+            success: true,
+            logs: [msg],
+            uiEvent: { type: 'action', logs: [msg] }
+        };
+    }
+
     return {
         applyEndTurn,
         applyUpgradeTo,
@@ -741,6 +783,7 @@ module.exports = function(deps) {
         applyEndOperatePhase,
         applyUndoBuild,
         applyCommitMove,
-        applyUndoMove
+        applyUndoMove,
+        applyBorrow
     };
 };

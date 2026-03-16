@@ -1064,7 +1064,9 @@ function createGameState(playerList, gameSettings) {
             loads: [],
             movement: 0,
             ferryState: null,
-            selectedDemands: [null, null, null]
+            selectedDemands: [null, null, null],
+            borrowedAmount: 0,
+            debtRemaining: 0
         };
         if (p.isAI) {
             player.isAI = true;
@@ -1200,7 +1202,9 @@ function serializeForSave(gameState, gameName) {
                 abandoned: p.abandoned || false,
                 isAI: p.isAI || false,
                 difficulty: p.difficulty || null,
-                aiState: p.aiState || null
+                aiState: p.aiState || null,
+                borrowedAmount: p.borrowedAmount || 0,
+                debtRemaining: p.debtRemaining || 0
             })),
             currentPlayerIndex: gs.currentPlayerIndex,
             turn: gs.turn,
@@ -1340,7 +1344,9 @@ function loadGameStateFromSave(saveData) {
         abandoned: p.abandoned || false,
         isAI: p.isAI || false,
         difficulty: p.difficulty || null,
-        aiState: p.aiState || null
+        aiState: p.aiState || null,
+        borrowedAmount: p.borrowedAmount || 0,
+        debtRemaining: p.debtRemaining || 0
     }));
 
     return {
@@ -2014,6 +2020,20 @@ io.on('connection', (socket) => {
                 }
                 console.log(`Room ${socket.roomCode}: ${endOpResult.logs[0]}`);
                 broadcastStateUpdate(socket.roomCode, room, endOpResult.uiEvent);
+                callback && callback({ success: true });
+                break;
+            }
+
+            case 'borrow': {
+                if (playerIndex !== gs.currentPlayerIndex) {
+                    return callback && callback({ success: false, error: 'Not your turn' });
+                }
+                const borrowResult = aiActions.applyBorrow(gs, playerIndex, { amount: action.amount });
+                if (!borrowResult.success) {
+                    return callback && callback({ success: false, error: borrowResult.error });
+                }
+                console.log(`Room ${socket.roomCode}: ${borrowResult.logs[0]}`);
+                broadcastStateUpdate(socket.roomCode, room, borrowResult.uiEvent);
                 callback && callback({ success: true });
                 break;
             }

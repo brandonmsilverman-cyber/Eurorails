@@ -1,4 +1,5 @@
 [
+  {"message": "Add borrowing feature: borrow up to 20M from bank, repay double from deliveries", "date": "Mar 15, 2026"},
   {"message": "Add train type to player cards and rename Major Cities to Cities", "date": "Mar 15, 2026"},
   {"message": "Add discard pile reshuffle and overhaul demand card hover effect", "date": "Mar 15, 2026"},
   {"message": "Update gale event descriptions to list all effects", "date": "Mar 15, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Improve AI route selection, building, deployment, and movement", "date": "Mar 14, 2026"},
   {"message": "Improve AI demand selection and movement to reduce stalling", "date": "Mar 14, 2026"},
   {"message": "Add idle room cleanup sweep every 2 hours", "date": "Mar 14, 2026"},
-  {"message": "Make lobby scrollable and cap room list to 5 visible rows", "date": "Mar 14, 2026"},
-  {"message": "Fix solo game save/resume by excluding AI players from waiting room", "date": "Mar 14, 2026"}
+  {"message": "Make lobby scrollable and cap room list to 5 visible rows", "date": "Mar 14, 2026"}
 ]
