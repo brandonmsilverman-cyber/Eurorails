@@ -53,9 +53,9 @@ Phase-specific values:
 
 The icon is placed inline before the text with a space separator. The uppercase transform is applied via CSS `text-transform`, so the source text is title case.
 
-### Row 2: Cash + Major Cities
+### Row 2: Cash + Train Type + Cities
 
-Dark container row holding both the ECU balance and major cities count.
+Dark container row holding the ECU balance, train type, and cities count.
 
 **Container:**
 
@@ -76,11 +76,19 @@ Dark container row holding both the ECU balance and major cities count.
 | Font weight | Bold |
 | Color | `#ffd700` (gold) |
 
-**Major Cities (right side):**
+**Train Type (center):**
 
 | Property | Value |
 |---|---|
-| Format | `Major Cities: {count}/7` |
+| Format | `{trainType}` (e.g., "Freight", "Fast Freight", "Heavy Freight", "Superfreight") |
+| Font size | 11px |
+| Color | `#aaa` |
+
+**Cities (right side):**
+
+| Property | Value |
+|---|---|
+| Format | `Cities: {count}/7` |
 | Label font size | 11px |
 | Label color | Inherited (default `#ccc`) |
 | Count font weight | Bold |
@@ -111,12 +119,13 @@ Flex row with `justify-content: space-between` and `align-items: center`.
 
 | Property | Value |
 |---|---|
-| Format | `ECU {amount}M \| {count}/7 Major Cities` |
+| Format | `ECU {amount}M \| {trainType} \| {count}/7 Cities` |
 | Overall font size | 11px |
 | Cash color | `#ffd700` (gold) |
 | Cash font weight | Bold |
 | Cities count color | `#4a9e4a` (green) if `>= 7`, else `#ff8800` (orange) |
 | Cities count font weight | Bold |
+| Train type color | `#aaa` |
 | Separator | ` \| ` (pipe with spaces, default text color) |
 
 ---
