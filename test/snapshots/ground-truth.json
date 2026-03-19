@@ -1,0 +1,1265 @@
+{
+  "milepostCount": 1710,
+  "cityToMilepost": {
+    "Aberdeen": 132,
+    "Glasgow": 193,
+    "Belfast": 223,
+    "Edinburgh": 195,
+    "Newcastle": 259,
+    "Dublin": 355,
+    "Manchester": 390,
+    "Birmingham": 501,
+    "Cardiff": 597,
+    "London": 572,
+    "Cork": 530,
+    "Oslo": 38,
+    "Stockholm": 66,
+    "Göteborg": 133,
+    "København": 232,
+    "Århus": 200,
+    "Amsterdam": 468,
+    "Antwerpen": 604,
+    "Bruxelles": 673,
+    "Luxembourg": 795,
+    "Hamburg": 278,
+    "Bremen": 365,
+    "Essen": 543,
+    "Berlin": 373,
+    "Leipzig": 551,
+    "Frankfurt": 678,
+    "Stuttgart": 799,
+    "München": 903,
+    "Szczecin": 286,
+    "Warszawa": 451,
+    "Lodz": 559,
+    "Wroclaw": 620,
+    "Krakow": 722,
+    "Kaliningrad": 235,
+    "Paris": 858,
+    "Nantes": 917,
+    "Bordeaux": 1164,
+    "Toulouse": 1315,
+    "Lyon": 1114,
+    "Marseille": 1349,
+    "Bilbao": 1309,
+    "Porto": 1436,
+    "Madrid": 1533,
+    "Lisboa": 1602,
+    "Sevilla": 1671,
+    "Valencia": 1613,
+    "Barcelona": 1476,
+    "Bern": 930,
+    "Zürich": 899,
+    "Vienna": 808,
+    "Milano": 1091,
+    "Torino": 1117,
+    "Venezia": 1095,
+    "Firenze": 1232,
+    "Roma": 1454,
+    "Napoli": 1542,
+    "Zagreb": 1069,
+    "Budapest": 913,
+    "Sarajevo": 1239,
+    "Beograd": 1133,
+    "Praha": 653
+  },
+  "ferryConnections": [
+    {
+      "fromId": 572,
+      "toId": 637,
+      "name": "Dover-Calais",
+      "cost": 4
+    },
+    {
+      "fromId": 539,
+      "toId": 504,
+      "name": "London-Amsterdam",
+      "cost": 4
+    },
+    {
+      "fromId": 666,
+      "toId": 815,
+      "name": "Plymouth-Brest",
+      "cost": 4
+    },
+    {
+      "fromId": 259,
+      "toId": 197,
+      "name": "Newcastle-Århus",
+      "cost": 14
+    },
+    {
+      "fromId": 262,
+      "toId": 232,
+      "name": "Germany-Copenhagen",
+      "cost": 4
+    },
+    {
+      "fromId": 145,
+      "toId": 119,
+      "name": "Denmark-Scandinavia",
+      "cost": 4
+    },
+    {
+      "fromId": 225,
+      "toId": 224,
+      "name": "Scotland-Belfast",
+      "cost": 4
+    },
+    {
+      "fromId": 356,
+      "toId": 459,
+      "name": "Dublin-Wales",
+      "cost": 6
+    }
+  ],
+  "totalNeighborEdges": 9212,
+  "sampleMileposts": [
+    {
+      "id": 0,
+      "x": 38,
+      "y": 6,
+      "terrain": "clear",
+      "landmass": "scandinavia",
+      "city": null,
+      "neighborCount": 3
+    },
+    {
+      "id": 50,
+      "x": 26.5,
+      "y": 8.6,
+      "terrain": "clear",
+      "landmass": "britain",
+      "city": null,
+      "neighborCount": 4
+    },
+    {
+      "id": 100,
+      "x": 26,
+      "y": 11.2,
+      "terrain": "clear",
+      "landmass": "britain",
+      "city": null,
+      "neighborCount": 6
+    },
+    {
+      "id": 200,
+      "x": 45.5,
+      "y": 17.26,
+      "terrain": "clear",
+      "landmass": "denmark",
+      "city": "Århus",
+      "neighborCount": 2
+    },
+    {
+      "id": 300,
+      "x": 28.5,
+      "y": 22.45,
+      "terrain": "clear",
+      "landmass": "britain",
+      "city": null,
+      "neighborCount": 3
+    },
+    {
+      "id": 400,
+      "x": 45,
+      "y": 25.05,
+      "terrain": "clear",
+      "landmass": "continental",
+      "city": null,
+      "neighborCount": 6
+    },
+    {
+      "id": 500,
+      "x": 29.5,
+      "y": 27.65,
+      "terrain": "clear",
+      "landmass": "britain",
+      "city": null,
+      "neighborCount": 6
+    },
+    {
+      "id": 600,
+      "x": 31,
+      "y": 30.25,
+      "terrain": "clear",
+      "landmass": "britain",
+      "city": null,
+      "neighborCount": 6
+    },
+    {
+      "id": 700,
+      "x": 34.5,
+      "y": 32.85,
+      "terrain": "clear",
+      "landmass": "continental",
+      "city": null,
+      "neighborCount": 6
+    },
+    {
+      "id": 800,
+      "x": 45,
+      "y": 35.44,
+      "terrain": "clear",
+      "landmass": "continental",
+      "city": null,
+      "neighborCount": 6
+    },
+    {
+      "id": 900,
+      "x": 43.5,
+      "y": 38.04,
+      "terrain": "clear",
+      "landmass": "continental",
+      "city": null,
+      "neighborCount": 6
+    },
+    {
+      "id": 1000,
+      "x": 47,
+      "y": 40.64,
+      "terrain": "alpine",
+      "landmass": "continental",
+      "city": null,
+      "neighborCount": 6
+    },
+    {
+      "id": 1100,
+      "x": 54.5,
+      "y": 43.24,
+      "terrain": "clear",
+      "landmass": "continental",
+      "city": null,
+      "neighborCount": 6
+    },
+    {
+      "id": 1200,
+      "x": 36.5,
+      "y": 46.7,
+      "terrain": "clear",
+      "landmass": "continental",
+      "city": null,
+      "neighborCount": 6
+    },
+    {
+      "id": 1300,
+      "x": 59,
+      "y": 49.3,
+      "terrain": "clear",
+      "landmass": "continental",
+      "city": null,
+      "neighborCount": 6
+    },
+    {
+      "id": 1400,
+      "x": 31,
+      "y": 52.77,
+      "terrain": "clear",
+      "landmass": "continental",
+      "city": null,
+      "neighborCount": 6
+    },
+    {
+      "id": 1500,
+      "x": 49,
+      "y": 56.23,
+      "terrain": "mountain",
+      "landmass": "italy",
+      "city": null,
+      "neighborCount": 3
+    },
+    {
+      "id": 1600,
+      "x": 53.5,
+      "y": 60.56,
+      "terrain": "clear",
+      "landmass": "italy",
+      "city": null,
+      "neighborCount": 5
+    },
+    {
+      "id": 1700,
+      "x": 51.5,
+      "y": 67.49,
+      "terrain": "clear",
+      "landmass": "sicily",
+      "city": null,
+      "neighborCount": 4
+    },
+    {
+      "id": 1709,
+      "x": 51,
+      "y": 68.35,
+      "terrain": "clear",
+      "landmass": "sicily",
+      "city": null,
+      "neighborCount": 3
+    }
+  ],
+  "terrainTypes": [
+    {
+      "x": 43,
+      "y": 38,
+      "terrain": "clear"
+    },
+    {
+      "x": 45,
+      "y": 37,
+      "terrain": "clear"
+    },
+    {
+      "x": 47,
+      "y": 38,
+      "terrain": "clear"
+    },
+    {
+      "x": 50,
+      "y": 40,
+      "terrain": "clear"
+    },
+    {
+      "x": 44,
+      "y": 42,
+      "terrain": "mountain"
+    },
+    {
+      "x": 41,
+      "y": 40,
+      "terrain": "clear"
+    },
+    {
+      "x": 48,
+      "y": 41,
+      "terrain": "clear"
+    },
+    {
+      "x": 46,
+      "y": 44,
+      "terrain": "clear"
+    },
+    {
+      "x": 42,
+      "y": 45,
+      "terrain": "mountain"
+    },
+    {
+      "x": 51,
+      "y": 39,
+      "terrain": "alpine"
+    },
+    {
+      "x": 29,
+      "y": 13,
+      "terrain": "clear"
+    },
+    {
+      "x": 30,
+      "y": 14,
+      "terrain": "alpine"
+    },
+    {
+      "x": 41,
+      "y": 7,
+      "terrain": "clear"
+    },
+    {
+      "x": 50,
+      "y": 30,
+      "terrain": "mountain"
+    },
+    {
+      "x": 56,
+      "y": 32,
+      "terrain": "mountain"
+    },
+    {
+      "x": 57,
+      "y": 46,
+      "terrain": "mountain"
+    },
+    {
+      "x": 47,
+      "y": 51,
+      "terrain": "clear"
+    },
+    {
+      "x": 25,
+      "y": 58,
+      "terrain": "mountain"
+    },
+    {
+      "x": 52,
+      "y": 31,
+      "terrain": "clear"
+    },
+    {
+      "x": 55,
+      "y": 36,
+      "terrain": "clear"
+    },
+    {
+      "x": 30,
+      "y": 25,
+      "terrain": "clear"
+    },
+    {
+      "x": 35,
+      "y": 37,
+      "terrain": "clear"
+    },
+    {
+      "x": 40,
+      "y": 27,
+      "terrain": "clear"
+    },
+    {
+      "x": 50,
+      "y": 24,
+      "terrain": "clear"
+    },
+    {
+      "x": 45,
+      "y": 20,
+      "terrain": "clear"
+    },
+    {
+      "x": 38,
+      "y": 30,
+      "terrain": "clear"
+    },
+    {
+      "x": 33,
+      "y": 30,
+      "terrain": "clear"
+    },
+    {
+      "x": 58,
+      "y": 26,
+      "terrain": "clear"
+    },
+    {
+      "x": 20,
+      "y": 24,
+      "terrain": "clear"
+    },
+    {
+      "x": 24,
+      "y": 58,
+      "terrain": "clear"
+    },
+    {
+      "x": 39,
+      "y": 37,
+      "terrain": "clear"
+    },
+    {
+      "x": 53,
+      "y": 36,
+      "terrain": "clear"
+    },
+    {
+      "x": 55,
+      "y": 38,
+      "terrain": "clear"
+    },
+    {
+      "x": 48,
+      "y": 44,
+      "terrain": "mountain"
+    },
+    {
+      "x": 44,
+      "y": 48,
+      "terrain": "clear"
+    },
+    {
+      "x": 27,
+      "y": 48,
+      "terrain": "clear"
+    },
+    {
+      "x": 31,
+      "y": 47,
+      "terrain": "clear"
+    },
+    {
+      "x": 48,
+      "y": 29,
+      "terrain": "clear"
+    },
+    {
+      "x": 54,
+      "y": 43,
+      "terrain": "clear"
+    },
+    {
+      "x": 22,
+      "y": 55,
+      "terrain": "clear"
+    },
+    {
+      "x": 19,
+      "y": 54,
+      "terrain": "clear"
+    },
+    {
+      "x": 33,
+      "y": 56,
+      "terrain": "clear"
+    },
+    {
+      "x": 43.5,
+      "y": 43,
+      "terrain": "mountain"
+    },
+    {
+      "x": 28,
+      "y": 62,
+      "terrain": "clear"
+    },
+    {
+      "x": 47,
+      "y": 13,
+      "terrain": "clear"
+    },
+    {
+      "x": 44,
+      "y": 8,
+      "terrain": "mountain"
+    },
+    {
+      "x": 59,
+      "y": 44,
+      "terrain": "clear"
+    },
+    {
+      "x": 21,
+      "y": 66,
+      "terrain": "clear"
+    },
+    {
+      "x": 53,
+      "y": 9,
+      "terrain": "clear"
+    },
+    {
+      "x": 17,
+      "y": 61,
+      "terrain": "clear"
+    }
+  ],
+  "terrainHashes": [
+    {
+      "x": 30,
+      "y": 25,
+      "hash": 0.5031860856433923
+    },
+    {
+      "x": 45.5,
+      "y": 17,
+      "hash": 0.6109236898191739
+    },
+    {
+      "x": 43,
+      "y": 38,
+      "hash": 0.5493275180178898
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "hash": 0
+    },
+    {
+      "x": 100,
+      "y": 100,
+      "hash": 0.08279798646981362
+    },
+    {
+      "x": 33.33,
+      "y": 66.66,
+      "hash": 0.022711106736096554
+    }
+  ],
+  "coastDistances": [
+    {
+      "id": 0,
+      "coastDistance": 0
+    },
+    {
+      "id": 50,
+      "coastDistance": 0
+    },
+    {
+      "id": 100,
+      "coastDistance": 1
+    },
+    {
+      "id": 200,
+      "coastDistance": 0
+    },
+    {
+      "id": 300,
+      "coastDistance": 0
+    },
+    {
+      "id": 400,
+      "coastDistance": 3
+    },
+    {
+      "id": 500,
+      "coastDistance": 2
+    },
+    {
+      "id": 600,
+      "coastDistance": 1
+    },
+    {
+      "id": 700,
+      "coastDistance": 1
+    },
+    {
+      "id": 800,
+      "coastDistance": 8
+    },
+    {
+      "id": 900,
+      "coastDistance": 7
+    },
+    {
+      "id": 1000,
+      "coastDistance": 2
+    },
+    {
+      "id": 1100,
+      "coastDistance": 4
+    },
+    {
+      "id": 1200,
+      "coastDistance": 4
+    },
+    {
+      "id": 1300,
+      "coastDistance": 1
+    },
+    {
+      "id": 1400,
+      "coastDistance": 3
+    },
+    {
+      "id": 1500,
+      "coastDistance": 0
+    },
+    {
+      "id": 1600,
+      "coastDistance": 0
+    },
+    {
+      "id": 1700,
+      "coastDistance": 0
+    },
+    {
+      "id": 1709,
+      "coastDistance": 0
+    }
+  ],
+  "buildPaths": [
+    {
+      "from": "London",
+      "to": "Paris",
+      "path": [
+        572,
+        637,
+        670,
+        701,
+        730,
+        760,
+        790,
+        824,
+        858
+      ],
+      "cost": 15
+    },
+    {
+      "from": "London",
+      "to": "Birmingham",
+      "path": [
+        572,
+        538,
+        537,
+        501
+      ],
+      "cost": 5
+    },
+    {
+      "from": "Berlin",
+      "to": "München",
+      "path": [
+        373,
+        405,
+        443,
+        479,
+        515,
+        550,
+        583,
+        613,
+        649,
+        681,
+        711,
+        739,
+        770,
+        801,
+        835,
+        870,
+        903
+      ],
+      "cost": 18
+    },
+    {
+      "from": "Madrid",
+      "to": "Barcelona",
+      "path": [
+        1533,
+        1512,
+        1513,
+        1492,
+        1493,
+        1471,
+        1472,
+        1473,
+        1474,
+        1475,
+        1476
+      ],
+      "cost": 16
+    },
+    {
+      "from": "Amsterdam",
+      "to": "Vienna",
+      "path": [
+        468,
+        469,
+        470,
+        507,
+        508,
+        544,
+        578,
+        609,
+        646,
+        679,
+        680,
+        711,
+        712,
+        713,
+        742,
+        773,
+        774,
+        775,
+        806,
+        807,
+        808
+      ],
+      "cost": 24
+    },
+    {
+      "from": "Oslo",
+      "to": "Stockholm",
+      "path": [
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        66
+      ],
+      "cost": 11
+    },
+    {
+      "from": "Milano",
+      "to": "Roma",
+      "path": [
+        1091,
+        1120,
+        1150,
+        1178,
+        1206,
+        1231,
+        1257,
+        1290,
+        1322,
+        1352,
+        1379,
+        1405,
+        1429,
+        1454
+      ],
+      "cost": 20
+    },
+    {
+      "from": "Lisboa",
+      "to": "Porto",
+      "path": [
+        1602,
+        1586,
+        1569,
+        1549,
+        1528,
+        1507,
+        1485,
+        1463,
+        1436
+      ],
+      "cost": 10
+    },
+    {
+      "from": "Hamburg",
+      "to": "Warszawa",
+      "path": [
+        278,
+        279,
+        280,
+        281,
+        282,
+        283,
+        284,
+        312,
+        342,
+        374,
+        407,
+        446,
+        447,
+        448,
+        449,
+        450,
+        451
+      ],
+      "cost": 18
+    },
+    {
+      "from": "Dublin",
+      "to": "Cork",
+      "path": [
+        355,
+        386,
+        418,
+        456,
+        493,
+        530
+      ],
+      "cost": 7
+    }
+  ],
+  "shortestPaths": [
+    {
+      "from": "London",
+      "to": "Paris",
+      "path": [
+        572,
+        637,
+        670,
+        701,
+        730,
+        761,
+        791,
+        824,
+        858
+      ],
+      "cost": 15
+    },
+    {
+      "from": "Berlin",
+      "to": "München",
+      "path": [
+        373,
+        405,
+        443,
+        479,
+        515,
+        550,
+        583,
+        613,
+        649,
+        681,
+        712,
+        740,
+        771,
+        802,
+        835,
+        870,
+        903
+      ],
+      "cost": 18
+    }
+  ],
+  "movementPath": {
+    "from": "London",
+    "to": "Birmingham",
+    "trackPath": [
+      572,
+      538,
+      537,
+      501
+    ],
+    "movePath": [
+      572,
+      538,
+      537,
+      501
+    ],
+    "ferryCrossings": [],
+    "foreignSegments": []
+  },
+  "eventZones": {
+    "130": {
+      "title": "Snow! Torino",
+      "zoneSize": 111,
+      "sampleInZone": [
+        927,
+        928,
+        929,
+        930,
+        931,
+        932,
+        933,
+        959,
+        960,
+        961
+      ],
+      "sampleOutZone": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "131": {
+      "title": "Snow! München",
+      "zoneSize": 91,
+      "sampleInZone": [
+        738,
+        739,
+        740,
+        741,
+        742,
+        743,
+        768,
+        769,
+        770,
+        771
+      ],
+      "sampleOutZone": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "132": {
+      "title": "Snow! Praha",
+      "zoneSize": 61,
+      "sampleInZone": [
+        515,
+        516,
+        517,
+        518,
+        519,
+        550,
+        551,
+        552,
+        553,
+        554
+      ],
+      "sampleOutZone": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "133": {
+      "title": "Snow! Krakow",
+      "zoneSize": 115,
+      "sampleInZone": [
+        520,
+        521,
+        522,
+        523,
+        524,
+        525,
+        526,
+        555,
+        556,
+        557
+      ],
+      "sampleOutZone": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "134": {
+      "title": "Fog! Frankfurt",
+      "zoneSize": 61,
+      "sampleInZone": [
+        543,
+        544,
+        545,
+        546,
+        547,
+        576,
+        577,
+        578,
+        579,
+        580
+      ],
+      "sampleOutZone": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "138": {
+      "title": "Gale! North Sea & English Channel",
+      "zoneSize": 386,
+      "sampleInZone": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        15
+      ],
+      "sampleOutZone": [
+        9,
+        10,
+        11,
+        12,
+        13
+      ]
+    },
+    "139": {
+      "title": "Gale! Baltic & Mediterranean",
+      "zoneSize": 644,
+      "sampleInZone": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "sampleOutZone": [
+        0,
+        15,
+        16,
+        32,
+        33
+      ]
+    },
+    "140": {
+      "title": "Gale! Atlantic & Bay of Biscay",
+      "zoneSize": 262,
+      "sampleInZone": [
+        188,
+        204,
+        205,
+        219,
+        220,
+        221,
+        222,
+        236,
+        237,
+        238
+      ],
+      "sampleOutZone": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  },
+  "eventZoneSpotChecks": [
+    {
+      "eventId": 130,
+      "milepostId": 1117,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "eventId": 130,
+      "milepostId": 0,
+      "actual": false
+    },
+    {
+      "eventId": 131,
+      "milepostId": 903,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "eventId": 131,
+      "milepostId": 0,
+      "actual": false
+    },
+    {
+      "eventId": 132,
+      "milepostId": 653,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "eventId": 132,
+      "milepostId": 0,
+      "actual": false
+    },
+    {
+      "eventId": 133,
+      "milepostId": 722,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "eventId": 133,
+      "milepostId": 0,
+      "actual": false
+    },
+    {
+      "eventId": 134,
+      "milepostId": 678,
+      "expected": true,
+      "actual": true
+    },
+    {
+      "eventId": 134,
+      "milepostId": 0,
+      "actual": false
+    },
+    {
+      "eventId": 138,
+      "milepostId": 0,
+      "actual": true
+    },
+    {
+      "eventId": 139,
+      "milepostId": 0,
+      "actual": false
+    },
+    {
+      "eventId": 140,
+      "milepostId": 0,
+      "actual": false
+    }
+  ],
+  "landmassConnections": [
+    {
+      "lm1": "continental",
+      "lm2": "italy",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "lm1": "italy",
+      "lm2": "continental",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "lm1": "continental",
+      "lm2": "iberia",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "lm1": "britain",
+      "lm2": "continental",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "lm1": "britain",
+      "lm2": "ireland",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "lm1": "continental",
+      "lm2": "scandinavia",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "lm1": "continental",
+      "lm2": "denmark",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "lm1": "denmark",
+      "lm2": "scandinavia",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "lm1": "zealand",
+      "lm2": "denmark",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "lm1": "zealand",
+      "lm2": "scandinavia",
+      "expected": true,
+      "actual": true
+    }
+  ],
+  "ferryOwnershipTests": [
+    {
+      "desc": "empty - can build",
+      "result": true
+    },
+    {
+      "desc": "one owner - can build",
+      "result": true
+    },
+    {
+      "desc": "one owner - already owns",
+      "result": true
+    },
+    {
+      "desc": "one owner - playerOwnsFerry blue",
+      "result": true
+    },
+    {
+      "desc": "one owner - playerOwnsFerry red",
+      "result": false
+    },
+    {
+      "desc": "two owners - cannot build",
+      "result": false
+    },
+    {
+      "desc": "two owners - already owns blue",
+      "result": true
+    }
+  ]
+}

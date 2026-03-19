@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Train Card Mockup — Exact In-Game Rendering</title>
+<style>
+  body {
+    background: #1a1a1a;
+    color: #ccc;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+    padding: 40px 20px;
+  }
+
+  h2 {
+    color: #4a9eff;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0;
+  }
+
+  .scenario { text-align: center; }
+
+  /* ── Exact train card CSS from public/eurorails.html lines 271–347 ── */
+
+  .train-status-card {
+    width: 480px;
+    background: linear-gradient(145deg, #2a1e0e, #1e1508);
+    border: 1.5px solid #8a6a3a;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 12px;
+    color: #d0c8b0;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(180,150,80,0.1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .train-status-card .train-bg {
+    position: absolute;
+    left: 50%;
+    bottom: 2px;
+    transform: translateX(-50%);
+    opacity: 0.25;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .train-status-card .train-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .train-status-card .train-info-col {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .train-status-card .train-header {
+    font-weight: bold;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(138, 106, 58, 0.4);
+    position: relative;
+    z-index: 1;
+  }
+
+  .train-status-card .train-stat {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+  }
+
+  .train-status-card .train-stat span {
+    color: #998866;
+  }
+
+  .train-status-card .train-stat strong {
+    color: #d0c8b0;
+  }
+
+  .train-status-card .train-loads-col {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .train-status-card .train-loads-header {
+    font-size: 11px;
+    color: #998866;
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+
+  .train-status-card .load-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 2px;
+  }
+
+  .train-status-card .empty-slot {
+    color: #555;
+    font-style: italic;
+  }
+
+  /* ── NEW: Status Row (proposed addition) ── */
+
+  .train-status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #1a1a2e;
+    padding: 6px 8px;
+    border-radius: 4px;
+    border: 1px solid #333;
+    margin: 8px 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .train-status-row .ecu {
+    font-size: 13px;
+    font-weight: bold;
+    color: #ffd700;
+  }
+
+  .train-status-row .phase-badge {
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  .train-status-row .waiting {
+    font-size: 10px;
+    font-style: italic;
+    color: #888;
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════ -->
+<!-- Scenario 1: Active turn – Build phase  -->
+<!-- ════════════════════════════════════════ -->
+<div class="scenario">
+  <h2>Active Turn — Build Phase (Fast Freight)</h2>
+</div>
+<div class="train-status-card" style="border-color: #ff444440;">
+  <!-- SVG backdrop: Fast Freight (diesel) -->
+  <svg class="train-bg" width="340" height="70" viewBox="0 0 340 70" fill="#ff4444">
+    <g transform="translate(340,0) scale(-1,1)">
+      <path d="M2,50 L2,36 Q2,24 10,18 L30,14 L96,12 Q102,12 102,16 L102,50 Z"/>
+      <path d="M2,36 Q2,26 10,20 L18,16 L18,32 Q18,38 10,40 Z" fill-opacity="0.25"/>
+      <path d="M6,34 Q8,24 16,20 L20,18 L20,30 Z" fill-opacity="0.2"/>
+      <rect x="28" y="10" width="72" height="4" rx="2" fill-opacity="0.5"/>
+      <rect x="60" y="8" width="8" height="4" rx="2" fill-opacity="0.5"/>
+      <line x1="18" y1="28" x2="102" y2="28" stroke="#ff4444" stroke-width="0.6" opacity="0.15"/>
+      <line x1="10" y1="40" x2="102" y2="40" stroke="#ff4444" stroke-width="0.6" opacity="0.15"/>
+      <rect x="36" y="20" width="12" height="6" rx="1" fill-opacity="0.15"/>
+      <rect x="54" y="20" width="12" height="6" rx="1" fill-opacity="0.15"/>
+      <rect x="72" y="20" width="12" height="6" rx="1" fill-opacity="0.15"/>
+      <rect x="3" y="30" width="3" height="3" rx="1" fill-opacity="0.5"/>
+      <rect x="3" y="42" width="3" height="2" rx="1" fill-opacity="0.35"/>
+      <rect x="2" y="48" width="100" height="3" fill-opacity="0.4"/>
+      <rect x="24" y="51" width="54" height="5" rx="2" fill-opacity="0.4"/>
+      <rect x="10" y="55" width="24" height="4" rx="1" fill-opacity="0.4"/>
+      <circle cx="16" cy="62" r="5"/><circle cx="16" cy="62" r="3" fill-opacity="0.3"/>
+      <circle cx="30" cy="62" r="5"/><circle cx="30" cy="62" r="3" fill-opacity="0.3"/>
+      <rect x="68" y="55" width="24" height="4" rx="1" fill-opacity="0.4"/>
+      <circle cx="74" cy="62" r="5"/><circle cx="74" cy="62" r="3" fill-opacity="0.3"/>
+      <circle cx="88" cy="62" r="5"/><circle cx="88" cy="62" r="3" fill-opacity="0.3"/>
+      <rect x="104" y="46" width="6" height="3" rx="1" fill-opacity="0.5"/>
+      <rect x="110" y="16" width="58" height="36" rx="2"/>
+      <path d="M112,16 Q139,10 166,16" fill-opacity="0.3"/>
+      <line x1="130" y1="16" x2="130" y2="52" stroke="#ff4444" stroke-width="0.4" opacity="0.15"/>
+      <line x1="148" y1="16" x2="148" y2="52" stroke="#ff4444" stroke-width="0.4" opacity="0.15"/>
+      <line x1="110" y1="40" x2="168" y2="40" stroke="#ff4444" stroke-width="0.7" opacity="0.15"/>
+      <rect x="132" y="22" width="14" height="28" fill-opacity="0.15"/>
+      <rect x="110" y="50" width="58" height="3" fill-opacity="0.4"/>
+      <rect x="114" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="120" cy="62" r="4.5"/><circle cx="120" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="130" cy="62" r="4.5"/><circle cx="130" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="144" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="150" cy="62" r="4.5"/><circle cx="150" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="160" cy="62" r="4.5"/><circle cx="160" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="170" y="46" width="6" height="3" rx="1" fill-opacity="0.5"/>
+      <ellipse cx="208" cy="34" rx="28" ry="14"/>
+      <rect x="181" y="44" width="54" height="8" rx="2" fill-opacity="0.45"/>
+      <rect x="192" y="21" width="1.5" height="26" fill-opacity="0.15"/>
+      <rect x="208" y="20" width="1.5" height="28" fill-opacity="0.15"/>
+      <rect x="222" y="21" width="1.5" height="26" fill-opacity="0.15"/>
+      <ellipse cx="208" cy="21" rx="5" ry="2.5" fill-opacity="0.5"/>
+      <rect x="188" y="19" width="40" height="1" fill-opacity="0.2"/>
+      <rect x="181" y="52" width="54" height="2" fill-opacity="0.35"/>
+      <rect x="186" y="54" width="18" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="192" cy="62" r="4.5"/><circle cx="192" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="200" cy="62" r="4.5"/><circle cx="200" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="214" y="54" width="18" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="220" cy="62" r="4.5"/><circle cx="220" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="228" cy="62" r="4.5"/><circle cx="228" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="236" y="46" width="6" height="3" rx="1" fill-opacity="0.5"/>
+      <rect x="242" y="16" width="58" height="36" rx="2"/>
+      <path d="M244,16 Q271,10 298,16" fill-opacity="0.3"/>
+      <line x1="262" y1="16" x2="262" y2="52" stroke="#ff4444" stroke-width="0.4" opacity="0.15"/>
+      <line x1="280" y1="16" x2="280" y2="52" stroke="#ff4444" stroke-width="0.4" opacity="0.15"/>
+      <line x1="242" y1="40" x2="300" y2="40" stroke="#ff4444" stroke-width="0.7" opacity="0.15"/>
+      <rect x="264" y="22" width="14" height="28" fill-opacity="0.15"/>
+      <rect x="242" y="50" width="58" height="3" fill-opacity="0.4"/>
+      <rect x="246" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="252" cy="62" r="4.5"/><circle cx="252" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="262" cy="62" r="4.5"/><circle cx="262" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="276" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="282" cy="62" r="4.5"/><circle cx="282" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="292" cy="62" r="4.5"/><circle cx="292" cy="62" r="2.5" fill-opacity="0.3"/>
+    </g>
+  </svg>
+
+  <div class="train-header" style="color: #ff4444; border-bottom-color: #ff444440;">
+    Alice's Train
+  </div>
+
+  <div class="train-status-row">
+    <span class="ecu">ECU 45M</span>
+    <span class="phase-badge" style="background: #4a7aff22; border: 1px solid #4a7aff; color: #4a7aff;">
+      &#x1F527; Build
+    </span>
+  </div>
+
+  <div class="train-content">
+    <div class="train-info-col">
+      <div class="train-stat"><span>Type:</span><strong>Fast Freight</strong></div>
+      <div class="train-stat"><span>Speed:</span><strong>12mp</strong></div>
+      <div class="train-stat"><span>Location:</span><strong>Paris</strong></div>
+    </div>
+    <div class="train-loads-col">
+      <div class="train-loads-header">Cargo (1/3):</div>
+      <div class="load-item"><span>&#x26CF;</span> Coal</div>
+      <div class="load-item empty-slot">— empty —</div>
+      <div class="load-item empty-slot">— empty —</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ -->
+<!-- Scenario 2: Active turn – Operate phase -->
+<!-- ════════════════════════════════════════ -->
+<div class="scenario">
+  <h2>Active Turn — Operate Phase (Freight / Steam Locomotive)</h2>
+</div>
+<div class="train-status-card" style="border-color: #4a9eff40;">
+  <!-- SVG backdrop: Freight (steam locomotive) -->
+  <svg class="train-bg" width="340" height="70" viewBox="0 0 340 70" fill="#4a9eff">
+    <g transform="translate(340,0) scale(-1,1)">
+      <path d="M55,54 L60,54 L60,46 L57,46 Z" fill-opacity="0.5"/>
+      <rect x="60" y="32" width="40" height="22" rx="1"/>
+      <ellipse cx="80" cy="32" rx="20" ry="4"/>
+      <rect x="58" y="30" width="7" height="24" rx="1" fill-opacity="0.8"/>
+      <rect x="63" y="18" width="5" height="14"/>
+      <rect x="61" y="16" width="9" height="3" rx="1"/>
+      <ellipse cx="80" cy="28" rx="4" ry="3"/>
+      <ellipse cx="92" cy="29" rx="3" ry="2.5" fill-opacity="0.8"/>
+      <rect x="100" y="26" width="18" height="28" rx="1"/>
+      <rect x="103" y="30" width="5" height="7" fill-opacity="0.3"/>
+      <rect x="111" y="30" width="5" height="7" fill-opacity="0.3"/>
+      <rect x="98" y="24" width="22" height="3" rx="1" fill-opacity="0.7"/>
+      <rect x="60" y="52" width="40" height="1.5" fill-opacity="0.5"/>
+      <circle cx="65" cy="60" r="4"/><circle cx="65" cy="60" r="2.5" fill-opacity="0.3"/>
+      <circle cx="80" cy="60" r="6.5"/><circle cx="80" cy="60" r="4" fill-opacity="0.3"/>
+      <circle cx="94" cy="60" r="6.5"/><circle cx="94" cy="60" r="4" fill-opacity="0.3"/>
+      <circle cx="113" cy="60" r="4"/><circle cx="113" cy="60" r="2.5" fill-opacity="0.3"/>
+      <rect x="76" y="58" width="22" height="1.5" rx="1" fill-opacity="0.4"/>
+      <rect x="120" y="48" width="4" height="4" rx="1" fill-opacity="0.5"/>
+      <rect x="124" y="32" width="24" height="22" rx="1"/>
+      <path d="M126,32 L146,32 L146,37 L126,37 Z" fill-opacity="0.3"/>
+      <circle cx="132" cy="60" r="4"/><circle cx="132" cy="60" r="2.5" fill-opacity="0.3"/>
+      <circle cx="142" cy="60" r="4"/><circle cx="142" cy="60" r="2.5" fill-opacity="0.3"/>
+      <rect x="149" y="48" width="6" height="2.5" rx="1" fill-opacity="0.4"/>
+      <rect x="156" y="30" width="42" height="24" rx="1"/>
+      <rect x="170" y="32" width="14" height="20" fill-opacity="0.25"/>
+      <line x1="177" y1="32" x2="177" y2="52" stroke="#4a9eff" stroke-width="0.6" opacity="0.4"/>
+      <line x1="166" y1="30" x2="166" y2="54" stroke="#4a9eff" stroke-width="0.4" opacity="0.2"/>
+      <line x1="190" y1="30" x2="190" y2="54" stroke="#4a9eff" stroke-width="0.4" opacity="0.2"/>
+      <rect x="157" y="28" width="40" height="2.5" rx="1" fill-opacity="0.6"/>
+      <rect x="156" y="54" width="42" height="2" fill-opacity="0.5"/>
+      <circle cx="167" cy="61" r="3.5"/><circle cx="167" cy="61" r="2" fill-opacity="0.3"/>
+      <circle cx="187" cy="61" r="3.5"/><circle cx="187" cy="61" r="2" fill-opacity="0.3"/>
+      <rect x="199" y="48" width="6" height="2.5" rx="1" fill-opacity="0.4"/>
+      <rect x="206" y="38" width="42" height="16" rx="1"/>
+      <path d="M208,38 L208,34 L246,34 L246,38" fill-opacity="0.5"/>
+      <rect x="216" y="34" width="1.5" height="20" fill-opacity="0.2"/>
+      <rect x="227" y="34" width="1.5" height="20" fill-opacity="0.2"/>
+      <rect x="238" y="34" width="1.5" height="20" fill-opacity="0.2"/>
+      <rect x="206" y="54" width="42" height="2" fill-opacity="0.5"/>
+      <circle cx="217" cy="61" r="3.5"/><circle cx="217" cy="61" r="2" fill-opacity="0.3"/>
+      <circle cx="237" cy="61" r="3.5"/><circle cx="237" cy="61" r="2" fill-opacity="0.3"/>
+      <rect x="249" y="48" width="6" height="2.5" rx="1" fill-opacity="0.4"/>
+      <rect x="256" y="30" width="30" height="24" rx="1"/>
+      <rect x="254" y="22" width="34" height="10" rx="1" fill-opacity="0.7"/>
+      <rect x="262" y="24" width="5" height="5" fill-opacity="0.3"/>
+      <rect x="275" y="24" width="5" height="5" fill-opacity="0.3"/>
+      <rect x="259" y="36" width="5" height="6" fill-opacity="0.3"/>
+      <rect x="268" y="36" width="5" height="6" fill-opacity="0.3"/>
+      <rect x="277" y="36" width="5" height="6" fill-opacity="0.3"/>
+      <rect x="256" y="54" width="30" height="2" fill-opacity="0.5"/>
+      <rect x="284" y="34" width="3" height="20" fill-opacity="0.4"/>
+      <circle cx="265" cy="61" r="3.5"/><circle cx="265" cy="61" r="2" fill-opacity="0.3"/>
+      <circle cx="279" cy="61" r="3.5"/><circle cx="279" cy="61" r="2" fill-opacity="0.3"/>
+    </g>
+  </svg>
+
+  <div class="train-header" style="color: #4a9eff; border-bottom-color: #4a9eff40;">
+    Bob's Train
+  </div>
+
+  <div class="train-status-row">
+    <span class="ecu">ECU 112M</span>
+    <span class="phase-badge" style="background: #4a9e4a22; border: 1px solid #4a9e4a; color: #4a9e4a;">
+      &#x1F682; Operate
+    </span>
+  </div>
+
+  <div class="train-content">
+    <div class="train-info-col">
+      <div class="train-stat"><span>Type:</span><strong>Freight</strong></div>
+      <div class="train-stat"><span>Speed:</span><strong>9mp</strong></div>
+      <div class="train-stat"><span>Location:</span><strong>Wien</strong></div>
+    </div>
+    <div class="train-loads-col">
+      <div class="train-loads-header">Cargo (2/2):</div>
+      <div class="load-item"><span>&#x1F37A;</span> Beer</div>
+      <div class="load-item"><span>&#x1F9C0;</span> Cheese</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- Scenario 3: Active turn – Initial Building -->
+<!-- ════════════════════════════════════════════ -->
+<div class="scenario">
+  <h2>Active Turn — Initial Building (Heavy Freight / Diesel-Electric)</h2>
+</div>
+<div class="train-status-card" style="border-color: #4a9e4a40;">
+  <!-- SVG backdrop: Heavy Freight (modern diesel-electric) -->
+  <svg class="train-bg" width="340" height="70" viewBox="0 0 340 70" fill="#4a9e4a">
+    <g transform="translate(340,0) scale(-1,1)">
+      <path d="M4,52 L4,30 Q4,18 12,16 L98,14 Q104,14 104,18 L104,52 Z"/>
+      <path d="M4,30 Q4,20 12,18 L20,16 L20,30 Z" fill-opacity="0.3"/>
+      <rect x="8" y="22" width="10" height="8" rx="1" fill-opacity="0.25"/>
+      <rect x="22" y="12" width="80" height="4" rx="1" fill-opacity="0.6"/>
+      <rect x="26" y="20" width="16" height="16" fill-opacity="0.2"/>
+      <rect x="26" y="22" width="16" height="1" fill-opacity="0.15"/>
+      <rect x="26" y="25" width="16" height="1" fill-opacity="0.15"/>
+      <rect x="26" y="28" width="16" height="1" fill-opacity="0.15"/>
+      <rect x="26" y="31" width="16" height="1" fill-opacity="0.15"/>
+      <rect x="46" y="20" width="14" height="14" fill-opacity="0.2"/>
+      <circle cx="53" cy="27" r="5" fill-opacity="0.15"/>
+      <rect x="64" y="8" width="6" height="6" rx="1" fill-opacity="0.6"/>
+      <rect x="64" y="20" width="34" height="18" fill-opacity="0.15"/>
+      <line x1="76" y1="20" x2="76" y2="38" stroke="#4a9e4a" stroke-width="0.5" opacity="0.2"/>
+      <line x1="88" y1="20" x2="88" y2="38" stroke="#4a9e4a" stroke-width="0.5" opacity="0.2"/>
+      <rect x="5" y="24" width="3" height="3" rx="1" fill-opacity="0.5"/>
+      <rect x="5" y="34" width="3" height="2" rx="1" fill-opacity="0.4"/>
+      <rect x="4" y="50" width="100" height="2" fill-opacity="0.35"/>
+      <rect x="22" y="52" width="60" height="7" rx="2" fill-opacity="0.45"/>
+      <rect x="8" y="57" width="30" height="4" rx="1" fill-opacity="0.4"/>
+      <circle cx="14" cy="63" r="5"/><circle cx="14" cy="63" r="3" fill-opacity="0.3"/>
+      <circle cx="24" cy="63" r="5"/><circle cx="24" cy="63" r="3" fill-opacity="0.3"/>
+      <circle cx="34" cy="63" r="5"/><circle cx="34" cy="63" r="3" fill-opacity="0.3"/>
+      <rect x="66" y="57" width="30" height="4" rx="1" fill-opacity="0.4"/>
+      <circle cx="72" cy="63" r="5"/><circle cx="72" cy="63" r="3" fill-opacity="0.3"/>
+      <circle cx="82" cy="63" r="5"/><circle cx="82" cy="63" r="3" fill-opacity="0.3"/>
+      <circle cx="92" cy="63" r="5"/><circle cx="92" cy="63" r="3" fill-opacity="0.3"/>
+      <rect x="106" y="48" width="6" height="3" rx="1" fill-opacity="0.5"/>
+      <rect x="112" y="50" width="60" height="4" rx="1" fill-opacity="0.6"/>
+      <path d="M116,36 L116,50 L168,50 L168,36 Z" fill-opacity="0.3"/>
+      <rect x="114" y="16" width="56" height="34" rx="1"/>
+      <rect x="114" y="16" width="56" height="3" fill-opacity="0.5"/>
+      <line x1="124" y1="19" x2="124" y2="50" stroke="#4a9e4a" stroke-width="0.5" opacity="0.15"/>
+      <line x1="134" y1="19" x2="134" y2="50" stroke="#4a9e4a" stroke-width="0.5" opacity="0.15"/>
+      <line x1="144" y1="19" x2="144" y2="50" stroke="#4a9e4a" stroke-width="0.5" opacity="0.15"/>
+      <line x1="154" y1="19" x2="154" y2="50" stroke="#4a9e4a" stroke-width="0.5" opacity="0.15"/>
+      <line x1="164" y1="19" x2="164" y2="50" stroke="#4a9e4a" stroke-width="0.5" opacity="0.15"/>
+      <rect x="138" y="28" width="14" height="22" fill-opacity="0.2"/>
+      <rect x="116" y="53" width="18" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="122" cy="62" r="4.5"/><circle cx="122" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="130" cy="62" r="4.5"/><circle cx="130" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="150" y="53" width="18" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="156" cy="62" r="4.5"/><circle cx="156" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="164" cy="62" r="4.5"/><circle cx="164" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="174" y="48" width="6" height="3" rx="1" fill-opacity="0.5"/>
+      <rect x="180" y="50" width="60" height="4" rx="1" fill-opacity="0.6"/>
+      <rect x="182" y="24" width="28" height="26" rx="1"/>
+      <line x1="190" y1="24" x2="190" y2="50" stroke="#4a9e4a" stroke-width="0.5" opacity="0.15"/>
+      <line x1="198" y1="24" x2="198" y2="50" stroke="#4a9e4a" stroke-width="0.5" opacity="0.15"/>
+      <rect x="182" y="24" width="28" height="2.5" fill-opacity="0.4"/>
+      <rect x="212" y="24" width="28" height="26" rx="1"/>
+      <line x1="220" y1="24" x2="220" y2="50" stroke="#4a9e4a" stroke-width="0.5" opacity="0.15"/>
+      <line x1="228" y1="24" x2="228" y2="50" stroke="#4a9e4a" stroke-width="0.5" opacity="0.15"/>
+      <rect x="212" y="24" width="28" height="2.5" fill-opacity="0.4"/>
+      <rect x="184" y="53" width="18" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="190" cy="62" r="4.5"/><circle cx="190" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="198" cy="62" r="4.5"/><circle cx="198" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="218" y="53" width="18" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="224" cy="62" r="4.5"/><circle cx="224" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="232" cy="62" r="4.5"/><circle cx="232" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="242" y="48" width="6" height="3" rx="1" fill-opacity="0.5"/>
+      <rect x="248" y="16" width="60" height="38" rx="1"/>
+      <rect x="248" y="16" width="60" height="3" rx="1" fill-opacity="0.5"/>
+      <rect x="254" y="22" width="8" height="14" fill-opacity="0.15"/>
+      <rect x="266" y="22" width="8" height="14" fill-opacity="0.15"/>
+      <rect x="278" y="22" width="8" height="14" fill-opacity="0.15"/>
+      <rect x="290" y="22" width="8" height="14" fill-opacity="0.15"/>
+      <rect x="254" y="38" width="8" height="10" fill-opacity="0.15"/>
+      <rect x="266" y="38" width="8" height="10" fill-opacity="0.15"/>
+      <rect x="278" y="38" width="8" height="10" fill-opacity="0.15"/>
+      <rect x="290" y="38" width="8" height="10" fill-opacity="0.15"/>
+      <rect x="248" y="52" width="60" height="3" fill-opacity="0.5"/>
+      <rect x="252" y="55" width="20" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="258" cy="62" r="4.5"/><circle cx="258" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="268" cy="62" r="4.5"/><circle cx="268" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="282" y="55" width="20" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="288" cy="62" r="4.5"/><circle cx="288" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="298" cy="62" r="4.5"/><circle cx="298" cy="62" r="2.5" fill-opacity="0.3"/>
+    </g>
+  </svg>
+
+  <div class="train-header" style="color: #4a9e4a; border-bottom-color: #4a9e4a40;">
+    Charlie's Train
+  </div>
+
+  <div class="train-status-row">
+    <span class="ecu">ECU 50M</span>
+    <span class="phase-badge" style="background: #ff880022; border: 1px solid #ff8800; color: #ff8800;">
+      &#x1F528; Initial Building
+    </span>
+  </div>
+
+  <div class="train-content">
+    <div class="train-info-col">
+      <div class="train-stat"><span>Type:</span><strong>Heavy Freight</strong></div>
+      <div class="train-stat"><span>Speed:</span><strong>12mp</strong></div>
+      <div class="train-stat"><span>Location:</span><strong>—</strong></div>
+    </div>
+    <div class="train-loads-col">
+      <div class="train-loads-header">Cargo (0/3):</div>
+      <div class="load-item empty-slot">— empty —</div>
+      <div class="load-item empty-slot">— empty —</div>
+      <div class="load-item empty-slot">— empty —</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- Scenario 4: NOT the player's turn (waiting)    -->
+<!-- ════════════════════════════════════════════════ -->
+<div class="scenario">
+  <h2>Not Your Turn — Waiting (Fast Freight)</h2>
+</div>
+<div class="train-status-card" style="border-color: #ff444440;">
+  <!-- SVG backdrop: Fast Freight (diesel) in Alice's red -->
+  <svg class="train-bg" width="340" height="70" viewBox="0 0 340 70" fill="#ff4444">
+    <g transform="translate(340,0) scale(-1,1)">
+      <path d="M2,50 L2,36 Q2,24 10,18 L30,14 L96,12 Q102,12 102,16 L102,50 Z"/>
+      <path d="M2,36 Q2,26 10,20 L18,16 L18,32 Q18,38 10,40 Z" fill-opacity="0.25"/>
+      <path d="M6,34 Q8,24 16,20 L20,18 L20,30 Z" fill-opacity="0.2"/>
+      <rect x="28" y="10" width="72" height="4" rx="2" fill-opacity="0.5"/>
+      <rect x="60" y="8" width="8" height="4" rx="2" fill-opacity="0.5"/>
+      <line x1="18" y1="28" x2="102" y2="28" stroke="#ff4444" stroke-width="0.6" opacity="0.15"/>
+      <line x1="10" y1="40" x2="102" y2="40" stroke="#ff4444" stroke-width="0.6" opacity="0.15"/>
+      <rect x="36" y="20" width="12" height="6" rx="1" fill-opacity="0.15"/>
+      <rect x="54" y="20" width="12" height="6" rx="1" fill-opacity="0.15"/>
+      <rect x="72" y="20" width="12" height="6" rx="1" fill-opacity="0.15"/>
+      <rect x="3" y="30" width="3" height="3" rx="1" fill-opacity="0.5"/>
+      <rect x="3" y="42" width="3" height="2" rx="1" fill-opacity="0.35"/>
+      <rect x="2" y="48" width="100" height="3" fill-opacity="0.4"/>
+      <rect x="24" y="51" width="54" height="5" rx="2" fill-opacity="0.4"/>
+      <rect x="10" y="55" width="24" height="4" rx="1" fill-opacity="0.4"/>
+      <circle cx="16" cy="62" r="5"/><circle cx="16" cy="62" r="3" fill-opacity="0.3"/>
+      <circle cx="30" cy="62" r="5"/><circle cx="30" cy="62" r="3" fill-opacity="0.3"/>
+      <rect x="68" y="55" width="24" height="4" rx="1" fill-opacity="0.4"/>
+      <circle cx="74" cy="62" r="5"/><circle cx="74" cy="62" r="3" fill-opacity="0.3"/>
+      <circle cx="88" cy="62" r="5"/><circle cx="88" cy="62" r="3" fill-opacity="0.3"/>
+      <rect x="104" y="46" width="6" height="3" rx="1" fill-opacity="0.5"/>
+      <rect x="110" y="16" width="58" height="36" rx="2"/>
+      <path d="M112,16 Q139,10 166,16" fill-opacity="0.3"/>
+      <line x1="130" y1="16" x2="130" y2="52" stroke="#ff4444" stroke-width="0.4" opacity="0.15"/>
+      <line x1="148" y1="16" x2="148" y2="52" stroke="#ff4444" stroke-width="0.4" opacity="0.15"/>
+      <line x1="110" y1="40" x2="168" y2="40" stroke="#ff4444" stroke-width="0.7" opacity="0.15"/>
+      <rect x="132" y="22" width="14" height="28" fill-opacity="0.15"/>
+      <rect x="110" y="50" width="58" height="3" fill-opacity="0.4"/>
+      <rect x="114" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="120" cy="62" r="4.5"/><circle cx="120" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="130" cy="62" r="4.5"/><circle cx="130" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="144" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="150" cy="62" r="4.5"/><circle cx="150" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="160" cy="62" r="4.5"/><circle cx="160" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="170" y="46" width="6" height="3" rx="1" fill-opacity="0.5"/>
+      <ellipse cx="208" cy="34" rx="28" ry="14"/>
+      <rect x="181" y="44" width="54" height="8" rx="2" fill-opacity="0.45"/>
+      <rect x="192" y="21" width="1.5" height="26" fill-opacity="0.15"/>
+      <rect x="208" y="20" width="1.5" height="28" fill-opacity="0.15"/>
+      <rect x="222" y="21" width="1.5" height="26" fill-opacity="0.15"/>
+      <ellipse cx="208" cy="21" rx="5" ry="2.5" fill-opacity="0.5"/>
+      <rect x="188" y="19" width="40" height="1" fill-opacity="0.2"/>
+      <rect x="181" y="52" width="54" height="2" fill-opacity="0.35"/>
+      <rect x="186" y="54" width="18" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="192" cy="62" r="4.5"/><circle cx="192" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="200" cy="62" r="4.5"/><circle cx="200" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="214" y="54" width="18" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="220" cy="62" r="4.5"/><circle cx="220" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="228" cy="62" r="4.5"/><circle cx="228" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="236" y="46" width="6" height="3" rx="1" fill-opacity="0.5"/>
+      <rect x="242" y="16" width="58" height="36" rx="2"/>
+      <path d="M244,16 Q271,10 298,16" fill-opacity="0.3"/>
+      <line x1="262" y1="16" x2="262" y2="52" stroke="#ff4444" stroke-width="0.4" opacity="0.15"/>
+      <line x1="280" y1="16" x2="280" y2="52" stroke="#ff4444" stroke-width="0.4" opacity="0.15"/>
+      <line x1="242" y1="40" x2="300" y2="40" stroke="#ff4444" stroke-width="0.7" opacity="0.15"/>
+      <rect x="264" y="22" width="14" height="28" fill-opacity="0.15"/>
+      <rect x="242" y="50" width="58" height="3" fill-opacity="0.4"/>
+      <rect x="246" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="252" cy="62" r="4.5"/><circle cx="252" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="262" cy="62" r="4.5"/><circle cx="262" cy="62" r="2.5" fill-opacity="0.3"/>
+      <rect x="276" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
+      <circle cx="282" cy="62" r="4.5"/><circle cx="282" cy="62" r="2.5" fill-opacity="0.3"/>
+      <circle cx="292" cy="62" r="4.5"/><circle cx="292" cy="62" r="2.5" fill-opacity="0.3"/>
+    </g>
+  </svg>
+
+  <div class="train-header" style="color: #ff4444; border-bottom-color: #ff444440;">
+    Alice's Train
+  </div>
+
+  <div class="train-status-row">
+    <span class="ecu">ECU 45M</span>
+    <span class="waiting">Waiting for <span style="color: #4a9eff; font-style: normal; font-weight: bold;">Bob</span> to finish</span>
+  </div>
+
+  <div class="train-content">
+    <div class="train-info-col">
+      <div class="train-stat"><span>Type:</span><strong>Fast Freight</strong></div>
+      <div class="train-stat"><span>Speed:</span><strong>12mp</strong></div>
+      <div class="train-stat"><span>Location:</span><strong>Paris</strong></div>
+    </div>
+    <div class="train-loads-col">
+      <div class="train-loads-header">Cargo (1/3):</div>
+      <div class="load-item"><span>&#x26CF;</span> Coal</div>
+      <div class="load-item empty-slot">— empty —</div>
+      <div class="load-item empty-slot">— empty —</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- Scenario 5: Waiting, different active player color -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="scenario">
+  <h2>Not Your Turn — Different Active Player Color (Freight)</h2>
+</div>
+<div class="train-status-card" style="border-color: #4a9e4a40;">
+  <!-- SVG backdrop: Freight (steam) in Charlie's green -->
+  <svg class="train-bg" width="340" height="70" viewBox="0 0 340 70" fill="#4a9e4a">
+    <g transform="translate(340,0) scale(-1,1)">
+      <path d="M55,54 L60,54 L60,46 L57,46 Z" fill-opacity="0.5"/>
+      <rect x="60" y="32" width="40" height="22" rx="1"/>
+      <ellipse cx="80" cy="32" rx="20" ry="4"/>
+      <rect x="58" y="30" width="7" height="24" rx="1" fill-opacity="0.8"/>
+      <rect x="63" y="18" width="5" height="14"/>
+      <rect x="61" y="16" width="9" height="3" rx="1"/>
+      <ellipse cx="80" cy="28" rx="4" ry="3"/>
+      <ellipse cx="92" cy="29" rx="3" ry="2.5" fill-opacity="0.8"/>
+      <rect x="100" y="26" width="18" height="28" rx="1"/>
+      <rect x="103" y="30" width="5" height="7" fill-opacity="0.3"/>
+      <rect x="111" y="30" width="5" height="7" fill-opacity="0.3"/>
+      <rect x="98" y="24" width="22" height="3" rx="1" fill-opacity="0.7"/>
+      <rect x="60" y="52" width="40" height="1.5" fill-opacity="0.5"/>
+      <circle cx="65" cy="60" r="4"/><circle cx="65" cy="60" r="2.5" fill-opacity="0.3"/>
+      <circle cx="80" cy="60" r="6.5"/><circle cx="80" cy="60" r="4" fill-opacity="0.3"/>
+      <circle cx="94" cy="60" r="6.5"/><circle cx="94" cy="60" r="4" fill-opacity="0.3"/>
+      <circle cx="113" cy="60" r="4"/><circle cx="113" cy="60" r="2.5" fill-opacity="0.3"/>
+      <rect x="76" y="58" width="22" height="1.5" rx="1" fill-opacity="0.4"/>
+      <rect x="120" y="48" width="4" height="4" rx="1" fill-opacity="0.5"/>
+      <rect x="124" y="32" width="24" height="22" rx="1"/>
+      <path d="M126,32 L146,32 L146,37 L126,37 Z" fill-opacity="0.3"/>
+      <circle cx="132" cy="60" r="4"/><circle cx="132" cy="60" r="2.5" fill-opacity="0.3"/>
+      <circle cx="142" cy="60" r="4"/><circle cx="142" cy="60" r="2.5" fill-opacity="0.3"/>
+      <rect x="149" y="48" width="6" height="2.5" rx="1" fill-opacity="0.4"/>
+      <rect x="156" y="30" width="42" height="24" rx="1"/>
+      <rect x="170" y="32" width="14" height="20" fill-opacity="0.25"/>
+      <line x1="177" y1="32" x2="177" y2="52" stroke="#4a9e4a" stroke-width="0.6" opacity="0.4"/>
+      <line x1="166" y1="30" x2="166" y2="54" stroke="#4a9e4a" stroke-width="0.4" opacity="0.2"/>
+      <line x1="190" y1="30" x2="190" y2="54" stroke="#4a9e4a" stroke-width="0.4" opacity="0.2"/>
+      <rect x="157" y="28" width="40" height="2.5" rx="1" fill-opacity="0.6"/>
+      <rect x="156" y="54" width="42" height="2" fill-opacity="0.5"/>
+      <circle cx="167" cy="61" r="3.5"/><circle cx="167" cy="61" r="2" fill-opacity="0.3"/>
+      <circle cx="187" cy="61" r="3.5"/><circle cx="187" cy="61" r="2" fill-opacity="0.3"/>
+      <rect x="199" y="48" width="6" height="2.5" rx="1" fill-opacity="0.4"/>
+      <rect x="206" y="38" width="42" height="16" rx="1"/>
+      <path d="M208,38 L208,34 L246,34 L246,38" fill-opacity="0.5"/>
+      <rect x="216" y="34" width="1.5" height="20" fill-opacity="0.2"/>
+      <rect x="227" y="34" width="1.5" height="20" fill-opacity="0.2"/>
+      <rect x="238" y="34" width="1.5" height="20" fill-opacity="0.2"/>
+      <rect x="206" y="54" width="42" height="2" fill-opacity="0.5"/>
+      <circle cx="217" cy="61" r="3.5"/><circle cx="217" cy="61" r="2" fill-opacity="0.3"/>
+      <circle cx="237" cy="61" r="3.5"/><circle cx="237" cy="61" r="2" fill-opacity="0.3"/>
+      <rect x="249" y="48" width="6" height="2.5" rx="1" fill-opacity="0.4"/>
+      <rect x="256" y="30" width="30" height="24" rx="1"/>
+      <rect x="254" y="22" width="34" height="10" rx="1" fill-opacity="0.7"/>
+      <rect x="262" y="24" width="5" height="5" fill-opacity="0.3"/>
+      <rect x="275" y="24" width="5" height="5" fill-opacity="0.3"/>
+      <rect x="259" y="36" width="5" height="6" fill-opacity="0.3"/>
+      <rect x="268" y="36" width="5" height="6" fill-opacity="0.3"/>
+      <rect x="277" y="36" width="5" height="6" fill-opacity="0.3"/>
+      <rect x="256" y="54" width="30" height="2" fill-opacity="0.5"/>
+      <rect x="284" y="34" width="3" height="20" fill-opacity="0.4"/>
+      <circle cx="265" cy="61" r="3.5"/><circle cx="265" cy="61" r="2" fill-opacity="0.3"/>
+      <circle cx="279" cy="61" r="3.5"/><circle cx="279" cy="61" r="2" fill-opacity="0.3"/>
+    </g>
+  </svg>
+
+  <div class="train-header" style="color: #4a9e4a; border-bottom-color: #4a9e4a40;">
+    Charlie's Train
+  </div>
+
+  <div class="train-status-row">
+    <span class="ecu">ECU 50M</span>
+    <span class="waiting">Waiting for <span style="color: #ff4444; font-style: normal; font-weight: bold;">Alice</span> to finish</span>
+  </div>
+
+  <div class="train-content">
+    <div class="train-info-col">
+      <div class="train-stat"><span>Type:</span><strong>Freight</strong></div>
+      <div class="train-stat"><span>Speed:</span><strong>9mp</strong></div>
+      <div class="train-stat"><span>Location:</span><strong>Berlin</strong></div>
+    </div>
+    <div class="train-loads-col">
+      <div class="train-loads-header">Cargo (0/2):</div>
+      <div class="load-item empty-slot">— empty —</div>
+      <div class="load-item empty-slot">— empty —</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

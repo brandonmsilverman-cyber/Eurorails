@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Event Zone Visualization Mockup</title>
+<style>
+    body {
+        margin: 0;
+        background: #1a1a2e;
+        color: #ccc;
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    h2 { color: #fff; margin: 16px 0 4px; }
+    p { margin: 4px 0 12px; font-size: 13px; color: #999; }
+    .row {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
+    .panel {
+        text-align: center;
+    }
+    .panel h3 {
+        color: #ddd;
+        font-size: 14px;
+        margin: 0 0 6px;
+    }
+    .panel .subtitle {
+        color: #888;
+        font-size: 11px;
+        margin-bottom: 4px;
+    }
+    canvas {
+        border: 1px solid #333;
+        border-radius: 4px;
+    }
+</style>
+</head>
+<body>
+
+<h2>Event Zone Overlay Mockup</h2>
+<p>How active event zones would appear on the game map canvas</p>
+
+<div class="row">
+    <div class="panel">
+        <h3>Snow! Torino (radius 6)</h3>
+        <div class="subtitle">Blue/white tint — mountain mileposts highlighted</div>
+        <canvas id="snow" width="400" height="400"></canvas>
+    </div>
+    <div class="panel">
+        <h3>Fog! Frankfurt (radius 4)</h3>
+        <div class="subtitle">Gray muted overlay</div>
+        <canvas id="fog" width="400" height="400"></canvas>
+    </div>
+</div>
+
+<div class="row">
+    <div class="panel">
+        <h3>Gale! North Sea & English Channel (radius 6)</h3>
+        <div class="subtitle">Teal/storm overlay — two overlapping zones</div>
+        <canvas id="gale" width="400" height="400"></canvas>
+    </div>
+    <div class="panel">
+        <h3>Strike 123 — Rail Closure</h3>
+        <div class="subtitle">Drawing player's track dimmed/dashed</div>
+        <canvas id="strike123" width="400" height="400"></canvas>
+    </div>
+</div>
+
+<div class="row">
+    <div class="panel">
+        <h3>Strike 121 — Coast Restriction</h3>
+        <div class="subtitle">Cities >3 mileposts from coast blocked (red tint on blocked cities)</div>
+        <canvas id="strike121" width="400" height="400"></canvas>
+    </div>
+    <div class="panel">
+        <h3>Strike 122 — Coastal Blockade</h3>
+        <div class="subtitle">Cities ≤2 mileposts from coast blocked (red tint on blocked cities)</div>
+        <canvas id="strike122" width="400" height="400"></canvas>
+    </div>
+</div>
+
+<script>
+// Shared drawing helpers
+function drawBaseTerrain(ctx, w, h) {
+    // Ocean background
+    const grad = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w*0.7);
+    grad.addColorStop(0, "#3a7fc1");
+    grad.addColorStop(0.6, "#2c6faa");
+    grad.addColorStop(1, "#0e3560");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Landmass
+    ctx.fillStyle = "#9cc09c";
+    ctx.strokeStyle = "#5a8a5a";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(40, 60);
+    ctx.lineTo(80, 30);
+    ctx.lineTo(180, 20);
+    ctx.lineTo(300, 40);
+    ctx.lineTo(370, 80);
+    ctx.lineTo(380, 200);
+    ctx.lineTo(360, 300);
+    ctx.lineTo(280, 360);
+    ctx.lineTo(180, 380);
+    ctx.lineTo(80, 350);
+    ctx.lineTo(30, 280);
+    ctx.lineTo(20, 160);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+}
+
+function drawMileposts(ctx, mileposts) {
+    for (const mp of mileposts) {
+        ctx.beginPath();
+        if (mp.terrain === "alpine") {
+            // Triangle
+            ctx.moveTo(mp.x, mp.y - 4);
+            ctx.lineTo(mp.x - 3, mp.y + 3);
+            ctx.lineTo(mp.x + 3, mp.y + 3);
+            ctx.closePath();
+            ctx.fillStyle = "rgba(210, 210, 235, 0.85)";
+            ctx.fill();
+            ctx.strokeStyle = "rgba(80, 80, 110, 0.8)";
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+        } else if (mp.terrain === "mountain") {
+            ctx.moveTo(mp.x, mp.y - 4);
+            ctx.lineTo(mp.x - 3, mp.y + 3);
+            ctx.lineTo(mp.x + 3, mp.y + 3);
+            ctx.closePath();
+            ctx.fillStyle = "rgba(70, 50, 30, 0.8)";
+            ctx.fill();
+        } else {
+            ctx.arc(mp.x, mp.y, 2, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(60, 60, 60, 0.45)";
+            ctx.fill();
+        }
+    }
+}
+
+function drawCity(ctx, x, y, name, type) {
+    const colors = { major: "#dd2222", medium: "#3355cc", small: "#339933" };
+    const sizes = { major: 6, medium: 4, small: 3 };
+    ctx.beginPath();
+    ctx.arc(x, y, sizes[type], 0, Math.PI * 2);
+    ctx.fillStyle = colors[type];
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = type === "major" ? "bold 10px Arial" : "8px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(name, x, y - sizes[type] - 4);
+}
+
+function drawTrack(ctx, segments, color, lineWidth) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth || 2;
+    for (const seg of segments) {
+        ctx.beginPath();
+        ctx.moveTo(seg[0], seg[1]);
+        ctx.lineTo(seg[2], seg[3]);
+        ctx.stroke();
+    }
+}
+
+// Generate some fake mileposts in a grid pattern on land
+function generateMileposts(cx, cy, radius) {
+    const mps = [];
+    for (let y = 50; y < 380; y += 18) {
+        const odd = Math.floor((y - 50) / 18) % 2;
+        for (let x = 50 + odd * 9; x < 370; x += 18) {
+            const dx = x - 200, dy = y - 200;
+            if (dx*dx + dy*dy > 170*170) continue; // rough land check
+            const distToCenter = Math.hypot(x - cx, y - cy);
+            let terrain = "clear";
+            if (distToCenter < radius * 0.4) terrain = "alpine";
+            else if (distToCenter < radius * 0.65) terrain = "mountain";
+            mps.push({ x, y, terrain, distToCenter });
+        }
+    }
+    return mps;
+}
+
+// ---- SNOW MOCKUP ----
+(function() {
+    const canvas = document.getElementById("snow");
+    const ctx = canvas.getContext("2d");
+    const w = 400, h = 400;
+    const cx = 200, cy = 180; // "Torino"
+    const zoneRadius = 130; // visual radius for 6 mileposts
+
+    drawBaseTerrain(ctx, w, h);
+    const mps = generateMileposts(cx, cy, zoneRadius);
+    drawMileposts(ctx, mps);
+
+    // Zone circle — blue/white translucent
+    const zoneGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, zoneRadius);
+    zoneGrad.addColorStop(0, "rgba(150, 200, 255, 0.40)");
+    zoneGrad.addColorStop(0.7, "rgba(150, 200, 255, 0.28)");
+    zoneGrad.addColorStop(1, "rgba(150, 200, 255, 0)");
+    ctx.fillStyle = zoneGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, zoneRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Zone border — dashed circle with glow
+    ctx.shadowColor = "rgba(150, 200, 255, 0.6)";
+    ctx.shadowBlur = 6;
+    ctx.setLineDash([8, 4]);
+    ctx.strokeStyle = "rgba(180, 220, 255, 0.85)";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, zoneRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+
+    // Highlight blocked mountain/alpine mileposts inside zone with red-ish X
+    for (const mp of mps) {
+        if (mp.distToCenter <= zoneRadius && (mp.terrain === "mountain" || mp.terrain === "alpine")) {
+            ctx.strokeStyle = "rgba(255, 80, 80, 0.6)";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(mp.x - 4, mp.y - 4);
+            ctx.lineTo(mp.x + 4, mp.y + 4);
+            ctx.moveTo(mp.x + 4, mp.y - 4);
+            ctx.lineTo(mp.x - 4, mp.y + 4);
+            ctx.stroke();
+        }
+    }
+
+    // Zone label with background
+    ctx.font = "bold 11px Arial";
+    ctx.textAlign = "center";
+    const snowLabel = "SNOW ZONE";
+    const snowLabelW = ctx.measureText(snowLabel).width + 12;
+    const snowLabelY = cy - zoneRadius - 12;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.beginPath();
+    ctx.roundRect(cx - snowLabelW/2, snowLabelY - 10, snowLabelW, 16, 3);
+    ctx.fill();
+    ctx.fillStyle = "#b8e0ff";
+    ctx.fillText(snowLabel, cx, snowLabelY);
+    ctx.font = "9px Arial";
+    ctx.fillStyle = "rgba(255, 150, 150, 0.9)";
+    ctx.fillText("✕ = blocked (mountain/alpine)", cx, cy + zoneRadius + 14);
+
+    // Fake tracks
+    drawTrack(ctx, [[120,100,200,180],[200,180,280,160],[200,180,220,260]], "#ff0000", 2);
+    drawTrack(ctx, [[100,250,200,180],[200,180,300,220]], "#0066ff", 2);
+
+    drawCity(ctx, cx, cy, "Torino", "medium");
+    drawCity(ctx, 120, 100, "Lyon", "small");
+    drawCity(ctx, 300, 220, "Venezia", "small");
+    drawCity(ctx, 280, 160, "Milano", "major");
+})();
+
+// ---- FOG MOCKUP ----
+(function() {
+    const canvas = document.getElementById("fog");
+    const ctx = canvas.getContext("2d");
+    const w = 400, h = 400;
+    const cx = 200, cy = 190;
+    const zoneRadius = 95;
+
+    drawBaseTerrain(ctx, w, h);
+    const mps = generateMileposts(cx, cy, 200);
+    drawMileposts(ctx, mps);
+
+    // Zone circle — gray translucent
+    const zoneGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, zoneRadius);
+    zoneGrad.addColorStop(0, "rgba(180, 180, 180, 0.38)");
+    zoneGrad.addColorStop(0.7, "rgba(160, 160, 160, 0.25)");
+    zoneGrad.addColorStop(1, "rgba(160, 160, 160, 0)");
+    ctx.fillStyle = zoneGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, zoneRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Zone border with glow
+    ctx.shadowColor = "rgba(200, 200, 200, 0.5)";
+    ctx.shadowBlur = 6;
+    ctx.setLineDash([8, 4]);
+    ctx.strokeStyle = "rgba(220, 220, 220, 0.8)";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, zoneRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+
+    // Zone label with background
+    ctx.font = "bold 11px Arial";
+    ctx.textAlign = "center";
+    const fogLabel = "FOG ZONE";
+    const fogLabelW = ctx.measureText(fogLabel).width + 12;
+    const fogLabelY = cy - zoneRadius - 12;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.beginPath();
+    ctx.roundRect(cx - fogLabelW/2, fogLabelY - 10, fogLabelW, 16, 3);
+    ctx.fill();
+    ctx.fillStyle = "#e0e0e0";
+    ctx.fillText(fogLabel, cx, fogLabelY);
+    ctx.font = "9px Arial";
+    ctx.fillText("Half speed · No building", cx, cy + zoneRadius + 14);
+
+    drawTrack(ctx, [[120,130,200,190],[200,190,300,170],[200,190,180,290]], "#00cc00", 2);
+    drawCity(ctx, cx, cy, "Frankfurt", "medium");
+    drawCity(ctx, 120, 130, "Köln", "small");
+    drawCity(ctx, 300, 170, "Leipzig", "small");
+})();
+
+// ---- GALE MOCKUP ----
+(function() {
+    const canvas = document.getElementById("gale");
+    const ctx = canvas.getContext("2d");
+    const w = 400, h = 400;
+
+    drawBaseTerrain(ctx, w, h);
+    const mps = generateMileposts(200, 200, 300);
+    drawMileposts(ctx, mps);
+
+    // Two overlapping sea-area zones
+    const zones = [
+        { cx: 160, cy: 80, label: "North Sea" },
+        { cx: 120, cy: 200, label: "English Channel" }
+    ];
+    const zoneRadius = 130;
+
+    // Draw fills for both zones
+    for (const zone of zones) {
+        const zoneGrad = ctx.createRadialGradient(zone.cx, zone.cy, 0, zone.cx, zone.cy, zoneRadius);
+        zoneGrad.addColorStop(0, "rgba(80, 200, 200, 0.38)");
+        zoneGrad.addColorStop(0.7, "rgba(80, 200, 200, 0.25)");
+        zoneGrad.addColorStop(1, "rgba(80, 200, 200, 0)");
+        ctx.fillStyle = zoneGrad;
+        ctx.beginPath();
+        ctx.arc(zone.cx, zone.cy, zoneRadius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Draw borders, clipping each circle's border to outside the other circle
+    for (let i = 0; i < zones.length; i++) {
+        const zone = zones[i];
+        const other = zones[1 - i];
+
+        ctx.save();
+        // Clip to everything outside the other circle (rect with hole)
+        ctx.beginPath();
+        ctx.rect(0, 0, w, h);
+        ctx.arc(other.cx, other.cy, zoneRadius, 0, Math.PI * 2, true);
+        ctx.clip("evenodd");
+
+        ctx.shadowColor = "rgba(80, 220, 220, 0.5)";
+        ctx.shadowBlur = 6;
+        ctx.setLineDash([8, 4]);
+        ctx.strokeStyle = "rgba(100, 230, 230, 0.85)";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(zone.cx, zone.cy, zoneRadius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+
+        ctx.restore();
+    }
+
+    for (const zone of zones) {
+
+        ctx.font = "bold 10px Arial";
+        ctx.textAlign = "center";
+        const galeLabelW = ctx.measureText(zone.label).width + 12;
+        const galeLabelY = zone.cy - zoneRadius - 10;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.beginPath();
+        ctx.roundRect(zone.cx - galeLabelW/2, galeLabelY - 10, galeLabelW, 16, 3);
+        ctx.fill();
+        ctx.fillStyle = "#90eeee";
+        ctx.fillText(zone.label, zone.cx, galeLabelY);
+    }
+
+    ctx.font = "bold 11px Arial";
+    ctx.textAlign = "center";
+    const galeSummaryLabel = "GALE ZONE";
+    const galeSummaryW = ctx.measureText(galeSummaryLabel).width + 12;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.beginPath();
+    ctx.roundRect(140 - galeSummaryW/2, 310, galeSummaryW, 16, 3);
+    ctx.fill();
+    ctx.fillStyle = "#90eeee";
+    ctx.fillText(galeSummaryLabel, 140, 322);
+    ctx.font = "9px Arial";
+    ctx.fillText("Half speed · No building · No ferries", 140, 334);
+
+    // Ferry route (dashed, blocked)
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = "rgba(255, 100, 100, 0.6)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(80, 140);
+    ctx.lineTo(40, 100);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(255, 100, 100, 0.8)";
+    ctx.font = "9px Arial";
+    ctx.fillText("✕ Ferry blocked", 60, 90);
+
+    drawTrack(ctx, [[200,120,280,160],[280,160,320,240]], "#ff0000", 2);
+    drawCity(ctx, 200, 120, "Edinburgh", "medium");
+    drawCity(ctx, 280, 160, "London", "major");
+    drawCity(ctx, 320, 240, "Dover", "small");
+})();
+
+// ---- STRIKE 123 MOCKUP ----
+(function() {
+    const canvas = document.getElementById("strike123");
+    const ctx = canvas.getContext("2d");
+    const w = 400, h = 400;
+
+    drawBaseTerrain(ctx, w, h);
+    const mps = generateMileposts(200, 200, 300);
+    drawMileposts(ctx, mps);
+
+    // Normal player tracks
+    drawTrack(ctx, [[80,120,160,160],[160,160,240,140],[240,140,320,180]], "#0066ff", 2.5);
+    drawTrack(ctx, [[100,280,180,240],[180,240,260,260],[260,260,340,240]], "#00cc00", 2.5);
+
+    // Struck player's track — dimmed and dashed
+    ctx.setLineDash([6, 5]);
+    ctx.globalAlpha = 0.35;
+    drawTrack(ctx, [[120,180,200,200],[200,200,300,200],[200,200,180,300]], "#ff0000", 2.5);
+    ctx.globalAlpha = 1.0;
+    ctx.setLineDash([]);
+
+    // Struck track label
+    ctx.fillStyle = "rgba(255, 100, 100, 0.8)";
+    ctx.font = "bold 10px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("✕ STRUCK — No movement", 240, 215);
+    ctx.font = "9px Arial";
+    ctx.fillStyle = "rgba(255, 150, 150, 0.7)";
+    ctx.fillText("Red's rail lines closed", 240, 230);
+
+    drawCity(ctx, 160, 160, "Paris", "major");
+    drawCity(ctx, 320, 180, "Berlin", "major");
+    drawCity(ctx, 200, 200, "Strasbourg", "small");
+    drawCity(ctx, 260, 260, "München", "medium");
+})();
+
+// ---- STRIKE 121 MOCKUP ----
+(function() {
+    const canvas = document.getElementById("strike121");
+    const ctx = canvas.getContext("2d");
+    const w = 400, h = 400;
+
+    drawBaseTerrain(ctx, w, h);
+    const mps = generateMileposts(200, 200, 300);
+    drawMileposts(ctx, mps);
+
+    drawTrack(ctx, [[80,150,160,180],[160,180,250,170],[250,170,330,200]], "#ff0000", 2);
+
+    // Coastal cities (OK)
+    drawCity(ctx, 80, 150, "Lisboa", "medium");
+    drawCity(ctx, 60, 250, "Porto", "small");
+    drawCity(ctx, 330, 200, "Napoli", "small");
+
+    // Inland cities (blocked — >3 from coast)
+    const blockedCities = [
+        { x: 200, y: 200, name: "Madrid", type: "major" },
+        { x: 250, y: 170, name: "Zaragoza", type: "small" },
+        { x: 190, y: 280, name: "Córdoba", type: "small" }
+    ];
+
+    for (const city of blockedCities) {
+        drawCity(ctx, city.x, city.y, city.name, city.type);
+        // Red overlay ring
+        ctx.beginPath();
+        ctx.arc(city.x, city.y, 10, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255, 60, 60, 0.7)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // X mark
+        ctx.strokeStyle = "rgba(255, 60, 60, 0.6)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(city.x - 6, city.y - 6);
+        ctx.lineTo(city.x + 6, city.y + 6);
+        ctx.moveTo(city.x + 6, city.y - 6);
+        ctx.lineTo(city.x - 6, city.y + 6);
+        ctx.stroke();
+    }
+
+    ctx.fillStyle = "rgba(255, 150, 150, 0.9)";
+    ctx.font = "bold 10px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("✕ = Blocked (>3 from coast)", 200, 380);
+    ctx.font = "9px Arial";
+    ctx.fillStyle = "rgba(150, 255, 150, 0.8)";
+    ctx.fillText("Coastal cities OK", 200, 365);
+})();
+
+// ---- STRIKE 122 MOCKUP ----
+(function() {
+    const canvas = document.getElementById("strike122");
+    const ctx = canvas.getContext("2d");
+    const w = 400, h = 400;
+
+    drawBaseTerrain(ctx, w, h);
+    const mps = generateMileposts(200, 200, 300);
+    drawMileposts(ctx, mps);
+
+    drawTrack(ctx, [[80,150,160,180],[160,180,250,170],[250,170,330,200]], "#0066ff", 2);
+
+    // Coastal cities (blocked — ≤2 from coast)
+    const blockedCities = [
+        { x: 80, y: 150, name: "Lisboa", type: "medium" },
+        { x: 60, y: 250, name: "Porto", type: "small" },
+        { x: 330, y: 200, name: "Napoli", type: "small" }
+    ];
+
+    for (const city of blockedCities) {
+        drawCity(ctx, city.x, city.y, city.name, city.type);
+        ctx.beginPath();
+        ctx.arc(city.x, city.y, 10, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255, 60, 60, 0.7)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(255, 60, 60, 0.6)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(city.x - 6, city.y - 6);
+        ctx.lineTo(city.x + 6, city.y + 6);
+        ctx.moveTo(city.x + 6, city.y - 6);
+        ctx.lineTo(city.x - 6, city.y + 6);
+        ctx.stroke();
+    }
+
+    // Inland cities (OK)
+    drawCity(ctx, 200, 200, "Madrid", "major");
+    drawCity(ctx, 250, 170, "Zaragoza", "small");
+
+    ctx.fillStyle = "rgba(255, 150, 150, 0.9)";
+    ctx.font = "bold 10px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("✕ = Blocked (≤2 from coast)", 200, 380);
+    ctx.font = "9px Arial";
+    ctx.fillStyle = "rgba(150, 255, 150, 0.8)";
+    ctx.fillText("Inland cities OK", 200, 365);
+})();
+</script>
+</body>
+</html>

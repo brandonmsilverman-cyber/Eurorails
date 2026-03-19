@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Event Zone Hex Border Mockup</title>
+<style>
+    body {
+        margin: 0;
+        background: #1a1a2e;
+        color: #ccc;
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    h2 { color: #fff; margin: 16px 0 4px; }
+    p { margin: 4px 0 12px; font-size: 13px; color: #999; }
+    .row {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
+    .panel { text-align: center; }
+    .panel h3 { color: #ddd; font-size: 14px; margin: 0 0 6px; }
+    .panel .subtitle { color: #888; font-size: 11px; margin-bottom: 4px; }
+    canvas { border: 1px solid #333; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<h2>Hex Border vs Circle Border Comparison</h2>
+<p>Snow! Torino (radius 6) — same event, two visual styles</p>
+
+<div class="row">
+    <div class="panel">
+        <h3>Circle Border (current)</h3>
+        <div class="subtitle">Euclidean radius — clean but may not match hex gameplay</div>
+        <canvas id="circle" width="500" height="500"></canvas>
+    </div>
+    <div class="panel">
+        <h3>Hex Border (proposed)</h3>
+        <div class="subtitle">Convex hull of affected mileposts — matches actual gameplay</div>
+        <canvas id="hex" width="500" height="500"></canvas>
+    </div>
+</div>
+
+<script>
+// Real hex grid parameters from eurorails.html
+const CELL_SIZE = 1.0;
+const ROW_SPACING = Math.sqrt(3) / 2;
+
+// Generate hex mileposts matching the game's algorithm
+// We'll generate a subset around Torino for the mockup
+function generateRealHexGrid(centerX, centerY, viewRadius) {
+    const mileposts = [];
+    const byId = {};
+    let rowIndex = 0;
+
+    for (let y = 6; y < 69; y += ROW_SPACING) {
+        const isOddRow = rowIndex % 2 === 1;
+        const offsetX = isOddRow ? 0.5 : 0;
+        rowIndex++;
+
+        for (let x = 15 + offsetX; x < 63; x += CELL_SIZE) {
+            const rx = Math.round(x * 100) / 100;
+            const ry = Math.round(y * 100) / 100;
+
+            // Only generate mileposts near our view area
+            if (Math.abs(rx - centerX) > viewRadius + 2 || Math.abs(ry - centerY) > viewRadius + 2) continue;
+
+            const id = `${rx},${ry}`;
+            const mp = { id, x: rx, y: ry, neighbors: [], terrain: "clear" };
+            mileposts.push(mp);
+            byId[id] = mp;
+        }
+    }
+
+    // Build adjacency
+    for (const mp of mileposts) {
+        for (const other of mileposts) {
+            if (mp === other) continue;
+            const dist = Math.hypot(mp.x - other.x, mp.y - other.y);
+            if (dist < 1.2) {
+                mp.neighbors.push(other.id);
+            }
+        }
+    }
+
+    // Simple terrain assignment based on real alpine/mountain regions
+    const alpinePolygon = [[39,37], [45,35], [49,36], [53,36], [55,38], [53,41], [50,43], [48,44], [44,45], [41,44], [39,42], [39,37]];
+    const mountainPolygons = [
+        [[44,47], [47,49], [49,53], [51,57], [49,59], [47,55], [45,51], [44,47]],
+    ];
+
+    for (const mp of mileposts) {
+        if (pointInPolygon(mp.x, mp.y, alpinePolygon)) {
+            mp.terrain = "alpine";
+        } else {
+            for (const poly of mountainPolygons) {
+                if (pointInPolygon(mp.x, mp.y, poly)) {
+                    mp.terrain = "mountain";
+                    break;
+                }
+            }
+        }
+    }
+
+    return { mileposts, byId };
+}
+
+function pointInPolygon(x, y, polygon) {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i][0], yi = polygon[i][1];
+        const xj = polygon[j][0], yj = polygon[j][1];
+        if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
+// BFS from a milepost, returning all milepost IDs within N hex hops
+function getMilepostsInHexRange(byId, startId, radius) {
+    const result = new Set([startId]);
+    const queue = [startId];
+    const dist = { [startId]: 0 };
+
+    let head = 0;
+    while (head < queue.length) {
+        const id = queue[head++];
+        if (dist[id] >= radius) continue;
+        const mp = byId[id];
+        if (!mp) continue;
+        for (const nId of mp.neighbors) {
+            if (dist[nId] === undefined && byId[nId]) {
+                dist[nId] = dist[id] + 1;
+                result.add(nId);
+                queue.push(nId);
+            }
+        }
+    }
+    return result;
+}
+
+// Find nearest milepost to a world coordinate
+function findNearest(mileposts, wx, wy) {
+    let best = null, bestDist = Infinity;
+    for (const mp of mileposts) {
+        const d = Math.hypot(mp.x - wx, mp.y - wy);
+        if (d < bestDist) { bestDist = d; best = mp; }
+    }
+    return best;
+}
+
+// Compute convex hull of a set of points (Andrew's monotone chain)
+function convexHull(points) {
+    points = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    if (points.length <= 1) return points;
+
+    const cross = (O, A, B) => (A[0] - O[0]) * (B[1] - O[1]) - (A[1] - O[1]) * (B[0] - O[0]);
+
+    const lower = [];
+    for (const p of points) {
+        while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+        lower.push(p);
+    }
+
+    const upper = [];
+    for (let i = points.length - 1; i >= 0; i--) {
+        const p = points[i];
+        while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+        upper.push(p);
+    }
+
+    upper.pop();
+    lower.pop();
+    return lower.concat(upper);
+}
+
+// Expand a convex hull outward by a fixed amount (offset each edge outward)
+function expandHull(hull, amount) {
+    const expanded = [];
+    const n = hull.length;
+    for (let i = 0; i < n; i++) {
+        const prev = hull[(i - 1 + n) % n];
+        const curr = hull[i];
+        const next = hull[(i + 1) % n];
+
+        // Average of the two edge normals at this vertex
+        const dx1 = curr[0] - prev[0], dy1 = curr[1] - prev[1];
+        const dx2 = next[0] - curr[0], dy2 = next[1] - curr[1];
+
+        const len1 = Math.hypot(dx1, dy1);
+        const len2 = Math.hypot(dx2, dy2);
+
+        // Outward normals (for CCW winding, rotate edge direction 90 degrees CW)
+        const nx1 = dy1 / len1, ny1 = -dx1 / len1;
+        const nx2 = dy2 / len2, ny2 = -dx2 / len2;
+
+        const nx = (nx1 + nx2) / 2;
+        const ny = (ny1 + ny2) / 2;
+        const nlen = Math.hypot(nx, ny);
+
+        expanded.push([curr[0] + (nx / nlen) * amount, curr[1] + (ny / nlen) * amount]);
+    }
+    return expanded;
+}
+
+// Setup
+const TORINO = { x: 41, y: 44 };
+const SNOW_RADIUS = 6;
+const VIEW_RADIUS = 10;
+
+const { mileposts, byId } = generateRealHexGrid(TORINO.x, TORINO.y, VIEW_RADIUS);
+const torinoMp = findNearest(mileposts, TORINO.x, TORINO.y);
+
+// Get mileposts in snow zone
+const snowZone = getMilepostsInHexRange(byId, torinoMp.id, SNOW_RADIUS);
+
+// Drawing helpers
+function makeTransform(canvas, centerX, centerY, viewRadius) {
+    const w = canvas.width, h = canvas.height;
+    const padding = 40;
+    const scale = (Math.min(w, h) - padding * 2) / (viewRadius * 2);
+    const offX = w / 2 - centerX * scale;
+    const offY = h / 2 - centerY * scale;
+    return (x, y) => [x * scale + offX, y * scale + offY];
+}
+
+function drawBase(ctx, w, h, toScreen, mileposts, snowZone) {
+    // Ocean
+    const grad = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w*0.7);
+    grad.addColorStop(0, "#3a7fc1");
+    grad.addColorStop(0.6, "#2c6faa");
+    grad.addColorStop(1, "#0e3560");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Landmass background
+    ctx.fillStyle = "#9cc09c";
+    ctx.fillRect(20, 20, w - 40, h - 40);
+
+    // Mileposts
+    for (const mp of mileposts) {
+        const [sx, sy] = toScreen(mp.x, mp.y);
+        ctx.beginPath();
+        if (mp.terrain === "alpine") {
+            ctx.moveTo(sx, sy - 5);
+            ctx.lineTo(sx - 4, sy + 4);
+            ctx.lineTo(sx + 4, sy + 4);
+            ctx.closePath();
+            ctx.fillStyle = "rgba(210, 210, 235, 0.85)";
+            ctx.fill();
+            ctx.strokeStyle = "rgba(80, 80, 110, 0.8)";
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+        } else if (mp.terrain === "mountain") {
+            ctx.moveTo(sx, sy - 5);
+            ctx.lineTo(sx - 4, sy + 4);
+            ctx.lineTo(sx + 4, sy + 4);
+            ctx.closePath();
+            ctx.fillStyle = "rgba(70, 50, 30, 0.8)";
+            ctx.fill();
+        } else {
+            ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(60, 60, 60, 0.45)";
+            ctx.fill();
+        }
+    }
+
+    // Snow blocked X markers
+    for (const mp of mileposts) {
+        if (!snowZone.has(mp.id)) continue;
+        if (mp.terrain !== "mountain" && mp.terrain !== "alpine") continue;
+        const [sx, sy] = toScreen(mp.x, mp.y);
+        ctx.strokeStyle = "rgba(255, 80, 80, 0.7)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(sx - 4, sy - 4);
+        ctx.lineTo(sx + 4, sy + 4);
+        ctx.moveTo(sx + 4, sy - 4);
+        ctx.lineTo(sx - 4, sy + 4);
+        ctx.stroke();
+    }
+
+    // Torino city dot
+    const [tx, ty] = toScreen(torinoMp.x, torinoMp.y);
+    ctx.beginPath();
+    ctx.arc(tx, ty, 5, 0, Math.PI * 2);
+    ctx.fillStyle = "#3355cc";
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 11px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("Torino", tx, ty - 10);
+}
+
+// ---- CIRCLE VERSION ----
+(function() {
+    const canvas = document.getElementById("circle");
+    const ctx = canvas.getContext("2d");
+    const w = 500, h = 500;
+    const toScreen = makeTransform(canvas, TORINO.x, TORINO.y, VIEW_RADIUS);
+
+    drawBase(ctx, w, h, toScreen, mileposts, snowZone);
+
+    const [cx, cy] = toScreen(torinoMp.x, torinoMp.y);
+    const scale = (Math.min(w, h) - 80) / (VIEW_RADIUS * 2);
+    const screenRadius = SNOW_RADIUS * scale;
+
+    // Fill
+    const zoneGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, screenRadius);
+    zoneGrad.addColorStop(0, "rgba(150, 200, 255, 0.40)");
+    zoneGrad.addColorStop(0.7, "rgba(150, 200, 255, 0.28)");
+    zoneGrad.addColorStop(1, "rgba(150, 200, 255, 0)");
+    ctx.fillStyle = zoneGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, screenRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Border
+    ctx.shadowColor = "rgba(150, 200, 255, 0.6)";
+    ctx.shadowBlur = 6;
+    ctx.setLineDash([8, 4]);
+    ctx.strokeStyle = "rgba(180, 220, 255, 0.85)";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, screenRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+
+    // Label
+    ctx.font = "bold 11px Arial";
+    ctx.textAlign = "center";
+    const label = "SNOW ZONE";
+    const labelW = ctx.measureText(label).width + 12;
+    const labelY = cy - screenRadius - 14;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.beginPath();
+    ctx.roundRect(cx - labelW/2, labelY - 10, labelW, 16, 3);
+    ctx.fill();
+    ctx.fillStyle = "#b8e0ff";
+    ctx.fillText(label, cx, labelY);
+})();
+
+// ---- HEX VERSION ----
+(function() {
+    const canvas = document.getElementById("hex");
+    const ctx = canvas.getContext("2d");
+    const w = 500, h = 500;
+    const toScreen = makeTransform(canvas, TORINO.x, TORINO.y, VIEW_RADIUS);
+
+    drawBase(ctx, w, h, toScreen, mileposts, snowZone);
+
+    // Compute convex hull of zone mileposts in screen coords
+    const zonePoints = [];
+    for (const id of snowZone) {
+        const mp = byId[id];
+        if (mp) {
+            const [sx, sy] = toScreen(mp.x, mp.y);
+            zonePoints.push([sx, sy]);
+        }
+    }
+
+    const hull = convexHull(zonePoints);
+    // Expand hull slightly so border doesn't clip through edge mileposts
+    const expandedHull = expandHull(hull, 8);
+
+    // Fill with gradient approximation
+    const [cx, cy] = toScreen(torinoMp.x, torinoMp.y);
+
+    // Clip to hull shape for gradient fill
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(expandedHull[0][0], expandedHull[0][1]);
+    for (let i = 1; i < expandedHull.length; i++) {
+        ctx.lineTo(expandedHull[i][0], expandedHull[i][1]);
+    }
+    ctx.closePath();
+    ctx.clip();
+
+    // Radial gradient fill within the clipped hull
+    const maxDist = Math.max(...zonePoints.map(p => Math.hypot(p[0] - cx, p[1] - cy))) + 20;
+    const zoneGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxDist);
+    zoneGrad.addColorStop(0, "rgba(150, 200, 255, 0.40)");
+    zoneGrad.addColorStop(0.7, "rgba(150, 200, 255, 0.28)");
+    zoneGrad.addColorStop(1, "rgba(150, 200, 255, 0)");
+    ctx.fillStyle = zoneGrad;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+
+    // Hex border
+    ctx.shadowColor = "rgba(150, 200, 255, 0.6)";
+    ctx.shadowBlur = 6;
+    ctx.setLineDash([8, 4]);
+    ctx.strokeStyle = "rgba(180, 220, 255, 0.85)";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(expandedHull[0][0], expandedHull[0][1]);
+    for (let i = 1; i < expandedHull.length; i++) {
+        ctx.lineTo(expandedHull[i][0], expandedHull[i][1]);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+
+    // Label
+    ctx.font = "bold 11px Arial";
+    ctx.textAlign = "center";
+    const label = "SNOW ZONE";
+    const labelW = ctx.measureText(label).width + 12;
+    // Place label at top of hull
+    const topY = Math.min(...expandedHull.map(p => p[1]));
+    const labelY = topY - 14;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.beginPath();
+    ctx.roundRect(cx - labelW/2, labelY - 10, labelW, 16, 3);
+    ctx.fill();
+    ctx.fillStyle = "#b8e0ff";
+    ctx.fillText(label, cx, labelY);
+})();
+</script>
+</body>
+</html>

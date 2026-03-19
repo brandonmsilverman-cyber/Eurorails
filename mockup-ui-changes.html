@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>UI Mockup — Cash Display & Phase/Movement Indicators</title>
+<style>
+    body {
+        background: #1a1a1a;
+        color: #ccc;
+        font-family: Arial, sans-serif;
+        padding: 40px;
+        display: flex;
+        gap: 60px;
+        justify-content: center;
+    }
+    .column { width: 300px; }
+    .column h2 { color: #4a9eff; font-size: 14px; text-transform: uppercase; margin-bottom: 16px; }
+    .label { color: #888; font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; }
+
+    /* Shared base styles */
+    .player-info { margin-bottom: 8px; font-size: 13px; }
+    .player-info.active {
+        background: #444;
+        padding: 8px;
+        border-radius: 3px;
+        border-left: 3px solid #4a9eff;
+    }
+</style>
+</head>
+<body>
+
+<!-- ============ BEFORE ============ -->
+<div class="column">
+    <h2>Before (Current)</h2>
+
+    <!-- Player Cards -->
+    <div class="label">Active player card — Operate phase</div>
+    <div class="player-info active">
+        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <strong style="color:#ff0000;">Player 1</strong>
+            <span style="color:#4a9e4a; font-weight:bold; font-size:11px;">Operate</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:2px;">
+            <span>Cash: <span style="color:#4a9eff; font-weight:bold;">ECU 47M</span></span>
+            <span>Major Cities: <span style="color:#ff8800; font-weight:bold;">3/7</span></span>
+        </div>
+        <div style="font-size:11px; margin-bottom:2px;">
+            Movement: <span style="color:#ffff00; font-weight:bold;">6mp</span>
+        </div>
+    </div>
+
+    <div class="label" style="margin-top:16px;">Active player card — Build phase</div>
+    <div class="player-info active">
+        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <strong style="color:#ff0000;">Player 1</strong>
+            <span style="color:#4a7aff; font-weight:bold; font-size:11px;">Build</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:2px;">
+            <span>Cash: <span style="color:#4a9eff; font-weight:bold;">ECU 47M</span></span>
+            <span>Major Cities: <span style="color:#ff8800; font-weight:bold;">3/7</span></span>
+        </div>
+    </div>
+
+    <div class="label" style="margin-top:16px;">Inactive players</div>
+    <div class="player-info">
+        <div style="display:flex; justify-content:space-between;">
+            <strong style="color:#0088ff;">Player 2</strong>
+            <span style="font-size:11px;">ECU 35M | 3 cards | 2/7 Major Cities</span>
+        </div>
+    </div>
+    <div class="player-info">
+        <div style="display:flex; justify-content:space-between;">
+            <strong style="color:#00cc00;">Player 3</strong>
+            <span style="font-size:11px;">ECU 12M | 2 cards | 0/7 Major Cities</span>
+        </div>
+    </div>
+
+    <!-- Actions Panel -->
+    <div class="label" style="margin-top:24px; color:#4a9eff;">Actions Panel — Operate phase</div>
+    <div style="background:#2d2d2d; padding:10px; border-radius:4px; border:1px solid #444;">
+        <div style="font-size: 12px; margin-bottom: 10px;">Click along your track to move train</div>
+        <div style="margin-bottom:8px;">
+            <button style="width:100%; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid #555; background:#222; color:#888; cursor:pointer;">
+                Suggest Foreign Track: OFF
+            </button>
+        </div>
+    </div>
+
+    <div class="label" style="margin-top:16px; color:#4a9eff;">Actions Panel — Build phase (existing budget bar)</div>
+    <div style="background:#2d2d2d; padding:10px; border-radius:4px; border:1px solid #444;">
+        <div style="font-size: 12px; margin-bottom: 10px;">Click two mileposts to build track</div>
+        <div style="font-size:11px; margin-bottom:8px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                <span>Turn Budget:</span>
+                <strong style="color:#ffcc00;">8M / 20M</strong>
+            </div>
+            <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
+                <div style="background:#ffcc00; height:100%; width:40%;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ AFTER ============ -->
+<div class="column">
+    <h2>After (Proposed)</h2>
+
+    <!-- Player Cards -->
+    <div class="label">Active player card — Operate phase</div>
+    <div class="player-info active">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <strong style="color:#ff0000; font-size:14px;">Player 1</strong>
+            <span style="background:#4a9e4a22; border:1px solid #4a9e4a; color:#4a9e4a; font-weight:bold; font-size:10px; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:0.5px;">&#x1F682; Operate</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#1a1a2e; padding:6px 8px; border-radius:4px; border:1px solid #333;">
+            <span style="color:#ffd700; font-size:16px; font-weight:bold;">ECU 47M</span>
+            <span style="font-size:11px;">Major Cities: <span style="color:#ff8800; font-weight:bold;">3/7</span></span>
+        </div>
+    </div>
+
+    <div class="label" style="margin-top:16px;">Active player card — Build phase</div>
+    <div class="player-info active">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <strong style="color:#ff0000; font-size:14px;">Player 1</strong>
+            <span style="background:#4a7aff22; border:1px solid #4a7aff; color:#4a7aff; font-weight:bold; font-size:10px; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:0.5px;">&#x1F527; Build</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#1a1a2e; padding:6px 8px; border-radius:4px; border:1px solid #333;">
+            <span style="color:#ffd700; font-size:16px; font-weight:bold;">ECU 47M</span>
+            <span style="font-size:11px;">Major Cities: <span style="color:#ff8800; font-weight:bold;">3/7</span></span>
+        </div>
+    </div>
+
+    <div class="label" style="margin-top:16px;">Active player card — Initial Building</div>
+    <div class="player-info active">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <strong style="color:#0088ff; font-size:14px;">Player 2</strong>
+            <span style="background:#ff880022; border:1px solid #ff8800; color:#ff8800; font-weight:bold; font-size:10px; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:0.5px;">&#x1F528; Initial Building</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#1a1a2e; padding:6px 8px; border-radius:4px; border:1px solid #333;">
+            <span style="color:#ffd700; font-size:16px; font-weight:bold;">ECU 50M</span>
+            <span style="font-size:11px;">Major Cities: <span style="color:#ff8800; font-weight:bold;">0/7</span></span>
+        </div>
+    </div>
+
+    <div class="label" style="margin-top:16px;">Inactive players</div>
+    <div class="player-info">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong style="color:#0088ff;">Player 2</strong>
+            <span style="font-size:11px;"><span style="color:#ffd700; font-weight:bold;">ECU 35M</span> | <span style="color:#ff8800; font-weight:bold;">2/7</span> Major Cities</span>
+        </div>
+    </div>
+    <div class="player-info">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong style="color:#00cc00;">Player 3</strong>
+            <span style="font-size:11px;"><span style="color:#ffd700; font-weight:bold;">ECU 12M</span> | <span style="color:#ff8800; font-weight:bold;">0/7</span> Major Cities</span>
+        </div>
+    </div>
+
+    <!-- Actions Panel -->
+    <div class="label" style="margin-top:24px; color:#4a9eff;">Actions Panel — Operate (9mp train, 6 remaining)</div>
+    <div style="background:#2d2d2d; padding:10px; border-radius:4px; border:1px solid #444;">
+        <div style="font-size:11px; margin-bottom:8px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                <span>Movement:</span>
+                <strong style="color:#4a9eff;">6 / 9 mp</strong>
+            </div>
+            <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
+                <div style="background:#4a9eff; height:100%; width:67%;"></div>
+            </div>
+        </div>
+        <div style="font-size: 12px; margin-bottom: 10px;">Click along your track to move train</div>
+        <div style="margin-bottom:8px;">
+            <button style="width:100%; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid #555; background:#222; color:#888; cursor:pointer;">
+                Suggest Foreign Track: OFF
+            </button>
+        </div>
+    </div>
+
+    <div class="label" style="margin-top:16px; color:#4a9eff;">Actions Panel — Operate (12mp train, 2 remaining — low)</div>
+    <div style="background:#2d2d2d; padding:10px; border-radius:4px; border:1px solid #444;">
+        <div style="font-size:11px; margin-bottom:8px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                <span>Movement:</span>
+                <strong style="color:#ff4444;">2 / 12 mp</strong>
+            </div>
+            <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
+                <div style="background:#ff4444; height:100%; width:17%;"></div>
+            </div>
+        </div>
+        <div style="font-size: 12px; margin-bottom: 10px;">Click along your track to move train</div>
+    </div>
+
+    <div class="label" style="margin-top:16px; color:#4a9eff;">Actions Panel — Operate (half-speed, 9mp train → 4 effective)</div>
+    <div style="background:#2d2d2d; padding:10px; border-radius:4px; border:1px solid #444;">
+        <div style="font-size:11px; margin-bottom:8px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                <span>Movement:</span>
+                <strong style="color:#ffcc00;">3 / 4 mp &#x26A0; half</strong>
+            </div>
+            <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
+                <div style="background:#ffcc00; height:100%; width:75%;"></div>
+            </div>
+        </div>
+        <div style="font-size: 12px; margin-bottom: 10px;">Click along your track to move train</div>
+    </div>
+
+    <div class="label" style="margin-top:16px; color:#4a9eff;">Actions Panel — Build (existing budget bar, unchanged)</div>
+    <div style="background:#2d2d2d; padding:10px; border-radius:4px; border:1px solid #444;">
+        <div style="font-size:11px; margin-bottom:8px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                <span>Turn Budget:</span>
+                <strong style="color:#ffcc00;">8M / 20M</strong>
+            </div>
+            <div style="background:#333; border-radius:3px; height:8px; overflow:hidden;">
+                <div style="background:#ffcc00; height:100%; width:40%;"></div>
+            </div>
+        </div>
+        <div style="font-size: 12px; margin-bottom: 10px;">Click two mileposts to build track</div>
+    </div>
+</div>
+
+</body>
+</html>

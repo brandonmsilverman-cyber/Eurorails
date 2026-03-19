@@ -1064,7 +1064,7 @@ function playerOwnsFerry(ctx, ferryKey, playerColor) {
 
 // ctx must have: mileposts, mileposts_by_id, cityToMilepost, ferryConnections,
 //                ferryOwnership, tracks, activeEvents
-function findPath(ctx, startId, endId, playerColor, mode, allowForeignTrack) {
+function findPath(ctx, startId, endId, playerColor, mode, allowForeignTrack, virtualTrack) {
     mode = mode || "cheapest";
     allowForeignTrack = allowForeignTrack || false;
     var dist = {};
@@ -1170,7 +1170,8 @@ function findPath(ctx, startId, endId, playerColor, mode, allowForeignTrack) {
             // If player already owns this edge, weight is 0 in cheapest mode
             var isOwned = ownedEdges.has(edgeKey);
             var isForeign = foreignEdges.has(edgeKey);
-            var realEdgeCost = (isOwned || isForeign) ? 0 : getMileppostCost(current, neighbor);
+            var isVirtual = virtualTrack && virtualTrack.has(current.id) && virtualTrack.has(neighborId);
+            var realEdgeCost = (isOwned || isForeign || isVirtual) ? 0 : getMileppostCost(current, neighbor);
             // In "shortest" mode, every edge costs 1 (even owned ones) to find the
             // path with fewest total segments rather than detouring through existing track.
             // In "cheapest" mode, owned edges are free, foreign edges are free (no build cost).

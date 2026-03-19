@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Eurorails Layout Mockup — Option C</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+        background: #1a2a3a;
+        font-family: Arial, sans-serif;
+        color: #ccc;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    /* Fake map background */
+    .map-bg {
+        position: fixed;
+        inset: 0;
+        background:
+            radial-gradient(ellipse at 40% 40%, #2a4a3a 0%, transparent 60%),
+            radial-gradient(ellipse at 70% 60%, #2a3a4a 0%, transparent 50%),
+            #1a2a3a;
+        z-index: 0;
+    }
+    .map-bg::after {
+        content: "[ Map Canvas ]";
+        position: absolute;
+        top: 50%;
+        left: 45%;
+        transform: translate(-50%, -50%);
+        font-size: 28px;
+        color: rgba(255,255,255,0.08);
+        letter-spacing: 4px;
+    }
+
+    /* ===== LEGENDS — Top-left, collapsible ===== */
+    #legendOverlay {
+        position: fixed;
+        top: 6px;
+        left: 6px;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .legend-box {
+        background: rgba(10, 25, 50, 0.82);
+        border: 1px solid rgba(100, 150, 200, 0.3);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-size: 11px;
+        line-height: 1.55;
+        color: rgba(200, 220, 240, 0.7);
+        backdrop-filter: blur(4px);
+        transition: all 0.25s ease;
+    }
+
+    .legend-box .legend-title {
+        font-weight: bold;
+        font-size: 12px;
+        color: rgba(180, 210, 240, 0.8);
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+    }
+
+    .legend-box .legend-title .collapse-icon {
+        font-size: 9px;
+        opacity: 0.5;
+        transition: transform 0.25s ease;
+    }
+
+    .legend-box.collapsed .legend-title .collapse-icon {
+        transform: rotate(-90deg);
+    }
+
+    .legend-box .legend-content {
+        overflow: hidden;
+        max-height: 500px;
+        transition: max-height 0.3s ease, opacity 0.25s ease, margin-top 0.25s ease;
+        opacity: 1;
+        margin-top: 3px;
+    }
+
+    .legend-box.collapsed .legend-content {
+        max-height: 0;
+        opacity: 0;
+        margin-top: 0;
+    }
+
+    .legend-box .legend-item {
+        white-space: nowrap;
+    }
+
+    .legend-box .legend-item .legend-symbol {
+        display: inline-block;
+        width: 20px;
+        text-align: center;
+    }
+
+    .legend-box .goods-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0 10px;
+    }
+
+    /* ===== TRAIN STATUS CARD (bottom-left, independent) ===== */
+    #trainCardOverlay {
+        position: fixed;
+        bottom: 8px;
+        left: 8px;
+        z-index: 10;
+        pointer-events: auto;
+    }
+
+    .train-status-card {
+        width: 280px;
+        background: linear-gradient(145deg, #2a1e0e, #1e1508);
+        border: 1.5px solid #8a6a3a;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 11px;
+        color: #d0c8b0;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(180,150,80,0.1);
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* ===== DEMAND CARDS TRAY (bottom, after train card) ===== */
+    #bottomTray {
+        position: fixed;
+        bottom: 0;
+        left: 296px; /* train card width + gap */
+        right: 300px; /* stop at sidebar */
+        z-index: 10;
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        padding: 8px 12px;
+        pointer-events: none;
+    }
+
+    #bottomTray > * {
+        pointer-events: auto;
+    }
+
+    .train-status-card .train-content {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        gap: 12px;
+    }
+
+    .train-status-card .train-info-col {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .train-status-card .train-header {
+        font-weight: bold;
+        font-size: 13px;
+        margin-bottom: 6px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid rgba(138, 106, 58, 0.4);
+    }
+
+    .train-status-card .train-stat {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 2px;
+    }
+
+    .train-status-card .train-loads-col {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .train-status-card .train-loads-header {
+        font-size: 10px;
+        color: #998866;
+        font-weight: bold;
+        margin-bottom: 3px;
+    }
+
+    .train-status-card .load-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-bottom: 1px;
+    }
+
+    .train-status-card .empty-slot {
+        color: #555;
+        font-style: italic;
+    }
+
+    /* ===== DEMAND CARDS ===== */
+    .demand-card-overlay {
+        width: 180px;
+        flex-shrink: 0;
+        background: linear-gradient(145deg, #1c2a3e, #162030);
+        border: 1.5px solid #3a5a7a;
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 11px;
+        color: #d0dae8;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(100,160,220,0.1);
+        transition: border-color 0.2s;
+    }
+
+    .demand-card-overlay.deliverable {
+        border-color: #4a9e4a;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.5), 0 0 8px rgba(74,158,74,0.3);
+    }
+
+    .demand-card-overlay .card-header {
+        text-align: center;
+        font-weight: bold;
+        font-size: 10px;
+        color: #6a9ad0;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 6px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #2a4a6a;
+    }
+
+    .demand-card-overlay .card-demand {
+        padding: 4px 0;
+    }
+
+    .demand-card-overlay .card-demand + .card-demand {
+        border-top: 1px solid #2a3a50;
+    }
+
+    .demand-card-overlay .good-name {
+        font-weight: bold;
+        color: #e0e8f0;
+    }
+
+    .demand-card-overlay .payout {
+        color: #ffdd44;
+        font-weight: bold;
+        float: right;
+    }
+
+    .demand-card-overlay .source-cities {
+        font-size: 10px;
+        color: #8899aa;
+        margin-top: 1px;
+    }
+
+    .demand-card-overlay .source-cities span {
+        cursor: pointer;
+        text-decoration: underline;
+        color: #7baadd;
+    }
+
+    .demand-card-overlay .dest-city {
+        font-size: 10px;
+        margin-top: 1px;
+    }
+
+    .demand-card-overlay .dest-city span {
+        cursor: pointer;
+        text-decoration: underline;
+        color: #eebb44;
+        font-weight: bold;
+    }
+
+    /* ===== ACTIVE EVENTS — Top-center banner ===== */
+    #eventBanner {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 300px; /* stop at sidebar */
+        z-index: 15;
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        padding: 8px 12px;
+        pointer-events: none;
+    }
+
+    #eventBanner > * {
+        pointer-events: auto;
+    }
+
+    .active-event-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: linear-gradient(135deg, #4a1a1a, #3a1010);
+        border: 1.5px solid #aa4444;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-size: 11px;
+        color: #e0c0c0;
+        box-shadow: 0 4px 20px rgba(140,40,40,0.35), inset 0 1px 0 rgba(255,100,100,0.1);
+        animation: eventPulse 2.5s ease-in-out infinite;
+    }
+
+    @keyframes eventPulse {
+        0%, 100% { border-color: #aa4444; box-shadow: 0 4px 20px rgba(140,40,40,0.35), inset 0 1px 0 rgba(255,100,100,0.1); }
+        50% { border-color: #cc5555; box-shadow: 0 4px 24px rgba(180,50,50,0.5), inset 0 1px 0 rgba(255,100,100,0.15); }
+    }
+
+    .active-event-card .event-icon {
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+
+    .active-event-card .event-text {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+    }
+
+    .active-event-card .event-card-title {
+        font-weight: bold;
+        font-size: 13px;
+        color: #ff9999;
+    }
+
+    .active-event-card .event-card-desc {
+        font-size: 11px;
+        color: #cc9999;
+    }
+
+    .active-event-card .event-card-expiry {
+        font-size: 9px;
+        color: #886666;
+        font-style: italic;
+    }
+
+    /* ===== SIDEBAR (right) ===== */
+    .sidebar {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 300px;
+        background: #2d2d2d;
+        border-left: 1px solid #444;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        z-index: 20;
+    }
+
+    .sidebar-section {
+        padding: 15px;
+        border-bottom: 1px solid #444;
+    }
+
+    .sidebar-section h3 {
+        margin-bottom: 10px;
+        font-size: 14px;
+        text-transform: uppercase;
+        color: #4a9eff;
+    }
+
+    .player-info {
+        margin-bottom: 8px;
+        font-size: 13px;
+    }
+
+    .player-info.active {
+        background: #444;
+        padding: 8px;
+        border-radius: 3px;
+        border-left: 3px solid #4a9eff;
+    }
+
+    /* ===== Mockup label ===== */
+    .mockup-label {
+        position: fixed;
+        bottom: 6px;
+        right: 310px;
+        background: rgba(0,0,0,0.7);
+        color: #fff;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-size: 11px;
+        z-index: 100;
+        letter-spacing: 0.5px;
+    }
+    .mockup-label small {
+        opacity: 0.6;
+        font-size: 11px;
+    }
+</style>
+</head>
+<body>
+
+<div class="mockup-label">
+    Mockup — Click legend titles to collapse/expand
+</div>
+
+<!-- Fake map background -->
+<div class="map-bg"></div>
+
+<!-- ===== ACTIVE EVENTS BANNER (top-center) ===== -->
+<div id="eventBanner">
+    <div class="active-event-card">
+        <div class="event-icon">&#9888;</div>
+        <div class="event-text">
+            <div class="event-card-title">Dock Strike</div>
+            <div class="event-card-desc">All ferry routes closed</div>
+            <div class="event-card-expiry">Expires after Player 1's next turn</div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== LEGENDS (top-left, collapsible) ===== -->
+<div id="legendOverlay">
+    <div class="legend-box" id="mapLegend">
+        <div class="legend-title" onclick="toggleLegend('mapLegend')">
+            Map Legend
+            <span class="collapse-icon">▼</span>
+        </div>
+        <div class="legend-content">
+            <div class="legend-item"><span class="legend-symbol" style="color:#aaa">●</span>Clear (1M)</div>
+            <div class="legend-item"><span class="legend-symbol" style="color:#8a7040">▲</span>Mountain (2M)</div>
+            <div class="legend-item"><span class="legend-symbol" style="color:#888">△</span>Alpine (5M)</div>
+            <div class="legend-item"><span class="legend-symbol" style="color:#dd2222">⬤</span>Major city (5M)</div>
+            <div class="legend-item"><span class="legend-symbol" style="color:#3355cc">⬤</span>Medium city (3M)</div>
+            <div class="legend-item"><span class="legend-symbol" style="color:#339933">⬤</span>Small city (3M)</div>
+            <div class="legend-item"><span class="legend-symbol" style="color:#4488cc">〰</span>River (+2M)</div>
+            <div class="legend-item"><span class="legend-symbol" style="color:#88bbee">---</span>Ferry route</div>
+        </div>
+    </div>
+
+    <div class="legend-box" id="goodsLegend">
+        <div class="legend-title" onclick="toggleLegend('goodsLegend')">
+            Goods Legend
+            <span class="collapse-icon">▼</span>
+        </div>
+        <div class="legend-content">
+            <div class="goods-grid">
+                <div class="legend-item"><span class="legend-symbol">🍺</span>Beer <span style="color:#668877; font-size:9px;">4/4</span></div>
+                <div class="legend-item"><span class="legend-symbol">🧱</span>Bricks <span style="color:#668877; font-size:9px;">3/3</span></div>
+                <div class="legend-item"><span class="legend-symbol">🧀</span>Cheese <span style="color:#668877; font-size:9px;">2/2</span></div>
+                <div class="legend-item"><span class="legend-symbol">⚫</span>Coal <span style="color:#ffaa44; font-size:9px;">2/4</span></div>
+                <div class="legend-item"><span class="legend-symbol">☕</span>Coffee <span style="color:#668877; font-size:9px;">3/3</span></div>
+                <div class="legend-item"><span class="legend-symbol">🖥️</span>Computers <span style="color:#668877; font-size:9px;">2/2</span></div>
+                <div class="legend-item"><span class="legend-symbol">🐟</span>Fish <span style="color:#668877; font-size:9px;">3/3</span></div>
+                <div class="legend-item"><span class="legend-symbol">🍎</span>Fruit <span style="color:#668877; font-size:9px;">4/4</span></div>
+                <div class="legend-item"><span class="legend-symbol">🔩</span>Iron <span style="color:#668877; font-size:9px;">3/3</span></div>
+                <div class="legend-item"><span class="legend-symbol">🪵</span>Lumber <span style="color:#668877; font-size:9px;">4/4</span></div>
+                <div class="legend-item"><span class="legend-symbol">🛢️</span>Oil <span style="color:#ffaa44; font-size:9px;">1/3</span></div>
+                <div class="legend-item"><span class="legend-symbol">🍊</span>Oranges <span style="color:#668877; font-size:9px;">2/2</span></div>
+                <div class="legend-item"><span class="legend-symbol">🐖</span>Pork <span style="color:#668877; font-size:9px;">3/3</span></div>
+                <div class="legend-item"><span class="legend-symbol">⚙️</span>Steel <span style="color:#668877; font-size:9px;">3/3</span></div>
+                <div class="legend-item"><span class="legend-symbol">🧶</span>Textiles <span style="color:#668877; font-size:9px;">3/3</span></div>
+                <div class="legend-item"><span class="legend-symbol">🚂</span>Trains <span style="color:#668877; font-size:9px;">2/2</span></div>
+                <div class="legend-item"><span class="legend-symbol">🍷</span>Wine <span style="color:#668877; font-size:9px;">3/3</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== TRAIN STATUS CARD (bottom-left) ===== -->
+<div id="trainCardOverlay">
+    <div class="train-status-card">
+        <div class="train-content">
+            <div class="train-info-col">
+                <div class="train-header" style="color: #4a9eff;">🚂 Player 1 — Fast Freight</div>
+                <div class="train-stat"><span>Speed:</span><span>9 mileposts/turn</span></div>
+                <div class="train-stat"><span>Location:</span><span>Paris</span></div>
+                <div class="train-stat"><span>Cash:</span><span style="color:#ffdd44;">85M ECU</span></div>
+                <div class="train-stat"><span>Major Cities:</span><span>3 / 7</span></div>
+            </div>
+            <div class="train-loads-col">
+                <div class="train-loads-header">Cargo (1/3):</div>
+                <div class="load-item"><span>🍷</span> Wine</div>
+                <div class="load-item empty-slot">— empty —</div>
+                <div class="load-item empty-slot">— empty —</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== DEMAND CARDS TRAY (bottom, after train card) ===== -->
+<div id="bottomTray">
+        <div class="demand-card-overlay" style="border-color: #4a9eff;">
+            <div class="card-header">Demand Card 1</div>
+            <div class="card-demand">
+                <span class="good-name">🍷 Wine</span> <span class="payout">32M</span>
+                <div class="source-cities">From: <span>Bordeaux</span>, <span>Marseille</span></div>
+                <div class="dest-city">To: <span>Hamburg</span></div>
+            </div>
+            <div class="card-demand">
+                <span class="good-name">⚫ Coal</span> <span class="payout">18M</span>
+                <div class="source-cities">From: <span>Essen</span>, <span>Krakow</span></div>
+                <div class="dest-city">To: <span>Rome</span></div>
+            </div>
+            <div class="card-demand">
+                <span class="good-name">🐟 Fish</span> <span class="payout">24M</span>
+                <div class="source-cities">From: <span>Bergen</span></div>
+                <div class="dest-city">To: <span>Vienna</span></div>
+            </div>
+        </div>
+
+        <div class="demand-card-overlay deliverable" style="border-color: #4a9e4a;">
+            <div class="card-header">Demand Card 2</div>
+            <div class="card-demand">
+                <span class="good-name">🍺 Beer</span> <span class="payout">20M</span>
+                <div class="source-cities">From: <span>Munich</span>, <span>Dublin</span></div>
+                <div class="dest-city">To: <span>Madrid</span></div>
+            </div>
+            <div class="card-demand">
+                <span class="good-name">🔩 Iron</span> <span class="payout">28M</span>
+                <div class="source-cities">From: <span>Stockholm</span></div>
+                <div class="dest-city">To: <span>Istanbul</span></div>
+            </div>
+            <div class="card-demand">
+                <span class="good-name">🧀 Cheese</span> <span class="payout">15M</span>
+                <div class="source-cities">From: <span>Amsterdam</span></div>
+                <div class="dest-city">To: <span>Athens</span></div>
+            </div>
+        </div>
+
+        <div class="demand-card-overlay" style="border-color: #4a9eff;">
+            <div class="card-header">Demand Card 3</div>
+            <div class="card-demand">
+                <span class="good-name">🛢️ Oil</span> <span class="payout">35M</span>
+                <div class="source-cities">From: <span>Bucharest</span></div>
+                <div class="dest-city">To: <span>London</span></div>
+            </div>
+            <div class="card-demand">
+                <span class="good-name">🖥️ Computers</span> <span class="payout">30M</span>
+                <div class="source-cities">From: <span>Berlin</span></div>
+                <div class="dest-city">To: <span>Lisbon</span></div>
+            </div>
+            <div class="card-demand">
+                <span class="good-name">🍎 Fruit</span> <span class="payout">12M</span>
+                <div class="source-cities">From: <span>Valencia</span>, <span>Naples</span></div>
+                <div class="dest-city">To: <span>Warsaw</span></div>
+            </div>
+        </div>
+</div>
+
+<!-- ===== SIDEBAR (right) ===== -->
+<div class="sidebar">
+    <div class="sidebar-section">
+        <h3>Win Condition</h3>
+        <div style="font-size: 12px; color: #aaa;">Connect 7 of 8 major cities + 250M ECU cash</div>
+    </div>
+    <div class="sidebar-section">
+        <h3>Players</h3>
+        <div class="player-info active">
+            <span style="color: #4a9eff;">■</span> Player 1 — <span style="color:#ffdd44;">85M</span> — Fast Freight
+        </div>
+        <div class="player-info">
+            <span style="color: #e74c3c;">■</span> Player 2 — <span style="color:#ffdd44;">42M</span> — Freight
+        </div>
+        <div class="player-info">
+            <span style="color: #f1c40f;">■</span> Player 3 — <span style="color:#ffdd44;">120M</span> — Superfreight
+        </div>
+    </div>
+    <div class="sidebar-section">
+        <h3>Actions</h3>
+        <div>
+            <button style="width:100%; padding: 8px; margin-bottom: 6px; background: #3a6a3a; color: #fff; border: 1px solid #4a8a4a; border-radius: 4px; cursor: pointer;">End Turn</button>
+            <button style="width:100%; padding: 8px; margin-bottom: 6px; background: #3a3a6a; color: #fff; border: 1px solid #4a4a8a; border-radius: 4px; cursor: pointer;">Undo</button>
+        </div>
+    </div>
+    <div class="sidebar-section">
+        <h3>Log</h3>
+        <div style="height: 150px; overflow-y: auto; font-size: 11px; color: #bbb;">
+            <div>Player 1 built track: Paris → Lyon (cost: 6M)</div>
+            <div>Player 2 moved to: Berlin</div>
+            <div>Player 3 delivered Wine to Hamburg (+32M)</div>
+            <div>Event: Dock Strike drawn</div>
+            <div>Player 1 picked up Wine at Bordeaux</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleLegend(id) {
+        const box = document.getElementById(id);
+        box.classList.toggle('collapsed');
+    }
+
+    // Match train card height to tallest demand card
+    function syncTrainCardHeight() {
+        const trainCard = document.querySelector('.train-status-card');
+        const demandCards = document.querySelectorAll('.demand-card-overlay');
+        if (!trainCard || !demandCards.length) return;
+        let maxH = 0;
+        demandCards.forEach(c => { maxH = Math.max(maxH, c.offsetHeight); });
+        trainCard.style.height = maxH + 'px';
+    }
+    window.addEventListener('load', syncTrainCardHeight);
+    window.addEventListener('resize', syncTrainCardHeight);
+</script>
+
+</body>
+</html>

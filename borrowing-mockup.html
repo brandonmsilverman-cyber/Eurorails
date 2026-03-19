@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Borrowing Feature — UI Mockup</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0a0a1a; color: #ccc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; }
+    h1 { color: #fff; font-size: 20px; margin-bottom: 24px; }
+    .mockup-row { display: flex; gap: 32px; flex-wrap: wrap; margin-bottom: 40px; }
+    .mockup-card { background: #111; border: 1px solid #333; border-radius: 8px; padding: 16px; width: 320px; }
+    .mockup-card h2 { color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+    .mockup-label { color: #666; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 8px; margin-bottom: 4px; }
+    .annotation { color: #4a9eff; font-size: 10px; margin-top: 4px; }
+
+    /* Sidebar simulation */
+    .sidebar { background: #1a1a2e; border-radius: 6px; padding: 10px; font-size: 12px; }
+
+    /* Player info */
+    .player-info { padding: 8px; border-radius: 4px; margin-bottom: 4px; }
+    .player-info.active { background: rgba(255,255,255,0.05); border: 1px solid #333; }
+    .player-info .row { display: flex; justify-content: space-between; align-items: center; }
+    .player-name { font-weight: bold; font-size: 14px; }
+    .phase-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold; }
+    .cash-bar { display: flex; justify-content: space-between; align-items: center; background: #1a1a2e; padding: 6px 8px; border-radius: 4px; border: 1px solid #333; margin-top: 6px; font-size: 11px; }
+    .cash { color: #ffd700; font-size: 16px; font-weight: bold; }
+    .debt { color: #ff6666; font-size: 11px; margin-left: 6px; }
+    .inactive-line { font-size: 11px; }
+
+    /* Progress bar */
+    .progress-container { margin-bottom: 8px; }
+    .progress-header { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 11px; }
+    .progress-bar { background: #333; border-radius: 3px; height: 8px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+
+    /* Buttons */
+    .btn { width: 100%; padding: 6px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; border: 1px solid #555; background: #222; color: #888; text-align: center; margin-bottom: 4px; }
+    .btn-primary { padding: 8px; font-size: 13px; background: #2a4a2a; border-color: #4a9e4a; color: #fff; }
+    .btn-discard { background: rgba(60, 60, 180, 0.15); color: #7777cc; border-color: #444499; }
+    .btn-borrow { background: rgba(180, 60, 60, 0.15); color: #cc7777; border-color: #994444; }
+    .btn-end { padding: 8px; font-size: 13px; background: #333; color: #fff; border-color: #555; }
+    .btn-active { border-color: #4a9e4a; background: #2a4a2a; color: #88ff88; }
+    .btn-foreign { border-color: #cc6600; background: #3d2200; color: #ffaa44; }
+
+    .divider { border-top: 1px solid #555; margin-top: 8px; padding-top: 8px; }
+
+    /* Overlay */
+    .overlay-bg { background: rgba(0,0,0,0.7); border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+    .overlay-box { background: #1a1a2e; border: 2px solid #4444cc; border-radius: 8px; padding: 24px; text-align: center; max-width: 340px; width: 100%; }
+    .overlay-box h2 { color: #fff; font-size: 18px; margin-bottom: 16px; }
+    .overlay-box p { color: #ccc; font-size: 13px; margin-bottom: 16px; line-height: 1.5; }
+    .amount-btns { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px; }
+    .amount-btn { padding: 8px 14px; font-size: 13px; border-radius: 4px; border: 1px solid #555; background: #222; color: #888; cursor: pointer; }
+    .amount-btn.selected { border-color: #4444cc; background: #2a2a5a; color: #aaaaff; font-weight: bold; }
+    .borrow-summary { font-size: 12px; margin-bottom: 20px; padding: 8px; background: #111; border-radius: 4px; }
+    .borrow-summary .label { color: #888; }
+    .borrow-summary .repay { color: #ff6666; font-weight: bold; }
+    .overlay-actions { display: flex; gap: 12px; justify-content: center; }
+    .overlay-actions button { padding: 10px 32px; font-size: 14px; border: none; border-radius: 4px; cursor: pointer; }
+    .btn-cancel { background: #555; color: #fff; }
+    .btn-confirm-borrow { background: #4444cc; color: #fff; }
+
+    .arrow { color: #4a9eff; font-size: 20px; text-align: center; padding: 0 8px; }
+
+    /* Existing debt note */
+    .existing-debt { color: #ff6666; font-size: 11px; margin-bottom: 12px; padding: 6px; background: rgba(255, 100, 100, 0.1); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Borrowing Feature — UI Mockup</h1>
+
+<!-- ===== PLAYER INFO PANEL ===== -->
+<p class="mockup-label">1. Player Info Panel — Debt Display</p>
+<div class="mockup-row">
+    <!-- No debt -->
+    <div class="mockup-card">
+        <h2>Current (no debt)</h2>
+        <div class="sidebar">
+            <div class="player-info active">
+                <div class="row">
+                    <span class="player-name" style="color:#ff4444;">Alice</span>
+                    <span class="phase-badge" style="background:#4a9e4a22; border:1px solid #4a9e4a; color:#4a9e4a;">🔧 BUILD</span>
+                </div>
+                <div class="cash-bar">
+                    <span class="cash">ECU 35M</span>
+                    <span style="color:#aaa;">Freight</span>
+                    <span>Cities: <span style="color:#ff8800; font-weight:bold;">3/7</span></span>
+                </div>
+            </div>
+            <div class="player-info">
+                <div class="row">
+                    <strong style="color:#4444ff;">Bob</strong>
+                    <span class="inactive-line"><span style="color:#ffd700; font-weight:bold;">ECU 120M</span> | <span style="color:#aaa;">Fast Freight</span> | <span style="color:#ff8800; font-weight:bold;">4/7</span> Cities</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="arrow" style="align-self:center;">→</div>
+
+    <!-- With debt -->
+    <div class="mockup-card">
+        <h2>With active debt</h2>
+        <div class="sidebar">
+            <div class="player-info active">
+                <div class="row">
+                    <span class="player-name" style="color:#ff4444;">Alice</span>
+                    <span class="phase-badge" style="background:#4a9e4a22; border:1px solid #4a9e4a; color:#4a9e4a;">🔧 BUILD</span>
+                </div>
+                <div class="cash-bar">
+                    <span class="cash">ECU 55M</span>
+                    <span class="debt">Debt: ECU 40M</span>
+                    <span style="color:#aaa; font-size:11px;">Freight</span>
+                </div>
+            </div>
+            <div class="player-info">
+                <div class="row">
+                    <strong style="color:#4444ff;">Bob</strong>
+                    <span class="inactive-line"><span style="color:#ffd700; font-weight:bold;">ECU 120M</span> <span style="color:#ff6666;">Debt: 10M</span> | <span style="color:#aaa;">Fast Freight</span> | <span style="color:#ff8800; font-weight:bold;">4/7</span></span>
+                </div>
+            </div>
+        </div>
+        <div class="annotation">↑ Red debt text appears next to cash for all players</div>
+    </div>
+</div>
+
+<!-- ===== OPERATE PHASE ===== -->
+<p class="mockup-label">2. Operate Phase Sidebar — Borrow Button</p>
+<div class="mockup-row">
+    <div class="mockup-card">
+        <h2>Operate phase (your turn)</h2>
+        <div class="sidebar">
+            <div class="progress-container">
+                <div class="progress-header">
+                    <span>Movement:</span>
+                    <strong style="color:#4a9eff;">8 / 12 mp</strong>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="background:#4a9eff; width:67%;"></div>
+                </div>
+            </div>
+            <div style="font-size:11px; margin-bottom:8px; color:#aaa;">Click along your track to move train</div>
+
+            <button class="btn btn-foreign">🚂 Suggest Foreign Track: OFF</button>
+
+            <div style="font-size:11px; margin-bottom:8px; background:#333; padding:6px; border-radius:3px; margin-top:8px;">
+                <div style="color:#4a9eff; margin-bottom:4px;"><strong>Carried Goods:</strong></div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>🍷 Wine</span>
+                    <button style="padding:2px 6px; font-size:10px; background:#555; border:none; color:#ccc; border-radius:3px;">Drop</button>
+                </div>
+            </div>
+
+            <button class="btn btn-end" style="margin-top:4px;">Proceed to Build Phase</button>
+
+            <div class="divider">
+                <button class="btn btn-discard">Discard Hand &amp; End Turn</button>
+                <button class="btn btn-borrow">Borrow from Bank (Carries a Payment Penalty)</button>
+            </div>
+        </div>
+        <div class="annotation">↑ Discard in blue, Borrow in red below it. Both in bottom divider section.</div>
+    </div>
+
+    <!-- With partial debt already -->
+    <div class="mockup-card">
+        <h2>Operate phase (has partial debt, 10M borrowed)</h2>
+        <div class="sidebar">
+            <div class="progress-container">
+                <div class="progress-header">
+                    <span>Movement:</span>
+                    <strong style="color:#4a9eff;">4 / 12 mp</strong>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="background:#4a9eff; width:33%;"></div>
+                </div>
+            </div>
+            <div style="font-size:11px; margin-bottom:8px; color:#aaa;">Click along your track to move train</div>
+
+            <button class="btn btn-foreign">🚂 Suggest Foreign Track: OFF</button>
+
+            <button class="btn btn-end" style="margin-top:8px;">Proceed to Build Phase</button>
+
+            <div class="divider">
+                <button class="btn btn-discard">Discard Hand &amp; End Turn</button>
+                <button class="btn btn-borrow">Borrow from Bank (Carries a Payment Penalty)</button>
+            </div>
+        </div>
+        <div class="annotation">↑ Same label even with partial debt — details shown in confirmation dialog</div>
+    </div>
+</div>
+
+<!-- ===== BUILD PHASE ===== -->
+<p class="mockup-label">3. Build Phase Sidebar — Borrow Button</p>
+<div class="mockup-row">
+    <div class="mockup-card">
+        <h2>Build phase (your turn)</h2>
+        <div class="sidebar">
+            <div class="progress-container">
+                <div class="progress-header">
+                    <span>Turn Budget:</span>
+                    <strong style="color:#4a9e4a;">15M / 20M</strong>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="background:#4a9e4a; width:75%;"></div>
+                </div>
+            </div>
+            <div style="font-size:11px; margin-bottom:8px; color:#aaa;">Click two mileposts to build track</div>
+
+            <div style="display:flex; gap:4px; margin-bottom:8px;">
+                <button class="btn btn-active" style="flex:1;">Cheapest</button>
+                <button class="btn" style="flex:1;">Shortest</button>
+            </div>
+            <button class="btn">🚂 Use Foreign Track: OFF</button>
+
+            <div style="font-size:10px; margin:8px 0; background:#1a2a1a; border:1px solid #3a5a3a; border-radius:4px; padding:6px;">
+                <div style="color:#88bb88; margin-bottom:4px; font-weight:bold;">Turn Summary — 3 segments</div>
+                <div style="color:#aaa; line-height:1.5;">2 clear (2M)<br>1 mountain (2M)</div>
+            </div>
+
+            <button class="btn btn-end">End Turn</button>
+
+            <div class="divider">
+                <button class="btn btn-discard">Discard Hand &amp; End Turn</button>
+                <button class="btn btn-borrow">Borrow from Bank (Carries a Payment Penalty)</button>
+            </div>
+        </div>
+        <div class="annotation">↑ Same bottom section as operate phase. Discard above borrow.</div>
+    </div>
+
+    <!-- Cap reached -->
+    <div class="mockup-card">
+        <h2>Build phase (cap reached — 20M borrowed)</h2>
+        <div class="sidebar">
+            <div class="progress-container">
+                <div class="progress-header">
+                    <span>Turn Budget:</span>
+                    <strong style="color:#ffcc00;">8M / 20M</strong>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="background:#ffcc00; width:40%;"></div>
+                </div>
+            </div>
+            <div style="font-size:11px; margin-bottom:8px; color:#aaa;">Click two mileposts to build track</div>
+
+            <div style="display:flex; gap:4px; margin-bottom:8px;">
+                <button class="btn btn-active" style="flex:1;">Cheapest</button>
+                <button class="btn" style="flex:1;">Shortest</button>
+            </div>
+
+            <button class="btn btn-end" style="margin-top:8px;">End Turn</button>
+
+            <div class="divider">
+                <button class="btn btn-discard">Discard Hand &amp; End Turn</button>
+                <!-- No borrow button — cap reached -->
+            </div>
+        </div>
+        <div class="annotation">↑ Borrow button hidden when borrowedAmount == 20 (cap reached)</div>
+    </div>
+</div>
+
+<!-- ===== CONFIRMATION DIALOG ===== -->
+<p class="mockup-label">4. Borrow Confirmation Dialog</p>
+<div class="mockup-row">
+    <!-- Fresh borrow -->
+    <div class="mockup-card" style="width: 400px;">
+        <h2>First-time borrow (no existing debt)</h2>
+        <div class="overlay-bg">
+            <div class="overlay-box">
+                <h2>Borrow from Bank</h2>
+                <p>How much do you want to borrow?<br>You must repay <strong style="color:#ff6666;">DOUBLE</strong> from future delivery payoffs.</p>
+                <div class="amount-btns">
+                    <button class="amount-btn">5M</button>
+                    <button class="amount-btn">10M</button>
+                    <button class="amount-btn">15M</button>
+                    <button class="amount-btn selected">20M</button>
+                </div>
+                <div class="borrow-summary">
+                    <div><span class="label">Borrowing:</span> ECU 20M</div>
+                    <div><span class="label">Repayment:</span> <span class="repay">ECU 40M from deliveries</span></div>
+                </div>
+                <div class="overlay-actions">
+                    <button class="btn-cancel">Cancel</button>
+                    <button class="btn-confirm-borrow">Borrow</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Partial existing debt -->
+    <div class="mockup-card" style="width: 400px;">
+        <h2>Additional borrow (10M already borrowed)</h2>
+        <div class="overlay-bg">
+            <div class="overlay-box">
+                <h2>Borrow from Bank</h2>
+                <div class="existing-debt">Current debt: ECU 15M remaining</div>
+                <p>How much more do you want to borrow?<br>You must repay <strong style="color:#ff6666;">DOUBLE</strong> from future delivery payoffs.</p>
+                <div class="amount-btns">
+                    <button class="amount-btn">5M</button>
+                    <button class="amount-btn selected">10M</button>
+                </div>
+                <div class="borrow-summary">
+                    <div><span class="label">Borrowing:</span> ECU 10M</div>
+                    <div><span class="label">Additional repayment:</span> <span class="repay">ECU 20M</span></div>
+                    <div style="margin-top:4px; border-top:1px solid #333; padding-top:4px;"><span class="label">Total debt after:</span> <span class="repay">ECU 35M</span></div>
+                </div>
+                <div class="overlay-actions">
+                    <button class="btn-cancel">Cancel</button>
+                    <button class="btn-confirm-borrow">Borrow</button>
+                </div>
+            </div>
+        </div>
+        <div class="annotation">↑ Shows current debt + capped amount buttons (only 10M left to borrow)</div>
+    </div>
+</div>
+
+</body>
+</html>
