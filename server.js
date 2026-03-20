@@ -1060,6 +1060,20 @@ function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete
     console.log(`Room ${roomCode}: ${player.name} [HARD] action: ${actionSummary}${result.logs ? ' — ' + result.logs[result.logs.length - 1] : ''}`);
     broadcastStateUpdate(roomCode, room, result.uiEvent);
 
+    // Advance committedPlan.currentStopIndex when a pickup/deliver action succeeds.
+    // planMovement tags these actions with _advanceStop so we only advance for
+    // actions that correspond to plan stops (not ad-hoc actions).
+    if (action._advanceStop && (action.type === 'pickupGood' || action.type === 'deliverGood')) {
+        const committedPlan = aiHard.getCommittedPlan(gs, playerIndex);
+        if (committedPlan) {
+            committedPlan.currentStopIndex++;
+            // Clear plan if all stops are now complete
+            if (committedPlan.currentStopIndex >= committedPlan.visitSequence.length) {
+                aiHard.clearCommittedPlan(gs, playerIndex);
+            }
+        }
+    }
+
     // endOperatePhase: transition to build phase via callback
     if (action.type === 'endOperatePhase') {
         room.aiTurnTimer = setTimeout(() => {
@@ -1860,11 +1874,19 @@ io.on('connection', (socket) => {
             if (p.isAI) aiCount++;
         }
 
+        // Auto-assign first available color
+        const allColors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
+        const takenColors = new Set();
+        for (const [, p] of room.players) {
+            if (p.color) takenColors.add(p.color);
+        }
+        const autoColor = allColors.find(c => !takenColors.has(c)) || null;
+
         const aiKey = `ai-${randomUUID()}`;
         const aiSessionToken = `ai-${randomUUID()}`;
         room.players.set(aiKey, {
             name: `AI ${aiCount + 1}`,
-            color: null,
+            color: autoColor,
             sessionToken: aiSessionToken,
             isAI: true,
             difficulty

@@ -21,6 +21,51 @@ const getFerryKey = gl.getFerryKey;
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Recompute the true build cost of a plan by walking its buildPath edge-by-edge
+// against actual owned edges. This corrects Dijkstra estimation errors caused by
+// virtualTrack imprecision (city entry direction, non-edge milepost adjacency).
+function recomputeBuildCost(ctx, player, buildPath) {
+    if (!buildPath || buildPath.length < 2) return 0;
+
+    const ownedEdges = new Set();
+    for (const t of ctx.tracks) {
+        if (t.color === player.color) {
+            ownedEdges.add(t.from + '|' + t.to);
+            ownedEdges.add(t.to + '|' + t.from);
+        }
+    }
+
+    let cost = 0;
+    for (let i = 0; i < buildPath.length - 1; i++) {
+        const fromId = buildPath[i];
+        const toId = buildPath[i + 1];
+        if (ownedEdges.has(fromId + '|' + toId)) continue;
+
+        // Check ferry
+        const ferryKey = getFerryKey(fromId, toId);
+        let isFerry = false;
+        for (const fc of ctx.ferryConnections) {
+            if (getFerryKey(fc.fromId, fc.toId) === ferryKey) {
+                isFerry = true;
+                if (!gl.playerOwnsFerry(ctx, ferryKey, player.color)) {
+                    cost += fc.cost;
+                    const destMp = ctx.mileposts_by_id[toId];
+                    if (destMp && destMp.city) {
+                        cost += MAJOR_CITIES.includes(destMp.city.name) ? 5 : 3;
+                    }
+                }
+                break;
+            }
+        }
+        if (isFerry) continue;
+
+        const mp1 = ctx.mileposts_by_id[fromId];
+        const mp2 = ctx.mileposts_by_id[toId];
+        if (mp1 && mp2) cost += getMileppostCost(mp1, mp2);
+    }
+    return cost;
+}
+
 // Find the cheapest build path between two points, accounting for build
 // direction. When the target is an unconnected major city, compute the path
 // building OUT from the major city (1M exit) rather than INTO it (5M entry).
@@ -401,6 +446,55 @@ function buildBatchPlan(ctx, player, deliveryA, deliveryB, sequenceIndices, majo
         buildPath = combinePaths(buildPath, sp);
     }
 
+    // Recompute segment and total build costs by walking each segment path
+    // edge-by-edge against real owned edges (corrects Dijkstra virtualTrack errors).
+    const ownedEdges = new Set();
+    for (const t of ctx.tracks) {
+        if (t.color === player.color) {
+            ownedEdges.add(t.from + '|' + t.to);
+            ownedEdges.add(t.to + '|' + t.from);
+        }
+    }
+    // Track edges from earlier segments as "will be built" so they're free for later segments
+    const builtEdges = new Set();
+    let totalBuildCostActual = 0;
+    for (let i = 0; i < segmentPaths.length; i++) {
+        const sp = segmentPaths[i];
+        let segCostActual = 0;
+        for (let j = 0; j < sp.length - 1; j++) {
+            const edgeKey = sp[j] + '|' + sp[j + 1];
+            if (ownedEdges.has(edgeKey) || builtEdges.has(edgeKey)) continue;
+
+            // Check ferry
+            const ferryKey = getFerryKey(sp[j], sp[j + 1]);
+            let isFerry = false;
+            for (const fc of ctx.ferryConnections) {
+                if (getFerryKey(fc.fromId, fc.toId) === ferryKey) {
+                    isFerry = true;
+                    if (!gl.playerOwnsFerry(ctx, ferryKey, player.color)) {
+                        let ferryCost = fc.cost;
+                        const destMp = ctx.mileposts_by_id[sp[j + 1]];
+                        if (destMp && destMp.city) {
+                            ferryCost += MAJOR_CITIES.includes(destMp.city.name) ? 5 : 3;
+                        }
+                        segCostActual += ferryCost;
+                    }
+                    break;
+                }
+            }
+            if (!isFerry) {
+                const mp1 = ctx.mileposts_by_id[sp[j]];
+                const mp2 = ctx.mileposts_by_id[sp[j + 1]];
+                if (mp1 && mp2) segCostActual += getMileppostCost(mp1, mp2);
+            }
+            builtEdges.add(edgeKey);
+            builtEdges.add(sp[j + 1] + '|' + sp[j]);
+        }
+        segments[i].buildCost = segCostActual;
+        totalBuildCostActual += segCostActual;
+    }
+    totalBuildCost = totalBuildCostActual;
+
     // Compute trip distance
     let tripDistance = 0;
     for (const sp of segmentPaths) {
@@ -448,7 +542,10 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
     // and to facilitate batch pairing
     const singles = [];
 
+    const excludeCards = (options && options.excludeCardIndices) || null;
+
     for (let ci = 0; ci < player.demandCards.length; ci++) {
+        if (excludeCards && excludeCards.has(ci)) continue;
         const card = player.demandCards[ci];
         if (!card || !card.demands) continue;
 
@@ -567,10 +664,15 @@ function buildSinglePlan(ctx, player, cardIndex, demandIndex, demand, sourceCity
         if (!segToDest) return null;
     }
 
-    const totalBuildCost = segToSource.cost + segToDest.cost;
-
     // Build the full path (milepost sequence) for movement/frontier
     const buildPath = combinePaths(segToSource.path, segToDest.path);
+
+    // Recompute actual build costs by walking each segment path edge-by-edge
+    // against real owned edges. The Dijkstra estimate can be off due to
+    // virtualTrack imprecision (city entry direction, non-edge milepost adjacency).
+    const segToSourceCost = recomputeBuildCost(ctx, player, segToSource.path);
+    const segToDestCost = recomputeBuildCost(ctx, player, segToDest.path);
+    const totalBuildCost = segToSourceCost + segToDestCost;
 
     // Compute trip distance (track-based milepost count)
     let tripDistance;
@@ -590,8 +692,8 @@ function buildSinglePlan(ctx, player, cardIndex, demandIndex, demand, sourceCity
     ];
 
     const segments = [
-        { from: majorCity || '(network)', to: sourceCity, buildCost: segToSource.cost, cumCashAfter: null },
-        { from: sourceCity, to: destCity, buildCost: segToDest.cost, cumCashAfter: null }
+        { from: majorCity || '(network)', to: sourceCity, buildCost: segToSourceCost, cumCashAfter: null },
+        { from: sourceCity, to: destCity, buildCost: segToDestCost, cumCashAfter: null }
     ];
 
     // The last stop is a delivery — mark cash checkpoint
@@ -1018,11 +1120,24 @@ function shouldUpgrade(gs, playerIndex, ctx) {
     // using a fixed reserve. With extensive track, most plans are cheap and
     // this passes easily. Early game with little track, plans are expensive
     // and the gate blocks premature upgrades.
-    const cashAfterAll = surplus - 20; // cash after upgrade + remaining route
-    const testPlan = selectPlan(gs, playerIndex, ctx, { effectiveCash: cashAfterAll });
+    //
+    // Important: project cash forward to include pending delivery payouts from
+    // the current plan, and exclude those demand cards from the test search.
+    // Otherwise the AI may find its *current* delivery as the "next" plan,
+    // approve the upgrade, then have no money for a real next plan.
+    let pendingPayout = 0;
+    const excludeCards = new Set();
+    for (const stop of plan.visitSequence) {
+        if (stop.action === 'deliver') {
+            pendingPayout += plan.deliveries[stop.deliveryIndex].payout;
+            excludeCards.add(stop.cardIndex);
+        }
+    }
+    const cashAfterAll = surplus - 20 + pendingPayout; // cash after upgrade + route + deliveries
+    const testPlan = selectPlan(gs, playerIndex, ctx, { effectiveCash: cashAfterAll, excludeCardIndices: excludeCards });
     if (!testPlan) {
         logDecision(playerIndex, 'build',
-            `Upgrade skipped: Gate 3 — no affordable plan with ${cashAfterAll}M post-upgrade cash`
+            `Upgrade skipped: Gate 3 — no affordable plan with ${cashAfterAll}M post-upgrade cash (pending payout: ${pendingPayout}M)`
         );
         return false;
     }
@@ -1159,8 +1274,24 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
     let totalMajorCities = 0;
     const ferries = [];
 
+    // For batch plans, stop building past the first undelivered delivery stop.
+    // The affordability check assumes intermediate delivery payouts fund later
+    // segments, so we must actually deliver before spending money on later segments.
+    let buildSegmentLimit = plan.segments.length;
+    if (plan.deliveries.length > 1) {
+        for (let i = 0; i < plan.visitSequence.length; i++) {
+            const stop = plan.visitSequence[i];
+            if (stop.action === 'deliver' && i >= plan.currentStopIndex) {
+                // Stop building after the segment that reaches this delivery
+                // (segIdx corresponds to visitSequence index)
+                buildSegmentLimit = i + 1;
+                break;
+            }
+        }
+    }
+
     // Walk through segments in visit-sequence order
-    for (let segIdx = 0; segIdx < plan.segments.length; segIdx++) {
+    for (let segIdx = 0; segIdx < buildSegmentLimit; segIdx++) {
         const seg = plan.segments[segIdx];
         if (seg.buildCost === 0) continue; // nothing to build
 
@@ -1492,13 +1623,16 @@ function planMovement(gs, playerIndex, ctx, plan) {
     const carriedGoods = [...player.loads];
 
     // §3.2 Movement loop
+    // Use a local simulation index — do NOT mutate plan.currentStopIndex here.
+    // The real index is advanced by the server when actions actually succeed.
+    let simStopIndex = plan.currentStopIndex;
+
     while (movementRemaining > 0 || actions.length <= 1) {
         // actions.length <= 1 allows the first iteration even with 0 movement
         // (to handle pickup at deploy location)
-        const nextStopIdx = plan.currentStopIndex;
-        if (nextStopIdx >= plan.visitSequence.length) break; // all stops visited
+        if (simStopIndex >= plan.visitSequence.length) break; // all stops visited
 
-        const nextStop = plan.visitSequence[nextStopIdx];
+        const nextStop = plan.visitSequence[simStopIndex];
         const stopId = ctx.cityToMilepost[nextStop.city];
         if (!stopId) break;
 
@@ -1520,13 +1654,14 @@ function planMovement(gs, playerIndex, ctx, plan) {
                     handleSupplyExhaustion(gs, playerIndex, plan, carriedGoods);
                     break;
                 }
-                actions.push({ type: 'pickupGood', good: nextStop.good });
+                actions.push({ type: 'pickupGood', good: nextStop.good, _advanceStop: true });
                 carriedGoods.push(nextStop.good);
             } else if (nextStop.action === 'deliver') {
                 actions.push({
                     type: 'deliverGood',
                     cardIndex: nextStop.cardIndex,
-                    demandIndex: nextStop.demandIndex
+                    demandIndex: nextStop.demandIndex,
+                    _advanceStop: true
                 });
                 // Remove delivered good from local tracking
                 const goodIdx = carriedGoods.indexOf(
@@ -1534,7 +1669,7 @@ function planMovement(gs, playerIndex, ctx, plan) {
                 );
                 if (goodIdx >= 0) carriedGoods.splice(goodIdx, 1);
             }
-            plan.currentStopIndex++;
+            simStopIndex++;
             continue; // Don't break — use remaining movement for next stop
         }
 
@@ -1578,10 +1713,9 @@ function planMovement(gs, playerIndex, ctx, plan) {
         }
     }
 
-    // Plan completion: if all stops visited, clear committed plan
-    if (plan.currentStopIndex >= plan.visitSequence.length) {
-        clearCommittedPlan(gs, playerIndex);
-    }
+    // Note: plan completion is handled by the server — as each pickup/deliver
+    // action succeeds, currentStopIndex advances. When planOperate is called
+    // next turn and currentStopIndex >= visitSequence.length, the plan is done.
 
     actions.push({ type: 'endOperatePhase' });
     return actions;

@@ -42,25 +42,205 @@
 
         .setup-dialog {
             background: #2d2d2d;
-            padding: 40px;
-            border-radius: 10px;
+            padding: 32px;
+            border-radius: 12px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            max-width: 600px;
+            max-width: 480px;
         }
 
         .setup-dialog h1 {
-            margin-bottom: 30px;
-            font-size: 28px;
+            margin-bottom: 4px;
+            font-size: 22px;
             text-align: center;
+            font-weight: 700;
         }
 
         .setup-section {
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
 
         .setup-section label {
             display: block;
             margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .lobby-section-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .lobby-room-code {
+            text-align: center;
+            font-size: 13px;
+            color: #888;
+            letter-spacing: 1px;
+            margin-bottom: 24px;
+        }
+        .lobby-room-code span {
+            color: #ccc;
+            font-weight: 600;
+        }
+
+        .lobby-divider {
+            border: none;
+            border-top: 1px solid #3a3a3a;
+            margin: 16px 0;
+        }
+
+        .lobby-player-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: #1a1a1a;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+        .lobby-player-row.empty {
+            opacity: 0.35;
+        }
+
+        .lobby-color-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .lobby-badge {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        .lobby-badge.host  { background: rgba(241,196,15,0.15); color: #f1c40f; }
+        .lobby-badge.you   { background: rgba(255,255,255,0.08); color: #888; }
+        .lobby-badge.ai    { background: rgba(46,204,113,0.12); color: #2ecc71; }
+
+        .lobby-ai-difficulty {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+        .lobby-ai-difficulty.easy { background: rgba(46,204,113,0.15); color: #2ecc71; }
+        .lobby-ai-difficulty.hard { background: rgba(231,76,60,0.15); color: #e74c3c; }
+
+        .lobby-difficulty-toggle {
+            display: inline-flex;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid #444;
+        }
+        .lobby-difficulty-toggle button {
+            padding: 3px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            background: transparent;
+            color: #888;
+            border: none;
+            cursor: pointer;
+            border-radius: 0;
+            transition: all 0.15s;
+        }
+        .lobby-difficulty-toggle button.active-easy {
+            background: rgba(46,204,113,0.2);
+            color: #2ecc71;
+        }
+        .lobby-difficulty-toggle button.active-hard {
+            background: rgba(231,76,60,0.2);
+            color: #e74c3c;
+        }
+        .lobby-difficulty-toggle button:hover:not(.active-easy):not(.active-hard) {
+            color: #ccc;
+        }
+
+        .lobby-color-picker {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .lobby-color-btn {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 2.5px solid transparent;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.15s;
+            padding: 0;
+        }
+        .lobby-color-btn:hover:not(:disabled) {
+            transform: scale(1.15);
+        }
+        .lobby-color-btn.selected {
+            border-color: #fff;
+            box-shadow: 0 0 6px rgba(255,255,255,0.3);
+        }
+        .lobby-color-btn:disabled {
+            opacity: 0.2;
+            cursor: not-allowed;
+        }
+
+        .lobby-settings-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .lobby-setting {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            color: #888;
+        }
+        .lobby-setting select {
+            padding: 3px 6px;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            color: #ccc;
+            border-radius: 4px;
+            font-size: 12px;
+            width: auto;
+        }
+        .lobby-setting-hint {
+            width: 100%;
+            font-size: 11px;
+            color: #555;
+            font-style: italic;
+        }
+
+        .lobby-footer {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 24px;
+        }
+        .lobby-footer .lobby-status {
+            flex: 1;
+            font-size: 12px;
+            color: #666;
+        }
+        .lobby-btn-back {
+            padding: 10px 24px;
+            font-size: 14px;
+            border-radius: 6px;
+            font-weight: 600;
+            background: #444;
+            color: #ccc;
+        }
+        .lobby-btn-back:hover { background: #555; }
+        .lobby-btn-start {
+            padding: 10px 24px;
+            font-size: 14px;
+            border-radius: 6px;
             font-weight: 600;
         }
 
@@ -1175,31 +1355,32 @@
 
     <!-- Lobby: Waiting Room -->
     <div class="setup-dialog" id="lobbyRoom" style="display: none;">
-        <h1>Eurorails Fan Adaptation</h1>
-        <div id="lobbyPasswordDisplay" style="text-align: center; margin-bottom: 20px; display: none;">
-            <span style="color: #888;">Password:</span>
-            <span id="lobbyPasswordValue" style="font-size: 22px; font-weight: bold; letter-spacing: 2px; margin-left: 10px;"></span>
-        </div>
+        <h1>Eurorails</h1>
+        <div id="lobbyRoomCode" class="lobby-room-code"></div>
 
         <div class="setup-section">
-            <label>Players: <span id="lobbyPlayerCount" style="color: #888; font-size: 13px;"></span></label>
+            <div class="lobby-section-label">Players &middot; <span id="lobbyPlayerCount"></span></div>
             <div id="lobbyPlayerList"></div>
         </div>
 
+        <hr class="lobby-divider">
+
         <div class="setup-section" id="lobbyColorSection">
-            <label>Choose your color:</label>
-            <div id="lobbyColorPicker" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+            <div class="lobby-section-label">Your Color</div>
+            <div id="lobbyColorPicker" class="lobby-color-picker"></div>
         </div>
 
+        <hr class="lobby-divider">
+
         <div class="setup-section" id="lobbyGameSettings">
-            <label>Game Settings:</label>
+            <div class="lobby-section-label">Game Settings</div>
             <div id="lobbyGameSettingsContent"></div>
         </div>
 
-        <div class="setup-buttons" style="gap: 10px;">
-            <button onclick="leaveRoom()" style="padding: 12px 24px; font-size: 14px; background: #555; border: 1px solid #666;">Back</button>
-            <button id="lobbyStartBtn" onclick="lobbyStartGame()" style="display: none; padding: 12px 40px; font-size: 16px;">Start Game</button>
-            <div id="lobbyWaiting" style="color: #888; font-size: 14px;">Waiting for host to start...</div>
+        <div class="lobby-footer">
+            <button class="lobby-btn-back" onclick="leaveRoom()">Back</button>
+            <span id="lobbyWaiting" class="lobby-status">Waiting for host to start...</span>
+            <button id="lobbyStartBtn" class="lobby-btn-start" onclick="lobbyStartGame()" style="display: none;">Start Game</button>
         </div>
     </div>
 
@@ -6700,17 +6881,16 @@ function renderLobbyRoom(info) {
     const maxPlayers = info.maxPlayers || 6;
     const isCurrentHost = info.hostSessionToken === myPlayerId;
 
-    // Password display
-    const pwDisplay = document.getElementById("lobbyPasswordDisplay");
+    // Room code + password header
+    const roomCodeEl = document.getElementById("lobbyRoomCode");
     if (info.password) {
-        pwDisplay.style.display = "block";
-        document.getElementById("lobbyPasswordValue").textContent = info.password;
+        roomCodeEl.innerHTML = `Room <span>${info.roomCode || ''}</span> &middot; Password <span>${info.password}</span>`;
     } else {
-        pwDisplay.style.display = "none";
+        roomCodeEl.innerHTML = `Room <span>${info.roomCode || ''}</span>`;
     }
 
     // Player count label
-    document.getElementById("lobbyPlayerCount").textContent = `(${info.players.length}/${maxPlayers})`;
+    document.getElementById("lobbyPlayerCount").textContent = `${info.players.length} / ${maxPlayers}`;
 
     // Player list
     const listEl = document.getElementById("lobbyPlayerList");
@@ -6728,86 +6908,50 @@ function renderLobbyRoom(info) {
         if (p.isAI) continue;
 
         const div = document.createElement("div");
-        div.className = "player-setup";
-        div.style.display = "flex";
-        div.style.alignItems = "center";
-        div.style.gap = "10px";
-        div.style.padding = "8px 12px";
-        div.style.marginBottom = "6px";
+        div.className = "lobby-player-row";
 
-        const colorDot = p.color
-            ? `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${COLOR_DISPLAY[p.color] || p.color};"></span>`
-            : `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#555;"></span>`;
+        const dotColor = p.color ? (COLOR_DISPLAY[p.color] || p.color) : '#555';
+        const dotStyle = p.color ? '' : 'border:1.5px dashed #777;';
 
-        div.innerHTML = `${colorDot} <span>${p.name}</span>${p.isHost ? ' <span style="color:#f1c40f;font-size:11px;">(host)</span>' : ''}${p.id === myPlayerId ? ' <span style="color:#888;font-size:11px;">(you)</span>' : ''}`;
+        let badges = '';
+        if (p.isHost) badges += ' <span class="lobby-badge host">Host</span>';
+        if (p.id === myPlayerId) badges += ' <span class="lobby-badge you">You</span>';
+
+        div.innerHTML = `<span class="lobby-color-dot" style="background:${dotColor};${dotStyle}"></span><span style="flex:1">${p.name}</span>${badges}`;
         listEl.appendChild(div);
     }
 
-    // Empty slots for non-host
-    if (!isCurrentHost) {
-        const emptySlots = maxPlayers - info.players.length;
-        for (let i = 0; i < emptySlots; i++) {
-            const div = document.createElement("div");
-            div.className = "player-setup";
-            div.style.display = "flex";
-            div.style.alignItems = "center";
-            div.style.gap = "10px";
-            div.style.padding = "8px 12px";
-            div.style.marginBottom = "6px";
-            div.style.opacity = "0.4";
-            div.innerHTML = `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#555;border:1px dashed #888;"></span> <span style="color:#888;font-style:italic;">Waiting for player...</span>`;
-            listEl.appendChild(div);
-        }
-    }
-
-    // AI players section (host sees full controls, others see read-only rows)
+    // AI players
     const aiPlayers = info.players.filter(p => p.isAI);
-    if (aiPlayers.length > 0 || isCurrentHost) {
-        const aiHeader = document.createElement("label");
-        aiHeader.textContent = "AI Opponents:";
-        aiHeader.style.cssText = "display:block;margin-top:12px;margin-bottom:6px;font-size:14px;color:#ccc;";
-        listEl.appendChild(aiHeader);
-    }
-
     for (const p of aiPlayers) {
+        const div = document.createElement("div");
+        div.className = "lobby-player-row";
+
+        const dotColor = p.color ? (COLOR_DISPLAY[p.color] || p.color) : '#555';
+        const dotStyle = p.color ? '' : 'border:1.5px dashed #777;';
+
+        let badges = '<span class="lobby-badge ai">AI</span>';
+
         if (isCurrentHost) {
-            // AI control row: label, difficulty dropdown, color buttons, remove
-            const row = document.createElement("div");
-            row.className = "solo-ai-row";
+            div.innerHTML = `<span class="lobby-color-dot" style="background:${dotColor};${dotStyle}"></span><span style="flex:1">${p.name}</span>${badges}`;
 
-            const label = document.createElement("span");
-            label.className = "ai-label";
-            label.textContent = p.name;
-            row.appendChild(label);
-
-            // Difficulty select
-            const select = document.createElement("select");
+            // Difficulty toggle
+            const toggle = document.createElement("span");
+            toggle.className = "lobby-difficulty-toggle";
             for (const diff of AI_DIFFICULTIES) {
-                const opt = document.createElement("option");
-                opt.value = diff;
-                opt.textContent = AI_DIFFICULTY_LABELS[diff];
-                if (p.difficulty === diff) opt.selected = true;
-                select.appendChild(opt);
-            }
-            select.onchange = () => socket.emit('updateAIPlayer', { sessionToken: p.id, difficulty: select.value }, (res) => {
-                if (res && !res.success) console.warn('updateAIPlayer:', res.error);
-            });
-            row.appendChild(select);
-
-            // Color buttons
-            for (const c of LOBBY_COLORS) {
                 const btn = document.createElement("button");
-                btn.className = "solo-ai-color-btn";
-                btn.style.background = COLOR_DISPLAY[c];
-                const isMine = p.color === c;
-                const takenByOther = !isMine && takenColors.has(c);
-                if (isMine) btn.classList.add("selected");
-                btn.disabled = takenByOther;
-                btn.onclick = () => socket.emit('updateAIPlayer', { sessionToken: p.id, color: c }, (res) => {
-                    if (res && !res.success) console.warn('updateAIPlayer:', res.error);
-                });
-                row.appendChild(btn);
+                btn.textContent = AI_DIFFICULTY_LABELS[diff];
+                if (p.difficulty === diff) btn.className = `active-${diff}`;
+                btn.onclick = () => {
+                    if (p.difficulty !== diff) {
+                        socket.emit('updateAIPlayer', { sessionToken: p.id, difficulty: diff }, (res) => {
+                            if (res && !res.success) console.warn('updateAIPlayer:', res.error);
+                        });
+                    }
+                };
+                toggle.appendChild(btn);
             }
+            div.appendChild(toggle);
 
             // Remove button
             const removeBtn = document.createElement("button");
@@ -6817,22 +6961,23 @@ function renderLobbyRoom(info) {
             removeBtn.onclick = () => socket.emit('removeAIPlayer', { sessionToken: p.id }, (res) => {
                 if (res && !res.success) console.warn('removeAIPlayer:', res.error);
             });
-            row.appendChild(removeBtn);
-
-            listEl.appendChild(row);
+            div.appendChild(removeBtn);
         } else {
-            // Read-only row for non-host
+            // Read-only difficulty chip
+            const diffChip = `<span class="lobby-ai-difficulty ${p.difficulty || 'easy'}">${AI_DIFFICULTY_LABELS[p.difficulty] || p.difficulty}</span>`;
+            div.innerHTML = `<span class="lobby-color-dot" style="background:${dotColor};${dotStyle}"></span><span style="flex:1">${p.name}</span>${badges}${diffChip}`;
+        }
+
+        listEl.appendChild(div);
+    }
+
+    // Empty slots for non-host
+    if (!isCurrentHost) {
+        const emptySlots = maxPlayers - info.players.length;
+        for (let i = 0; i < emptySlots; i++) {
             const div = document.createElement("div");
-            div.className = "player-setup";
-            div.style.display = "flex";
-            div.style.alignItems = "center";
-            div.style.gap = "10px";
-            div.style.padding = "8px 12px";
-            div.style.marginBottom = "6px";
-            const colorDot = p.color
-                ? `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${COLOR_DISPLAY[p.color] || p.color};"></span>`
-                : `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#555;"></span>`;
-            div.innerHTML = `${colorDot} <span>${p.name}</span> <span style="color:#2ecc71;font-size:11px;">(AI - ${AI_DIFFICULTY_LABELS[p.difficulty] || p.difficulty})</span>`;
+            div.className = "lobby-player-row empty";
+            div.innerHTML = `<span class="lobby-color-dot" style="background:#555;border:1.5px dashed #777;"></span><span style="flex:1;color:#666;font-style:italic;">Waiting for player...</span>`;
             listEl.appendChild(div);
         }
     }
@@ -6842,24 +6987,23 @@ function renderLobbyRoom(info) {
         const addBtn = document.createElement("button");
         addBtn.className = "solo-add-ai-btn";
         addBtn.textContent = "+ Add AI Opponent";
-        addBtn.style.marginTop = "6px";
+        addBtn.style.marginTop = "4px";
         addBtn.onclick = () => lobbyAddAI();
         listEl.appendChild(addBtn);
     }
 
-    // Color picker
+    // Color picker (compact)
     const pickerEl = document.getElementById("lobbyColorPicker");
     pickerEl.innerHTML = "";
     for (const c of LOBBY_COLORS) {
         const btn = document.createElement("button");
-        btn.style.width = "40px";
-        btn.style.height = "40px";
-        btn.style.borderRadius = "50%";
+        btn.className = "lobby-color-btn";
         btn.style.background = COLOR_DISPLAY[c];
-        btn.style.border = myColor === c ? "3px solid #fff" : "3px solid transparent";
-        btn.style.cursor = takenColors.has(c) && myColor !== c ? "not-allowed" : "pointer";
-        btn.style.opacity = takenColors.has(c) && myColor !== c ? "0.3" : "1";
-        btn.disabled = takenColors.has(c) && myColor !== c;
+        btn.title = c.charAt(0).toUpperCase() + c.slice(1);
+        const isMine = myColor === c;
+        const takenByOther = !isMine && takenColors.has(c);
+        if (isMine) btn.classList.add("selected");
+        btn.disabled = takenByOther;
         btn.onclick = () => selectLobbyColor(c);
         pickerEl.appendChild(btn);
     }
@@ -6869,22 +7013,22 @@ function renderLobbyRoom(info) {
     const gs = info.gameSettings || { winCashThreshold: 250, winMajorCitiesRequired: 7 };
     if (isCurrentHost) {
         settingsEl.innerHTML = `
-            <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
-                <label style="font-size:13px;color:#ccc;">Cash to win:
-                    <select id="settingCashThreshold" style="margin-left:4px;padding:4px 8px;font-size:13px;">
-                        ${[100,150,200,250,300,350,400,450,500].map(v => `<option value="${v}"${v === gs.winCashThreshold ? ' selected' : ''}>${v}M ECU</option>`).join('')}
+            <div class="lobby-settings-row">
+                <span class="lobby-setting">Cash to win
+                    <select id="settingCashThreshold">
+                        ${[100,150,200,250,300,350,400,450,500].map(v => `<option value="${v}"${v === gs.winCashThreshold ? ' selected' : ''}>${v}M</option>`).join('')}
                     </select>
-                </label>
-                <label style="font-size:13px;color:#ccc;">Major cities:
-                    <select id="settingMajorCities" style="margin-left:4px;padding:4px 8px;font-size:13px;">
+                </span>
+                <span class="lobby-setting">Major cities
+                    <select id="settingMajorCities">
                         ${[1,2,3,4,5,6,7,8].map(v => `<option value="${v}"${v === gs.winMajorCitiesRequired ? ' selected' : ''}>${v} of 8</option>`).join('')}
                     </select>
-                </label>
-                <label style="font-size:13px;color:#ccc;">Train speed:
-                    <select id="settingSpeedTier" style="margin-left:4px;padding:4px 8px;font-size:13px;">
+                </span>
+                <span class="lobby-setting">Speed
+                    <select id="settingSpeedTier">
                         ${[["Standard","Standard (9/12 mp)"],["Faster","Faster (12/16 mp)"],["Fastest","Fastest (15/20 mp)"]].map(([val,label]) => `<option value="${val}"${val === (gs.speedTier || "Standard") ? ' selected' : ''}>${label}</option>`).join('')}
                     </select>
-                </label>
+                </span>
             </div>`;
         document.getElementById("settingCashThreshold").onchange = (e) => {
             socket.emit('updateGameSettings', { winCashThreshold: parseInt(e.target.value) }, (res) => {
@@ -6902,8 +7046,9 @@ function renderLobbyRoom(info) {
             });
         };
     } else {
-        const tierLabel = {"Standard":"Standard (9/12 mp)","Faster":"Faster (12/16 mp)","Fastest":"Fastest (15/20 mp)"}[gs.speedTier || "Standard"];
-        settingsEl.innerHTML = `<span style="font-size:13px;color:#aaa;">Win: ${gs.winCashThreshold}M ECU + ${gs.winMajorCitiesRequired} of 8 major cities · Speed: ${tierLabel}</span>`;
+        const tierLabels = {"Standard":"Standard (9/12 mp)","Faster":"Faster (12/16 mp)","Fastest":"Fastest (15/20 mp)"};
+        const tierLabel = tierLabels[gs.speedTier || "Standard"];
+        settingsEl.innerHTML = `<div style="font-size:12px;color:#888;">${gs.winCashThreshold}M ECU &middot; ${gs.winMajorCitiesRequired} of 8 major cities &middot; ${tierLabel}</div>`;
     }
 
     // Host controls
@@ -6913,14 +7058,18 @@ function renderLobbyRoom(info) {
     document.getElementById("lobbyStartBtn").style.display = isCurrentHost ? "inline-block" : "none";
     document.getElementById("lobbyStartBtn").disabled = !canStart;
     document.getElementById("lobbyStartBtn").style.opacity = canStart ? "1" : "0.5";
-    document.getElementById("lobbyWaiting").style.display = isCurrentHost ? "none" : "block";
+
+    const waitingEl = document.getElementById("lobbyWaiting");
     if (isCurrentHost && !canStart) {
-        document.getElementById("lobbyWaiting").style.display = "block";
-        document.getElementById("lobbyWaiting").textContent = !enoughPlayers
-            ? 'Need at least 2 players to start (add AI or wait for players)'
+        waitingEl.style.display = "block";
+        waitingEl.textContent = !enoughPlayers
+            ? 'Need at least 2 players to start'
             : 'All players must pick a color';
-    } else if (!isCurrentHost) {
-        document.getElementById("lobbyWaiting").textContent = enoughPlayers && allHaveColors
+    } else if (isCurrentHost && canStart) {
+        waitingEl.style.display = "none";
+    } else {
+        waitingEl.style.display = "block";
+        waitingEl.textContent = enoughPlayers && allHaveColors
             ? 'Waiting for host to start...'
             : !enoughPlayers
                 ? 'Waiting for more players...'
