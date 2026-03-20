@@ -1734,17 +1734,48 @@ function findFrontierPath(ctx, currentLoc, plan, playerColor) {
     const reachable = getConnectedComponent(ctx, currentLoc, playerColor);
     if (reachable.size <= 1) return null;
 
-    // Find the farthest reachable milepost on the build path
+    // Find the farthest reachable milepost on the build path that is
+    // CLOSER to the next stop than our current location. This prevents
+    // picking the current location itself as the frontier (e.g., when
+    // the AI is at the end of the buildPath but needs to go backward
+    // toward an earlier stop like a pickup city).
     const buildPathSet = new Set(plan.buildPath);
+
+    // Find where the next stop is on the buildPath
+    const nextStop = plan.visitSequence[plan.currentStopIndex];
+    const nextStopId = nextStop ? ctx.cityToMilepost[nextStop.city] : null;
+    let nextStopBuildIdx = -1;
+    if (nextStopId) {
+        for (let i = 0; i < plan.buildPath.length; i++) {
+            if (plan.buildPath[i] === nextStopId) { nextStopBuildIdx = i; break; }
+        }
+    }
+
     let bestFrontier = null;
     let bestIdx = -1;
 
-    for (let i = plan.buildPath.length - 1; i >= 0; i--) {
-        const mpId = plan.buildPath[i];
-        if (reachable.has(mpId) && buildPathSet.has(mpId)) {
-            bestFrontier = mpId;
-            bestIdx = i;
-            break;
+    if (nextStopBuildIdx >= 0) {
+        // Search from the next stop backward toward current location —
+        // find the farthest reachable point toward the next stop
+        for (let i = nextStopBuildIdx; i >= 0; i--) {
+            const mpId = plan.buildPath[i];
+            if (reachable.has(mpId) && mpId !== currentLoc) {
+                bestFrontier = mpId;
+                bestIdx = i;
+                break;
+            }
+        }
+    }
+
+    // Fallback: search from end of buildPath backward (original behavior)
+    if (!bestFrontier) {
+        for (let i = plan.buildPath.length - 1; i >= 0; i--) {
+            const mpId = plan.buildPath[i];
+            if (reachable.has(mpId) && buildPathSet.has(mpId) && mpId !== currentLoc) {
+                bestFrontier = mpId;
+                bestIdx = i;
+                break;
+            }
         }
     }
 
