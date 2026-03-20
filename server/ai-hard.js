@@ -1782,10 +1782,17 @@ function findFrontierPath(ctx, currentLoc, plan, playerColor, simStopIndex) {
 
     if (nextStopBuildIdx >= 0) {
         // Search from the next stop backward toward current location —
-        // find the farthest reachable point toward the next stop
+        // find the farthest reachable point toward the next stop.
+        // If the current location IS the closest reachable point (frontier),
+        // return null — the AI is already at the frontier and should wait
+        // for track to be built, not oscillate backward.
         for (let i = nextStopBuildIdx; i >= 0; i--) {
             const mpId = plan.buildPath[i];
-            if (reachable.has(mpId) && mpId !== currentLoc) {
+            if (reachable.has(mpId)) {
+                if (mpId === currentLoc) {
+                    // Already at the frontier — nowhere useful to move
+                    return null;
+                }
                 bestFrontier = mpId;
                 bestIdx = i;
                 break;

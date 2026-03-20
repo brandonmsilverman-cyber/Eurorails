@@ -226,15 +226,15 @@ describe('checkAffordability', () => {
         assert.equal(aiHard.checkAffordability(plan, player, null), false);
     });
 
-    it('rejects plans with exact cash match (2M reserve)', () => {
+    it('rejects plans with exact cash match (5M reserve)', () => {
         const player = makePlayer({ cash: 25 });
         const plan = { deliveries: [{}], totalBuildCost: 25 };
         assert.equal(aiHard.checkAffordability(plan, player, null), false,
-            'exact match should be rejected — need 2M reserve');
+            'exact match should be rejected — need 5M reserve');
     });
 
     it('accepts plans with cash exceeding cost by reserve', () => {
-        const player = makePlayer({ cash: 27 });
+        const player = makePlayer({ cash: 30 });
         const plan = { deliveries: [{}], totalBuildCost: 25 };
         assert.equal(aiHard.checkAffordability(plan, player, null), true);
     });
