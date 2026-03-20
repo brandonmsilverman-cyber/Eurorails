@@ -133,6 +133,7 @@
         }
         .lobby-ai-difficulty.easy { background: rgba(46,204,113,0.15); color: #2ecc71; }
         .lobby-ai-difficulty.hard { background: rgba(231,76,60,0.15); color: #e74c3c; }
+        .lobby-ai-difficulty.brutal { background: rgba(155,89,182,0.15); color: #9b59b6; }
 
         .lobby-difficulty-toggle {
             display: inline-flex;
@@ -159,7 +160,11 @@
             background: rgba(231,76,60,0.2);
             color: #e74c3c;
         }
-        .lobby-difficulty-toggle button:hover:not(.active-easy):not(.active-hard) {
+        .lobby-difficulty-toggle button.active-brutal {
+            background: rgba(155,89,182,0.2);
+            color: #9b59b6;
+        }
+        .lobby-difficulty-toggle button:hover:not(.active-easy):not(.active-hard):not(.active-brutal) {
             color: #ccc;
         }
 
@@ -6943,8 +6948,10 @@ function renderLobbyRoom(info) {
                 btn.textContent = AI_DIFFICULTY_LABELS[diff];
                 if (p.difficulty === diff) btn.className = `active-${diff}`;
                 btn.onclick = () => {
+                    console.log('Difficulty toggle clicked:', diff, 'current:', p.difficulty, 'id:', p.id);
                     if (p.difficulty !== diff) {
                         socket.emit('updateAIPlayer', { sessionToken: p.id, difficulty: diff }, (res) => {
+                            console.log('updateAIPlayer response:', res);
                             if (res && !res.success) console.warn('updateAIPlayer:', res.error);
                         });
                     }
@@ -7087,8 +7094,8 @@ function lobbyAddAI() {
     });
 }
 
-const AI_DIFFICULTIES = ['easy', 'hard'];
-const AI_DIFFICULTY_LABELS = { easy: 'Easy', hard: 'Hard' };
+const AI_DIFFICULTIES = ['easy', 'hard', 'brutal'];
+const AI_DIFFICULTY_LABELS = { easy: 'Easy', hard: 'Hard', brutal: 'Brutal' };
 
 // ============================================================================
 // SAVE & RESUME

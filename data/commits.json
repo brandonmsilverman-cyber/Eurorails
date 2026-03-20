@@ -1,4 +1,5 @@
 [
+  {"message": "Add Brutal AI with 3-delivery batches, Superfreight upgrades, and fix AI stuck loops", "date": "Mar 20, 2026"},
   {"message": "Rewrite easy AI to inherit from hard AI (singles only, no batches)", "date": "Mar 20, 2026"},
   {"message": "Fix AI frontier movement and batch build delivery gating", "date": "Mar 19, 2026"},
   {"message": "Polish game prep room UI and fix hard AI plan execution bugs", "date": "Mar 19, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Add AI player lobby management for multiplayer rooms", "date": "Mar 15, 2026"},
   {"message": "Add isAI flag as first-class player model property", "date": "Mar 15, 2026"},
   {"message": "Add bidirectional pathfinding to minimize AI build costs", "date": "Mar 14, 2026"},
-  {"message": "Fix AI deploy and initial build to prioritize source city", "date": "Mar 14, 2026"},
-  {"message": "Add lookahead building for AI when primary route is complete", "date": "Mar 14, 2026"}
+  {"message": "Fix AI deploy and initial build to prioritize source city", "date": "Mar 14, 2026"}
 ]

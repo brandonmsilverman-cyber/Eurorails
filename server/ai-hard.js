@@ -70,10 +70,10 @@ function recomputeBuildCost(ctx, player, buildPath) {
 // direction. When the target is an unconnected major city, compute the path
 // building OUT from the major city (1M exit) rather than INTO it (5M entry).
 // The returned path is always in movement order (source → target).
-function findCheapestBuildPath(ctx, idA, idB, playerColor, virtualTrack) {
+function findCheapestBuildPath(ctx, idA, idB, playerColor, virtualTrack, virtualEdges) {
     // Try both directions and pick cheaper
-    const fwd = findPath(ctx, idA, idB, playerColor, "cheapest", false, virtualTrack);
-    const rev = findPath(ctx, idB, idA, playerColor, "cheapest", false, virtualTrack);
+    const fwd = findPath(ctx, idA, idB, playerColor, "cheapest", false, virtualTrack, virtualEdges);
+    const rev = findPath(ctx, idB, idA, playerColor, "cheapest", false, virtualTrack, virtualEdges);
 
     let best = null;
     if (fwd && rev) {
@@ -382,13 +382,16 @@ function buildBatchPlan(ctx, player, deliveryA, deliveryB, sequenceIndices, majo
         return null;
     }
 
-    // Compute segments with virtual track accumulation
-    const virtualTrack = new Set();
-    if (majorId) {
-        virtualTrack.add(majorId);
-    } else {
-        const ownedMps = getPlayerOwnedMileposts(ctx, player.color);
-        for (const mpId of ownedMps) virtualTrack.add(mpId);
+    // Compute segments with virtual edge accumulation.
+    // Track planned edges (not just mileposts) so later segments only get
+    // free passage on edges that were actually planned by earlier segments.
+    const virtualEdges = new Set();
+    // Seed with owned edges so pathfinder treats them as free
+    for (const t of ctx.tracks) {
+        if (t.color === player.color) {
+            virtualEdges.add(t.from + '|' + t.to);
+            virtualEdges.add(t.to + '|' + t.from);
+        }
     }
 
     const segments = [];
@@ -404,16 +407,16 @@ function buildBatchPlan(ctx, player, deliveryA, deliveryB, sequenceIndices, majo
 
         let segPath;
         if (prevId) {
-            segPath = findCheapestBuildPath(ctx, prevId, stopId, player.color, virtualTrack);
+            segPath = findCheapestBuildPath(ctx, prevId, stopId, player.color, null, virtualEdges);
         } else {
             // No specific prev — find from network
             segPath = findCheapestBuildPathFromNetwork(ctx, player, stopId);
             if (segPath) {
-                // Adjust cost for virtual track
+                // Adjust cost for virtual edges
                 let adjustedCost = 0;
                 for (let j = 0; j < segPath.path.length - 1; j++) {
-                    if (virtualTrack.has(segPath.path[j]) && virtualTrack.has(segPath.path[j + 1])) continue;
-                    if (virtualTrack.has(segPath.path[j + 1])) continue;
+                    const edgeKey = segPath.path[j] + '|' + segPath.path[j + 1];
+                    if (virtualEdges.has(edgeKey)) continue;
                     const m1 = ctx.mileposts_by_id[segPath.path[j]];
                     const m2 = ctx.mileposts_by_id[segPath.path[j + 1]];
                     if (m1 && m2) adjustedCost += getMileppostCost(m1, m2);
@@ -432,8 +435,11 @@ function buildBatchPlan(ctx, player, deliveryA, deliveryB, sequenceIndices, majo
         });
         segmentPaths.push(segPath.path);
 
-        // Add path to virtual track
-        for (const mpId of segPath.path) virtualTrack.add(mpId);
+        // Add planned edges to virtual set
+        for (let j = 0; j < segPath.path.length - 1; j++) {
+            virtualEdges.add(segPath.path[j] + '|' + segPath.path[j + 1]);
+            virtualEdges.add(segPath.path[j + 1] + '|' + segPath.path[j]);
+        }
         totalBuildCost += segCost;
 
         prevId = stopId;
@@ -640,27 +646,38 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
 // Build a single-delivery plan object. Returns null if path can't be found.
 function buildSinglePlan(ctx, player, cardIndex, demandIndex, demand, sourceCity, srcId, destCity, destId, majorId, majorCity, effectiveCash) {
     // Compute path segments: network → source, source → dest
+    // Use virtual edges (not mileposts) so the second segment only reuses
+    // edges actually planned by the first segment, avoiding spurious loops.
     let segToSource, segToDest;
-    const virtualTrack = new Set();
+    const virtualEdges = new Set();
+    // Seed with owned edges
+    for (const t of ctx.tracks) {
+        if (t.color === player.color) {
+            virtualEdges.add(t.from + '|' + t.to);
+            virtualEdges.add(t.to + '|' + t.from);
+        }
+    }
 
     if (majorId !== null) {
         // Initial building: major city is the "network"
-        virtualTrack.add(majorId);
-        segToSource = findCheapestBuildPath(ctx, majorId, srcId, player.color, virtualTrack);
+        segToSource = findCheapestBuildPath(ctx, majorId, srcId, player.color, null, virtualEdges);
         if (!segToSource) return null;
-        // Add source path to virtual track
-        for (const mpId of segToSource.path) virtualTrack.add(mpId);
-        segToDest = findCheapestBuildPath(ctx, srcId, destId, player.color, virtualTrack);
+        // Add source path edges to virtual set
+        for (let j = 0; j < segToSource.path.length - 1; j++) {
+            virtualEdges.add(segToSource.path[j] + '|' + segToSource.path[j + 1]);
+            virtualEdges.add(segToSource.path[j + 1] + '|' + segToSource.path[j]);
+        }
+        segToDest = findCheapestBuildPath(ctx, srcId, destId, player.color, null, virtualEdges);
         if (!segToDest) return null;
     } else {
         // Existing network: find cheapest connection from owned track
         segToSource = findCheapestBuildPathFromNetwork(ctx, player, srcId);
         if (!segToSource) return null;
-        for (const mpId of segToSource.path) virtualTrack.add(mpId);
-        // Add player's owned mileposts to virtualTrack
-        const ownedMps = getPlayerOwnedMileposts(ctx, player.color);
-        for (const mpId of ownedMps) virtualTrack.add(mpId);
-        segToDest = findCheapestBuildPath(ctx, srcId, destId, player.color, virtualTrack);
+        for (let j = 0; j < segToSource.path.length - 1; j++) {
+            virtualEdges.add(segToSource.path[j] + '|' + segToSource.path[j + 1]);
+            virtualEdges.add(segToSource.path[j + 1] + '|' + segToSource.path[j]);
+        }
+        segToDest = findCheapestBuildPath(ctx, srcId, destId, player.color, null, virtualEdges);
         if (!segToDest) return null;
     }
 
@@ -771,10 +788,11 @@ function combinePaths(path1, path2) {
 // Batches: segment-based sequential check with cash checkpoints at each
 // delivery stop (§1.3). Cash is updated after each delivery payout.
 //
-// A 2M reserve is applied to prevent the AI from committing every last dollar
-// to building — cost estimates have inherent imprecision (city entry direction,
-// virtual track deduplication) and zero-margin plans leave no room for recovery.
-const AFFORDABILITY_RESERVE = 2;
+// Reserve applied during affordability checks to prevent the AI from committing
+// every last dollar to building. Cost estimates have inherent imprecision (city
+// entry direction, edge-based vs milepost-based deduplication) and zero-margin
+// plans leave no room for recovery from tax events or cost surprises.
+const AFFORDABILITY_RESERVE = 5;
 
 function checkAffordability(plan, player, ctx, options) {
     const effectiveCash = (options && options.effectiveCash) || player.cash;
@@ -1241,7 +1259,12 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
     const player = gs.players[playerIndex];
     const remainingBudget = 20 - gs.buildingThisTurn;
     const spendLimit = Math.min(remainingBudget, player.cash);
-    if (spendLimit <= 0) return [];
+    if (spendLimit <= 0) {
+        if (player.cash <= 0) {
+            logDecision(playerIndex, 'build', `No budget: cash=${player.cash}M. Plan: ${formatPlanSummary(plan)}`);
+        }
+        return [];
+    }
 
     // Build sets of owned track for checking what's already built
     const ownedEdges = new Set();
@@ -2134,10 +2157,12 @@ function shouldAbandon(gs, playerIndex, ctx, plan) {
     // 4. Stuck counter — 3+ turns with no progress
     if (aiState.stuckTurnCounter >= 3) {
         logDecision(playerIndex, 'plan abandoned',
-            `Reason: stuck ${aiState.stuckTurnCounter}+ turns. ` +
-            `Previous plan: ${formatPlanSummary(plan)}. Carrying: [${player.loads}]`
+            `Reason: stuck ${aiState.stuckTurnCounter}+ turns (cash=${player.cash}M). ` +
+            `Previous plan: ${formatPlanSummary(plan)}. stopIdx=${plan.currentStopIndex}/${plan.visitSequence.length}. ` +
+            `Carrying: [${player.loads}]`
         );
         aiState.stuckTurnCounter = 0;
+        aiState.stuckAbandoned = true; // Signal planOperate to discard instead of reselect
         return true;
     }
 
@@ -2185,8 +2210,15 @@ function planOperate(gs, playerIndex, ctx, strategy) {
 
     if (plan) {
         if (strategy.shouldAbandon(gs, playerIndex, ctx, plan)) {
+            const wasStuck = getAIState(gs.players[playerIndex]).stuckAbandoned;
             clearCommittedPlan(gs, playerIndex);
             plan = getCommittedPlan(gs, playerIndex); // residual plan if any
+            // If abandoned due to being stuck (not cargo/supply/affordability),
+            // discard to get fresh cards instead of reselecting the same plan.
+            if (wasStuck && !plan && gs.players[playerIndex].loads.length === 0) {
+                getAIState(gs.players[playerIndex]).stuckAbandoned = false;
+                return [{ type: 'discardHand' }];
+            }
         } else {
             return strategy.planMovement(gs, playerIndex, ctx, plan);
         }
@@ -2228,8 +2260,11 @@ function planBuild(gs, playerIndex, ctx, strategy) {
         }
     }
 
-    if (strategy.shouldUpgrade(gs, playerIndex, ctx)) {
-        return [{ type: 'upgradeTo', trainType: 'Fast Freight' }, { type: 'endTurn' }];
+    const upgradeResult = strategy.shouldUpgrade(gs, playerIndex, ctx);
+    if (upgradeResult) {
+        // shouldUpgrade returns true (Hard AI) or a train type string (Brutal AI)
+        const trainType = typeof upgradeResult === 'string' ? upgradeResult : 'Fast Freight';
+        return [{ type: 'upgradeTo', trainType }, { type: 'endTurn' }];
     }
 
     const buildActions = strategy.computeBuildOrder(gs, playerIndex, ctx, plan);

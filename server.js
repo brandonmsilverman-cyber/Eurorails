@@ -43,6 +43,7 @@ const findPathOnTrack = gl.findPathOnTrack;
 let aiActions = null;
 const aiEasy = require('./server/ai-easy');
 const aiHard = require('./server/ai-hard');
+const aiBrutal = require('./server/ai-brutal');
 
 const LOBBY_COLORS = ["red", "blue", "green", "yellow", "purple", "orange"];
 
@@ -915,9 +916,12 @@ function executeAITurn(roomCode, room) {
     const player = gs.players[playerIndex];
     if (!player || !player.isAI) return;
 
-    // Both easy and hard AI use two-phase execution (planOperate → planBuild)
-    const strategy = player.difficulty === 'hard' ? aiHard : aiEasy;
-    const label = player.difficulty === 'hard' ? 'HARD' : 'EASY';
+    // All AI difficulties use two-phase execution (planOperate → planBuild)
+    const strategy = player.difficulty === 'brutal' ? aiBrutal
+                   : player.difficulty === 'hard' ? aiHard
+                   : aiEasy;
+    const label = player.difficulty === 'brutal' ? 'BRUTAL'
+                : player.difficulty === 'hard' ? 'HARD' : 'EASY';
     executeTwoPhaseAITurn(roomCode, room, strategy, label);
 }
 
@@ -971,6 +975,11 @@ function executeTwoPhaseAITurn(roomCode, room, strategy, label) {
         return;
     }
 
+    // Track whether the AI made meaningful progress this turn (for stuck detection).
+    // Updated by executeHardAIActionSequence when actions succeed, and by the
+    // build action sequence below.
+    const turnProgress = { made: false };
+
     // Execute operate actions, then plan and execute build phase
     executeHardAIActionSequence(roomCode, room, operateActions, 0, () => {
         // Phase 2: Build (with post-operate state)
@@ -989,16 +998,35 @@ function executeTwoPhaseAITurn(roomCode, room, strategy, label) {
         }
         if (!buildActions || buildActions.length === 0) buildActions = [{ type: 'endTurn' }];
 
+        // Update stuck counter before executing build actions.
+        // Build progress is checked from the planned actions (commitBuild/upgradeTo
+        // are reliable — if planned, they succeed barring edge cases).
         const bp = freshGs.players[freshGs.currentPlayerIndex];
+        const buildProgress = buildActions.some(a => a.type === 'commitBuild' || a.type === 'upgradeTo');
+        const madeProgress = turnProgress.made || buildProgress;
+        try {
+            const freshCtx = buildPathfindingCtx(freshGs);
+            strategy.updateStuckCounter(freshGs, freshGs.currentPlayerIndex, freshCtx, madeProgress);
+            if (!madeProgress) {
+                const aiState = strategy.getAIState(bp);
+                console.log(`Room ${roomCode}: ${bp.name} stuck counter: ${aiState.stuckTurnCounter} (no progress this turn)`);
+            }
+        } catch (err) {
+            console.warn(`Room ${roomCode}: updateStuckCounter error: ${err.message}`);
+        }
         console.log(`Room ${roomCode}: ${bp.name} [${label}] build (cash=${bp.cash}): [${buildActions.map(a => a.type).join(', ')}]`);
         executeAIActionSequence(roomCode, room, buildActions, 0);
-    });
+    }, turnProgress);
 }
+
+// Actions that count as meaningful progress for stuck detection
+const AI_PROGRESS_ACTIONS = new Set(['commitMove', 'pickupGood', 'deliverGood']);
 
 // Execute a sequence of Hard AI actions with a callback when done.
 // Similar to executeAIActionSequence but calls onComplete after the last
 // non-terminal action (endOperatePhase), allowing the build phase to follow.
-function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete) {
+// turnProgress is an optional { made: boolean } object for tracking progress.
+function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete, turnProgress) {
     if (!rooms.has(roomCode)) return;
     const gs = room.gameState;
     if (!gs) return;
@@ -1025,7 +1053,7 @@ function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete
         if (skippable.includes(action.type)) {
             room.aiTurnTimer = setTimeout(() => {
                 room.aiTurnTimer = null;
-                executeHardAIActionSequence(roomCode, room, plan, stepIndex + 1, onComplete);
+                executeHardAIActionSequence(roomCode, room, plan, stepIndex + 1, onComplete, turnProgress);
             }, AI_ACTION_DELAY_MS);
             return;
         }
@@ -1034,8 +1062,15 @@ function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete
         return;
     }
 
-    const aiLabel = player.difficulty === 'hard' ? 'HARD' : 'EASY';
-    const aiModule = player.difficulty === 'hard' ? aiHard : aiEasy;
+    // Track meaningful progress for stuck detection
+    if (turnProgress && AI_PROGRESS_ACTIONS.has(action.type)) {
+        turnProgress.made = true;
+    }
+
+    const aiLabel = player.difficulty === 'brutal' ? 'BRUTAL'
+                  : player.difficulty === 'hard' ? 'HARD' : 'EASY';
+    const aiModule = player.difficulty === 'brutal' ? aiBrutal
+                   : player.difficulty === 'hard' ? aiHard : aiEasy;
     console.log(`Room ${roomCode}: ${player.name} [${aiLabel}] action: ${actionSummary}${result.logs ? ' — ' + result.logs[result.logs.length - 1] : ''}`);
     broadcastStateUpdate(roomCode, room, result.uiEvent);
 
@@ -1127,8 +1162,10 @@ function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete
             const p = freshGs.players[pi];
             if (!p || !p.isAI) return;
             let replan;
-            const replanModule = p.difficulty === 'hard' ? aiHard : aiEasy;
-            const replanLabel = p.difficulty === 'hard' ? 'HARD' : 'EASY';
+            const replanModule = p.difficulty === 'brutal' ? aiBrutal
+                              : p.difficulty === 'hard' ? aiHard : aiEasy;
+            const replanLabel = p.difficulty === 'brutal' ? 'BRUTAL'
+                              : p.difficulty === 'hard' ? 'HARD' : 'EASY';
             try {
                 const freshCtx = buildPathfindingCtx(freshGs);
                 const committedPlan = replanModule.getCommittedPlan(freshGs, pi);
@@ -1143,7 +1180,7 @@ function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete
             }
             if (!replan || replan.length === 0) replan = [{ type: 'endOperatePhase' }];
             console.log(`Room ${roomCode}: ${p.name} [${replanLabel}] post-delivery re-plan: [${replan.map(a => a.type).join(', ')}]`);
-            executeHardAIActionSequence(roomCode, room, replan, 0, onComplete);
+            executeHardAIActionSequence(roomCode, room, replan, 0, onComplete, turnProgress);
         }, AI_ACTION_DELAY_MS);
         return;
     }
@@ -1151,7 +1188,7 @@ function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete
     // Continue to next action
     room.aiTurnTimer = setTimeout(() => {
         room.aiTurnTimer = null;
-        executeHardAIActionSequence(roomCode, room, plan, stepIndex + 1, onComplete);
+        executeHardAIActionSequence(roomCode, room, plan, stepIndex + 1, onComplete, turnProgress);
     }, AI_ACTION_DELAY_MS);
 }
 
@@ -1798,7 +1835,7 @@ io.on('connection', (socket) => {
         }
 
         // Validate difficulty
-        const validDifficulties = ['easy', 'hard'];
+        const validDifficulties = ['easy', 'hard', 'brutal'];
         if (!difficulty || !validDifficulties.includes(difficulty)) {
             return callback && callback({ success: false, error: 'Invalid difficulty' });
         }
@@ -1820,7 +1857,7 @@ io.on('connection', (socket) => {
         const aiKey = `ai-${randomUUID()}`;
         const aiSessionToken = `ai-${randomUUID()}`;
         room.players.set(aiKey, {
-            name: `AI ${aiCount + 1}`,
+            name: `AI ${aiCount + 1} (${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)})`,
             color: autoColor,
             sessionToken: aiSessionToken,
             isAI: true,
@@ -1874,11 +1911,16 @@ io.on('connection', (socket) => {
 
         // Update difficulty if provided
         if (difficulty !== undefined) {
-            const validDifficulties = ['easy', 'hard'];
+            const validDifficulties = ['easy', 'hard', 'brutal'];
             if (!validDifficulties.includes(difficulty)) {
                 return callback && callback({ success: false, error: 'Invalid difficulty' });
             }
             aiPlayer.difficulty = difficulty;
+            // Update name to reflect new difficulty
+            const aiNumber = aiPlayer.name.match(/^AI (\d+)/);
+            if (aiNumber) {
+                aiPlayer.name = `AI ${aiNumber[1]} (${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)})`;
+            }
         }
 
         io.to(socket.roomCode).emit('roomUpdate', getRoomInfo(socket.roomCode));
