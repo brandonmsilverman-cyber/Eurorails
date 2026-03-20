@@ -1700,7 +1700,7 @@ function planMovement(gs, playerIndex, ctx, plan) {
             }
         } else {
             // 2b: Stop NOT reachable — frontier movement (§3.3)
-            const frontierPath = findFrontierPath(ctx, currentLoc, plan, player.color);
+            const frontierPath = findFrontierPath(ctx, currentLoc, plan, player.color, simStopIndex);
             if (frontierPath && frontierPath.length >= 2) {
                 const stepsToTake = Math.min(frontierPath.length - 1, movementRemaining);
                 const truncatedPath = frontierPath.slice(0, stepsToTake + 1);
@@ -1729,7 +1729,7 @@ function planMovement(gs, playerIndex, ctx, plan) {
 // track that is on the planned build path AND reachable from the train's
 // current position (same connected component).
 // Fallback: closest reachable milepost to the network attachment point.
-function findFrontierPath(ctx, currentLoc, plan, playerColor) {
+function findFrontierPath(ctx, currentLoc, plan, playerColor, simStopIndex) {
     // Get reachable mileposts from current position (BFS on owned track)
     const reachable = getConnectedComponent(ctx, currentLoc, playerColor);
     if (reachable.size <= 1) return null;
@@ -1741,8 +1741,11 @@ function findFrontierPath(ctx, currentLoc, plan, playerColor) {
     // toward an earlier stop like a pickup city).
     const buildPathSet = new Set(plan.buildPath);
 
-    // Find where the next stop is on the buildPath
-    const nextStop = plan.visitSequence[plan.currentStopIndex];
+    // Find where the next stop is on the buildPath.
+    // Use simStopIndex (the movement loop's simulated position) when provided,
+    // falling back to plan.currentStopIndex (the committed position).
+    const stopIdx = simStopIndex !== undefined ? simStopIndex : plan.currentStopIndex;
+    const nextStop = plan.visitSequence[stopIdx];
     const nextStopId = nextStop ? ctx.cityToMilepost[nextStop.city] : null;
     let nextStopBuildIdx = -1;
     if (nextStopId) {
@@ -2211,11 +2214,18 @@ function planOperate(gs, playerIndex, ctx, strategy) {
 
 function planBuild(gs, playerIndex, ctx, strategy) {
     strategy = strategy || module.exports;
-    const plan = getCommittedPlan(gs, playerIndex);
+    let plan = getCommittedPlan(gs, playerIndex);
 
     if (!plan) {
-        const buildActions = strategy.computeBuildOrder(gs, playerIndex, ctx, null);
-        return [...buildActions, { type: 'endTurn' }];
+        // No committed plan (completed mid-turn or discarded). Try to select
+        // a new plan so we can build toward it instead of wasting the build phase.
+        plan = strategy.selectPlan(gs, playerIndex, ctx);
+        if (plan) {
+            commitPlan(gs, playerIndex, plan);
+        } else {
+            const buildActions = strategy.computeBuildOrder(gs, playerIndex, ctx, null);
+            return [...buildActions, { type: 'endTurn' }];
+        }
     }
 
     if (strategy.shouldUpgrade(gs, playerIndex, ctx)) {

@@ -915,43 +915,22 @@ function executeAITurn(roomCode, room) {
     const player = gs.players[playerIndex];
     if (!player || !player.isAI) return;
 
-    // Route hard difficulty to the two-phase Hard AI execution
-    if (player.difficulty === 'hard') {
-        executeHardAITurn(roomCode, room);
-        return;
-    }
-
-    // Easy AI (default) — single planTurn call
-    let plan;
-    try {
-        const ctx = buildPathfindingCtx(gs);
-        plan = aiEasy.planTurn(gs, playerIndex, ctx);
-    } catch (err) {
-        console.warn(`Room ${roomCode}: AI planTurn error: ${err.message}`);
-        plan = [{ type: 'endTurn' }];
-    }
-    if (!plan || plan.length === 0) {
-        console.warn(`Room ${roomCode}: ${player.name} planTurn returned empty plan, falling back to endTurn`);
-        plan = [{ type: 'endTurn' }];
-    }
-    const hasSubstantiveAction = plan.some(a => !['endTurn', 'endOperatePhase'].includes(a.type));
-    const logLevel = hasSubstantiveAction ? 'log' : 'warn';
-    console[logLevel](`Room ${roomCode}: ${player.name} plan (phase=${gs.phase}, cash=${player.cash}, loads=${player.loads.length}): [${plan.map(a => a.type).join(', ')}]`);
-    executeAIActionSequence(roomCode, room, plan, 0);
+    // Both easy and hard AI use two-phase execution (planOperate → planBuild)
+    const strategy = player.difficulty === 'hard' ? aiHard : aiEasy;
+    const label = player.difficulty === 'hard' ? 'HARD' : 'EASY';
+    executeTwoPhaseAITurn(roomCode, room, strategy, label);
 }
 
-// §11.3.4 — Two-phase execution for Hard AI.
+// §11.3.4 — Two-phase execution for both Easy and Hard AI.
 // Phase 1: planOperate → execute operate actions
 // Phase 2: planBuild → execute build actions (with post-event state)
-function executeHardAITurn(roomCode, room) {
+function executeTwoPhaseAITurn(roomCode, room, strategy, label) {
     if (!rooms.has(roomCode)) return;
     const gs = room.gameState;
     if (!gs) return;
     const playerIndex = gs.currentPlayerIndex;
     const player = gs.players[playerIndex];
     if (!player || !player.isAI) return;
-
-    const strategy = aiHard;
 
     // Initial building: single-phase, no operate/build split
     if (gs.phase === 'initialBuilding') {
@@ -960,12 +939,12 @@ function executeHardAITurn(roomCode, room) {
             const ctx = buildPathfindingCtx(gs);
             actions = strategy.planTurn(gs, playerIndex, ctx, strategy);
         } catch (err) {
-            console.warn(`Room ${roomCode}: Hard AI planTurn error: ${err.message}`);
+            console.warn(`Room ${roomCode}: ${label} AI planTurn error: ${err.message}`);
             console.warn(err.stack);
             actions = [{ type: 'endTurn' }];
         }
         if (!actions || actions.length === 0) actions = [{ type: 'endTurn' }];
-        console.log(`Room ${roomCode}: ${player.name} [HARD] initialBuilding: [${actions.map(a => a.type).join(', ')}]`);
+        console.log(`Room ${roomCode}: ${player.name} [${label}] initialBuilding: [${actions.map(a => a.type).join(', ')}]`);
         executeAIActionSequence(roomCode, room, actions, 0);
         return;
     }
@@ -976,7 +955,7 @@ function executeHardAITurn(roomCode, room) {
         const ctx = buildPathfindingCtx(gs);
         operateActions = strategy.planOperate(gs, playerIndex, ctx, strategy);
     } catch (err) {
-        console.warn(`Room ${roomCode}: Hard AI planOperate error: ${err.message}`);
+        console.warn(`Room ${roomCode}: ${label} AI planOperate error: ${err.message}`);
         console.warn(err.stack);
         operateActions = [{ type: 'endOperatePhase' }];
     }
@@ -984,11 +963,9 @@ function executeHardAITurn(roomCode, room) {
         operateActions = [{ type: 'endOperatePhase' }];
     }
 
-    console.log(`Room ${roomCode}: ${player.name} [HARD] operate (cash=${player.cash}, loads=${player.loads.length}): [${operateActions.map(a => a.type).join(', ')}]`);
+    console.log(`Room ${roomCode}: ${player.name} [${label}] operate (cash=${player.cash}, loads=${player.loads.length}): [${operateActions.map(a => a.type).join(', ')}]`);
 
     // If operate ends with a discard, the turn is over — no build phase.
-    // applyDiscardHand already calls serverEndTurn internally, so we just
-    // execute the action sequence normally (no onComplete callback needed).
     if (operateActions.some(a => a.type === 'discardHand')) {
         executeAIActionSequence(roomCode, room, operateActions, 0);
         return;
@@ -1006,14 +983,14 @@ function executeHardAITurn(roomCode, room) {
             const freshCtx = buildPathfindingCtx(freshGs);
             buildActions = strategy.planBuild(freshGs, freshGs.currentPlayerIndex, freshCtx, strategy);
         } catch (err) {
-            console.warn(`Room ${roomCode}: Hard AI planBuild error: ${err.message}`);
+            console.warn(`Room ${roomCode}: ${label} AI planBuild error: ${err.message}`);
             console.warn(err.stack);
             buildActions = [{ type: 'endTurn' }];
         }
         if (!buildActions || buildActions.length === 0) buildActions = [{ type: 'endTurn' }];
 
         const bp = freshGs.players[freshGs.currentPlayerIndex];
-        console.log(`Room ${roomCode}: ${bp.name} [HARD] build (cash=${bp.cash}): [${buildActions.map(a => a.type).join(', ')}]`);
+        console.log(`Room ${roomCode}: ${bp.name} [${label}] build (cash=${bp.cash}): [${buildActions.map(a => a.type).join(', ')}]`);
         executeAIActionSequence(roomCode, room, buildActions, 0);
     });
 }
@@ -1042,7 +1019,7 @@ function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete
     const result = executeAIAction(gs, playerIndex, action);
 
     if (!result.success) {
-        console.warn(`Room ${roomCode}: Hard AI illegal action ${action.type}: ${result.error}`);
+        console.warn(`Room ${roomCode}: AI illegal action ${action.type}: ${result.error}`);
         // Skip non-critical failures and continue
         const skippable = ['pickupGood', 'deliverGood', 'commitMove'];
         if (skippable.includes(action.type)) {
@@ -1057,19 +1034,21 @@ function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete
         return;
     }
 
-    console.log(`Room ${roomCode}: ${player.name} [HARD] action: ${actionSummary}${result.logs ? ' — ' + result.logs[result.logs.length - 1] : ''}`);
+    const aiLabel = player.difficulty === 'hard' ? 'HARD' : 'EASY';
+    const aiModule = player.difficulty === 'hard' ? aiHard : aiEasy;
+    console.log(`Room ${roomCode}: ${player.name} [${aiLabel}] action: ${actionSummary}${result.logs ? ' — ' + result.logs[result.logs.length - 1] : ''}`);
     broadcastStateUpdate(roomCode, room, result.uiEvent);
 
     // Advance committedPlan.currentStopIndex when a pickup/deliver action succeeds.
     // planMovement tags these actions with _advanceStop so we only advance for
     // actions that correspond to plan stops (not ad-hoc actions).
     if (action._advanceStop && (action.type === 'pickupGood' || action.type === 'deliverGood')) {
-        const committedPlan = aiHard.getCommittedPlan(gs, playerIndex);
+        const committedPlan = aiModule.getCommittedPlan(gs, playerIndex);
         if (committedPlan) {
             committedPlan.currentStopIndex++;
             // Clear plan if all stops are now complete
             if (committedPlan.currentStopIndex >= committedPlan.visitSequence.length) {
-                aiHard.clearCommittedPlan(gs, playerIndex);
+                aiModule.clearCommittedPlan(gs, playerIndex);
             }
         }
     }
@@ -1096,7 +1075,7 @@ function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete
     // demandCards (splice), shifting all higher indices down by one.
     if (action.type === 'deliverGood' && player.isAI) {
         const deliveredCardIndex = action.cardIndex;
-        const committedPlan = aiHard.getCommittedPlan(gs, playerIndex);
+        const committedPlan = aiModule.getCommittedPlan(gs, playerIndex);
         if (committedPlan) {
             for (const stop of committedPlan.visitSequence) {
                 if (stop.cardIndex !== undefined && stop.cardIndex > deliveredCardIndex) {
@@ -1107,6 +1086,32 @@ function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete
                 if (d.cardIndex > deliveredCardIndex) {
                     d.cardIndex--;
                 }
+            }
+
+            // Validate remaining deliveries still match actual demand cards.
+            // When two batch deliveries reference the same card, delivering one
+            // splices it out — the other delivery's cardIndex now points at a
+            // different card with different demands. Detect and clear the plan.
+            let planInvalid = false;
+            for (let si = committedPlan.currentStopIndex; si < committedPlan.visitSequence.length; si++) {
+                const stop = committedPlan.visitSequence[si];
+                if (stop.action !== 'deliver') continue;
+                const delivery = committedPlan.deliveries[stop.deliveryIndex];
+                if (!delivery) { planInvalid = true; break; }
+                const card = player.demandCards[stop.cardIndex];
+                if (!card || !card.demands || !card.demands[stop.demandIndex]) {
+                    planInvalid = true;
+                    break;
+                }
+                const actualDemand = card.demands[stop.demandIndex];
+                if (actualDemand.good !== delivery.good || actualDemand.to !== delivery.destCity) {
+                    console.warn(`Room ${roomCode}: AI ${playerIndex} plan invalidated — demand shifted after delivery (expected ${delivery.good}→${delivery.destCity}, found ${actualDemand.good}→${actualDemand.to})`);
+                    planInvalid = true;
+                    break;
+                }
+            }
+            if (planInvalid) {
+                aiModule.clearCommittedPlan(gs, playerIndex);
             }
         }
     }
@@ -1122,21 +1127,22 @@ function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete
             const p = freshGs.players[pi];
             if (!p || !p.isAI) return;
             let replan;
+            const replanModule = p.difficulty === 'hard' ? aiHard : aiEasy;
+            const replanLabel = p.difficulty === 'hard' ? 'HARD' : 'EASY';
             try {
                 const freshCtx = buildPathfindingCtx(freshGs);
-                // Hard AI: re-plan operate with remaining movement
-                const committedPlan = aiHard.getCommittedPlan(freshGs, pi);
+                const committedPlan = replanModule.getCommittedPlan(freshGs, pi);
                 if (committedPlan) {
-                    replan = aiHard.planMovement(freshGs, pi, freshCtx, committedPlan);
+                    replan = replanModule.planMovement(freshGs, pi, freshCtx, committedPlan);
                 } else {
-                    replan = aiHard.planOperate(freshGs, pi, freshCtx, aiHard);
+                    replan = replanModule.planOperate(freshGs, pi, freshCtx, replanModule);
                 }
             } catch (err) {
-                console.warn(`Room ${roomCode}: Hard AI post-delivery re-plan error: ${err.message}`);
+                console.warn(`Room ${roomCode}: ${replanLabel} AI post-delivery re-plan error: ${err.message}`);
                 replan = [{ type: 'endOperatePhase' }];
             }
             if (!replan || replan.length === 0) replan = [{ type: 'endOperatePhase' }];
-            console.log(`Room ${roomCode}: ${p.name} [HARD] post-delivery re-plan: [${replan.map(a => a.type).join(', ')}]`);
+            console.log(`Room ${roomCode}: ${p.name} [${replanLabel}] post-delivery re-plan: [${replan.map(a => a.type).join(', ')}]`);
             executeHardAIActionSequence(roomCode, room, replan, 0, onComplete);
         }, AI_ACTION_DELAY_MS);
         return;
@@ -1193,77 +1199,10 @@ function executeAIActionSequence(roomCode, room, plan, stepIndex) {
 
     broadcastStateUpdate(roomCode, room, result.uiEvent);
 
-    // After deliverGood, adjust any persisted AI plan card indices to account
-    // for the spliced-out card (same fix as Hard AI path above).
-    if (action.type === 'deliverGood' && player.isAI) {
-        const deliveredCardIndex = action.cardIndex;
-        if (player.aiState && player.aiState.targetCardIndex !== undefined &&
-            player.aiState.targetCardIndex > deliveredCardIndex) {
-            player.aiState.targetCardIndex--;
-        }
-    }
-
-    // After a successful deliverGood by an AI with movement remaining,
-    // re-plan the operate phase with fresh state. The delivery replaced a
-    // demand card and cleared the AI target, so the pre-computed plan is stale.
-    if (action.type === 'deliverGood' && player.isAI && player.movement > 0) {
-        room.aiTurnTimer = setTimeout(() => {
-            room.aiTurnTimer = null;
-            if (!rooms.has(roomCode)) return;
-            const freshGs = room.gameState;
-            if (!freshGs) return;
-            const pi = freshGs.currentPlayerIndex;
-            const p = freshGs.players[pi];
-            if (!p || !p.isAI) return;
-            let operatePlan;
-            try {
-                const freshCtx = buildPathfindingCtx(freshGs);
-                operatePlan = aiEasy.planTurn(freshGs, pi, freshCtx);
-            } catch (err) {
-                console.warn(`Room ${roomCode}: AI planTurn error (post-delivery re-plan): ${err.message}`);
-                operatePlan = [{ type: 'endOperatePhase' }];
-            }
-            if (!operatePlan || operatePlan.length === 0) {
-                operatePlan = [{ type: 'endOperatePhase' }];
-            }
-            console.log(`Room ${roomCode}: ${p.name} post-delivery re-plan (movement=${p.movement}): [${operatePlan.map(a => a.type).join(', ')}]`);
-            executeAIActionSequence(roomCode, room, operatePlan, 0);
-        }, AI_ACTION_DELAY_MS);
-        return;
-    }
-
     if (action.type === 'endTurn' || action.type === 'discardHand') {
         if (result.uiEvent?.gameOver) return;
         maybeScheduleAITurn(roomCode, room);
         startTurnTimerIfNeeded(roomCode, room);
-        return;
-    }
-
-    // After endOperatePhase, the game transitions to build phase.
-    // Re-plan for the new phase instead of continuing the old plan.
-    if (action.type === 'endOperatePhase') {
-        room.aiTurnTimer = setTimeout(() => {
-            room.aiTurnTimer = null;
-            if (!rooms.has(roomCode)) return;
-            const freshGs = room.gameState;
-            if (!freshGs) return;
-            let buildPlan;
-            try {
-                const freshCtx = buildPathfindingCtx(freshGs);
-                buildPlan = aiEasy.planTurn(freshGs, freshGs.currentPlayerIndex, freshCtx);
-            } catch (err) {
-                console.warn(`Room ${roomCode}: AI planTurn error (build re-plan): ${err.message}`);
-                buildPlan = [{ type: 'endTurn' }];
-            }
-            if (!buildPlan || buildPlan.length === 0) {
-                console.warn(`Room ${roomCode}: AI build re-plan returned empty, falling back to endTurn`);
-                buildPlan = [{ type: 'endTurn' }];
-            }
-            const bp = freshGs.players[freshGs.currentPlayerIndex];
-            const hasBuild = buildPlan.some(a => !['endTurn', 'endOperatePhase'].includes(a.type));
-            console[hasBuild ? 'log' : 'warn'](`Room ${roomCode}: ${bp.name} plan (phase=${freshGs.phase}, cash=${bp.cash}): [${buildPlan.map(a => a.type).join(', ')}]`);
-            executeAIActionSequence(roomCode, room, buildPlan, 0);
-        }, AI_ACTION_DELAY_MS);
         return;
     }
 
@@ -1305,11 +1244,7 @@ function createGameState(playerList, gameSettings) {
         if (p.isAI) {
             player.isAI = true;
             player.difficulty = p.difficulty || 'easy';
-            player.aiState = {
-                targetCardIndex: null,
-                targetDemandIndex: null,
-                targetSourceCity: null
-            };
+            player.aiState = {};
         }
         return player;
     });
