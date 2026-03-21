@@ -1677,15 +1677,42 @@ function planMovement(gs, playerIndex, ctx, plan) {
                     handleSupplyExhaustion(gs, playerIndex, plan, carriedGoods);
                     break;
                 }
-                // Check train capacity before pickup
+                // Check train capacity — drop an irrelevant good if needed
                 const trainCapacity = gl.TRAIN_TYPES[player.trainType].capacity;
                 if (carriedGoods.length >= trainCapacity) {
-                    logDecision(playerIndex, 'plan abandoned',
-                        `Reason: train at capacity (${carriedGoods.length}/${trainCapacity}) for pickup at ${nextStop.city}. ` +
-                        `Carrying: [${carriedGoods}]. Plan: ${formatPlanSummary(plan)}`
-                    );
-                    clearCommittedPlan(gs, playerIndex);
-                    break;
+                    // Find a carried good not needed by this plan's remaining deliveries
+                    const neededGoods = new Set();
+                    for (let si = simStopIndex; si < plan.visitSequence.length; si++) {
+                        const s = plan.visitSequence[si];
+                        if (s.action === 'deliver') {
+                            neededGoods.add(plan.deliveries[s.deliveryIndex].good);
+                        }
+                    }
+                    // Also count the good we're about to pick up as needed
+                    neededGoods.add(nextStop.good);
+
+                    let dropIdx = -1;
+                    for (let li = 0; li < carriedGoods.length; li++) {
+                        if (!neededGoods.has(carriedGoods[li])) {
+                            dropIdx = li;
+                            break;
+                        }
+                    }
+                    if (dropIdx >= 0) {
+                        logDecision(playerIndex, 'drop',
+                            `Dropping ${carriedGoods[dropIdx]} (not needed) to make room for ${nextStop.good}`
+                        );
+                        actions.push({ type: 'dropGood', loadIndex: dropIdx });
+                        carriedGoods.splice(dropIdx, 1);
+                    } else {
+                        // All carried goods are needed — can't drop, abandon plan
+                        logDecision(playerIndex, 'plan abandoned',
+                            `Reason: train at capacity (${carriedGoods.length}/${trainCapacity}), all goods needed. ` +
+                            `Carrying: [${carriedGoods}]. Plan: ${formatPlanSummary(plan)}`
+                        );
+                        clearCommittedPlan(gs, playerIndex);
+                        break;
+                    }
                 }
                 actions.push({ type: 'pickupGood', good: nextStop.good, _advanceStop: true });
                 carriedGoods.push(nextStop.good);
@@ -2156,40 +2183,8 @@ function shouldAbandon(gs, playerIndex, ctx, plan) {
                 handleSupplyExhaustion(gs, playerIndex, plan, player.loads);
                 return true;
             }
-            // Check if train is at capacity — can't pick up
-            const trainCapacity = gl.TRAIN_TYPES[player.trainType].capacity;
-            if (player.loads.length >= trainCapacity) {
-                logDecision(playerIndex, 'plan abandoned',
-                    `Reason: train at capacity (${player.loads.length}/${trainCapacity}) for pickup at ${nextStop.city}. ` +
-                    `Carrying: [${player.loads}]. Previous plan: ${formatPlanSummary(plan)}`
-                );
-                // Create residual plan for carried goods (same as cargo integrity)
-                if (player.loads.length > 0) {
-                    const carriedGood = player.loads[0];
-                    const carriedDelivery = plan.deliveries.find(d => d.good === carriedGood);
-                    if (carriedDelivery) {
-                        aiState.committedPlan = {
-                            majorCity: null,
-                            deliveries: [{ ...carriedDelivery }],
-                            visitSequence: [{
-                                city: carriedDelivery.destCity,
-                                action: 'deliver',
-                                deliveryIndex: 0,
-                                cardIndex: carriedDelivery.cardIndex,
-                                demandIndex: carriedDelivery.demandIndex
-                            }],
-                            segments: [{ from: '(current)', to: carriedDelivery.destCity, buildCost: 0, cumCashAfter: null }],
-                            totalBuildCost: 0,
-                            totalPayout: carriedDelivery.payout,
-                            totalBuildTurns: 0, operateTurns: 0, estimatedTurns: 0, ecuPerTurn: 0,
-                            buildPath: plan.buildPath,
-                            tripDistance: 0,
-                            currentStopIndex: 0
-                        };
-                    }
-                }
-                return true;
-            }
+            // Note: capacity overflow is handled in planMovement, which drops
+            // irrelevant goods or abandons if all goods are needed.
         }
     }
 

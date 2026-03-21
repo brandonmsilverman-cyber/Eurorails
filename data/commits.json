@@ -1,4 +1,5 @@
 [
+  {"message": "Replace capacity abandon with smart drop: AI drops irrelevant goods at pickup", "date": "Mar 20, 2026"},
   {"message": "Fix AI capacity overflow loop: abandon plan when train is full at pickup", "date": "Mar 20, 2026"},
   {"message": "Fix AI ferry oscillation and update affordability reserve test", "date": "Mar 20, 2026"},
   {"message": "Add Brutal AI with 3-delivery batches, Superfreight upgrades, and fix AI stuck loops", "date": "Mar 20, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Add configurable win conditions and clean up solo mode tests", "date": "Mar 15, 2026"},
   {"message": "Fix AI track wormholes and movement undercharge bugs", "date": "Mar 15, 2026"},
   {"message": "Add AI multiplayer lobby UI, remove solo mode and player count picker", "date": "Mar 15, 2026"},
-  {"message": "Add AI player lobby management for multiplayer rooms", "date": "Mar 15, 2026"},
-  {"message": "Add isAI flag as first-class player model property", "date": "Mar 15, 2026"}
+  {"message": "Add AI player lobby management for multiplayer rooms", "date": "Mar 15, 2026"}
 ]

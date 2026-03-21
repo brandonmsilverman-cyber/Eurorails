@@ -1049,7 +1049,7 @@ function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete
     if (!result.success) {
         console.warn(`Room ${roomCode}: AI illegal action ${action.type}: ${result.error}`);
         // Skip non-critical failures and continue
-        const skippable = ['pickupGood', 'deliverGood', 'commitMove'];
+        const skippable = ['pickupGood', 'deliverGood', 'commitMove', 'dropGood'];
         if (skippable.includes(action.type)) {
             room.aiTurnTimer = setTimeout(() => {
                 room.aiTurnTimer = null;
