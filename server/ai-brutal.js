@@ -270,7 +270,15 @@ function buildTripleBatchPlan(ctx, player, deliveryA, deliveryB, deliveryC, sequ
 // ---------------------------------------------------------------------------
 
 // Budget cap for triple batch evaluations to keep computation time bounded.
-const TRIPLE_BATCH_BUDGET = 500;
+// Keep this low — enumeratePlans runs synchronously and blocks the event loop.
+// selectPlan can be called multiple times per turn (planOperate, shouldUpgrade
+// gate 3, handleNoPlan borrowing), so the total cost multiplies.
+// enumeratePlans blocks the event loop synchronously. Socket.IO ping timeout
+// is 20s — we must stay well under that. selectPlan can be called 2-3 times in
+// a single synchronous block (planOperate + handleNoPlan borrowing), so budget
+// per call × 3 must be < 20s. At ~17ms per triple, 3s ≈ ~175 triples.
+const TRIPLE_BATCH_BUDGET = 200;
+const TRIPLE_BATCH_TIME_LIMIT_MS = 3000;
 
 // Enumerate all single, 2-delivery batch, and 3-delivery batch candidate plans.
 function enumeratePlans(gs, playerIndex, ctx, options) {
@@ -391,12 +399,15 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
     // --- 3-delivery batches (Brutal AI exclusive) ---
     const trainCapacity = TRAIN_TYPES[player.trainType].capacity;
     let tripleCount = 0;
+    const tripleStartTime = Date.now();
 
     for (const pair of viablePairs) {
         if (tripleCount >= TRIPLE_BATCH_BUDGET) break;
+        if (Date.now() - tripleStartTime > TRIPLE_BATCH_TIME_LIMIT_MS) break;
 
         for (const sC of uniqueSingles) {
             if (tripleCount >= TRIPLE_BATCH_BUDGET) break;
+            if (Date.now() - tripleStartTime > TRIPLE_BATCH_TIME_LIMIT_MS) break;
 
             const dC = sC.deliveries[0];
 
@@ -428,6 +439,10 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
             }
         }
     }
+
+    // Annotate for logging (non-enumerable so it doesn't affect iteration)
+    candidates._tripleTimeMs = Date.now() - tripleStartTime;
+    candidates._tripleCount = tripleCount;
 
     return candidates;
 }
@@ -465,8 +480,10 @@ function selectPlan(gs, playerIndex, ctx, options) {
     const singles = candidates.filter(p => p.deliveries.length === 1);
     const batches = candidates.filter(p => p.deliveries.length === 2);
     const triples = candidates.filter(p => p.deliveries.length === 3);
+    const tripleTime = candidates._tripleTimeMs || 0;
+    const tripleBudgetUsed = candidates._tripleCount || 0;
     hard.logDecision(playerIndex, 'target selection',
-        `Candidates: ${singles.length} singles, ${batches.length} batches, ${triples.length} triples. ` +
+        `Candidates: ${singles.length} singles, ${batches.length} batches, ${triples.length} triples (${tripleBudgetUsed} evaluated, ${tripleTime}ms). ` +
         `Affordable: ${affordable.length}. Cash: ${(options && options.effectiveCash) || player.cash}M. ` +
         `Selected: ${hard.formatPlanSummary(bestPlan)}`
     );
