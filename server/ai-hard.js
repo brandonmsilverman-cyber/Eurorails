@@ -779,6 +779,59 @@ function combinePaths(path1, path2) {
     return [...path1, ...path2];
 }
 
+// Rebuild a plan's buildPath by re-pathfinding between visit sequence stops.
+// Used when foreign track blocks the existing path — preserves the plan's
+// deliveries, visit sequence, and carried goods while routing around obstacles.
+// Returns the new buildPath array, or null if any segment can't be routed.
+function rebuildPlanPath(ctx, player, plan) {
+    const virtualEdges = new Set();
+    for (const t of ctx.tracks) {
+        if (t.color === player.color) {
+            virtualEdges.add(t.from + '|' + t.to);
+            virtualEdges.add(t.to + '|' + t.from);
+        }
+    }
+
+    // Collect the city mileposts for remaining stops
+    const stops = plan.visitSequence;
+    let prevId = null;
+
+    // Find where the train or network connects
+    if (player.trainLocation) {
+        prevId = player.trainLocation;
+    } else if (plan.majorCity) {
+        prevId = ctx.cityToMilepost[plan.majorCity];
+    }
+
+    let newPath = [];
+    for (let i = plan.currentStopIndex; i < stops.length; i++) {
+        const stopId = ctx.cityToMilepost[stops[i].city];
+        if (!stopId) return null;
+
+        if (!prevId) {
+            // Find from network
+            const seg = findCheapestBuildPathFromNetwork(ctx, player, stopId);
+            if (!seg) return null;
+            newPath = combinePaths(newPath, seg.path);
+            for (let j = 0; j < seg.path.length - 1; j++) {
+                virtualEdges.add(seg.path[j] + '|' + seg.path[j + 1]);
+                virtualEdges.add(seg.path[j + 1] + '|' + seg.path[j]);
+            }
+        } else {
+            const seg = findCheapestBuildPath(ctx, prevId, stopId, player.color, null, virtualEdges);
+            if (!seg) return null;
+            newPath = combinePaths(newPath, seg.path);
+            for (let j = 0; j < seg.path.length - 1; j++) {
+                virtualEdges.add(seg.path[j] + '|' + seg.path[j + 1]);
+                virtualEdges.add(seg.path[j + 1] + '|' + seg.path[j]);
+            }
+        }
+        prevId = stopId;
+    }
+
+    return newPath.length >= 2 ? newPath : null;
+}
+
 // ---------------------------------------------------------------------------
 // §1.3 — checkAffordability
 // ---------------------------------------------------------------------------
@@ -1266,8 +1319,9 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
         return [];
     }
 
-    // Build sets of owned track for checking what's already built
+    // Build sets of owned track and other players' track
     const ownedEdges = new Set();
+    const otherEdges = new Set();
     const ownedMileposts = new Set();
     for (const t of gs.tracks) {
         if (t.color === player.color) {
@@ -1275,6 +1329,9 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
             ownedEdges.add(t.to + '|' + t.from);
             ownedMileposts.add(t.from);
             ownedMileposts.add(t.to);
+        } else {
+            otherEdges.add(t.from + '|' + t.to);
+            otherEdges.add(t.to + '|' + t.from);
         }
     }
 
@@ -1388,6 +1445,9 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
                 if (started) segBuildPath.push(to);
                 continue;
             }
+
+            // Skip edges owned by other players — can't build on foreign track
+            if (otherEdges.has(edgeKey)) break;
 
             // Compute segment cost
             const mp1 = ctx.mileposts_by_id[from];
@@ -1509,10 +1569,14 @@ function buildEndgameCityConnections(gs, playerIndex, ctx, budgetOverride, usedM
 
         // Build as much as budget allows
         const ownedEdges = new Set();
+        const otherEdgesEndgame = new Set();
         for (const t of gs.tracks) {
             if (t.color === player.color) {
                 ownedEdges.add(t.from + '|' + t.to);
                 ownedEdges.add(t.to + '|' + t.from);
+            } else {
+                otherEdgesEndgame.add(t.from + '|' + t.to);
+                otherEdgesEndgame.add(t.to + '|' + t.from);
             }
         }
 
@@ -1529,6 +1593,9 @@ function buildEndgameCityConnections(gs, playerIndex, ctx, budgetOverride, usedM
                 if (started) segPath.push(to);
                 continue;
             }
+
+            // Skip edges owned by other players
+            if (otherEdgesEndgame.has(from + '|' + to)) break;
 
             const mp1 = ctx.mileposts_by_id[from];
             const mp2 = ctx.mileposts_by_id[to];
@@ -2200,7 +2267,54 @@ function shouldAbandon(gs, playerIndex, ctx, plan) {
         return true;
     }
 
-    // 4. Stuck counter — 3+ turns with no progress
+    // 4. Foreign track blocks build path — opponent built on our planned route.
+    //    Rebuild the path around foreign track instead of abandoning the plan,
+    //    so carried goods and delivery targets are preserved.
+    if (plan.buildPath && plan.buildPath.length >= 2) {
+        const foreignEdges = new Set();
+        for (const t of gs.tracks) {
+            if (t.color !== player.color) {
+                foreignEdges.add(t.from + '|' + t.to);
+                foreignEdges.add(t.to + '|' + t.from);
+            }
+        }
+        let blocked = false;
+        for (let i = 0; i < plan.buildPath.length - 1; i++) {
+            const edgeKey = plan.buildPath[i] + '|' + plan.buildPath[i + 1];
+            if (foreignEdges.has(edgeKey)) {
+                blocked = true;
+                break;
+            }
+        }
+        if (blocked) {
+            const newPath = rebuildPlanPath(ctx, player, plan);
+            if (newPath) {
+                plan.buildPath = newPath;
+                plan.totalBuildCost = recomputeBuildCost(ctx, player, newPath);
+                logDecision(playerIndex, 'build path rerouted',
+                    `Foreign track blocked planned route — rebuilt path around it (new cost: ${plan.totalBuildCost}M). ` +
+                    `Plan: ${formatPlanSummary(plan)}`
+                );
+                // Re-check affordability with the new (potentially more expensive) route
+                if (!checkRemainingAffordability(gs, playerIndex, ctx, plan)) {
+                    logDecision(playerIndex, 'plan abandoned',
+                        `Reason: rerouted path unaffordable (new cost: ${plan.totalBuildCost}M, cash: ${player.cash}M). ` +
+                        `Previous plan: ${formatPlanSummary(plan)}`
+                    );
+                    return true;
+                }
+            } else {
+                // Can't route around — abandon plan
+                logDecision(playerIndex, 'plan abandoned',
+                    `Reason: build path blocked by foreign track and no alternative route found. ` +
+                    `Previous plan: ${formatPlanSummary(plan)}`
+                );
+                return true;
+            }
+        }
+    }
+
+    // 5. Stuck counter — 3+ turns with no progress
     if (aiState.stuckTurnCounter >= 3) {
         logDecision(playerIndex, 'plan abandoned',
             `Reason: stuck ${aiState.stuckTurnCounter}+ turns (cash=${player.cash}M). ` +
