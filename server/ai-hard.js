@@ -1677,6 +1677,16 @@ function planMovement(gs, playerIndex, ctx, plan) {
                     handleSupplyExhaustion(gs, playerIndex, plan, carriedGoods);
                     break;
                 }
+                // Check train capacity before pickup
+                const trainCapacity = gl.TRAIN_TYPES[player.trainType].capacity;
+                if (carriedGoods.length >= trainCapacity) {
+                    logDecision(playerIndex, 'plan abandoned',
+                        `Reason: train at capacity (${carriedGoods.length}/${trainCapacity}) for pickup at ${nextStop.city}. ` +
+                        `Carrying: [${carriedGoods}]. Plan: ${formatPlanSummary(plan)}`
+                    );
+                    clearCommittedPlan(gs, playerIndex);
+                    break;
+                }
                 actions.push({ type: 'pickupGood', good: nextStop.good, _advanceStop: true });
                 carriedGoods.push(nextStop.good);
             } else if (nextStop.action === 'deliver') {
@@ -2137,13 +2147,47 @@ function shouldAbandon(gs, playerIndex, ctx, plan) {
         }
     }
 
-    // 2. Supply exhaustion for next pickup
+    // 2. Supply exhaustion or capacity overflow for next pickup
     if (plan.currentStopIndex < plan.visitSequence.length) {
         const nextStop = plan.visitSequence[plan.currentStopIndex];
         if (nextStop.action === 'pickup') {
             if (!isGoodAvailable(gs, nextStop.good, player.loads)) {
                 // Handle via handleSupplyExhaustion (creates residual if carrying)
                 handleSupplyExhaustion(gs, playerIndex, plan, player.loads);
+                return true;
+            }
+            // Check if train is at capacity — can't pick up
+            const trainCapacity = gl.TRAIN_TYPES[player.trainType].capacity;
+            if (player.loads.length >= trainCapacity) {
+                logDecision(playerIndex, 'plan abandoned',
+                    `Reason: train at capacity (${player.loads.length}/${trainCapacity}) for pickup at ${nextStop.city}. ` +
+                    `Carrying: [${player.loads}]. Previous plan: ${formatPlanSummary(plan)}`
+                );
+                // Create residual plan for carried goods (same as cargo integrity)
+                if (player.loads.length > 0) {
+                    const carriedGood = player.loads[0];
+                    const carriedDelivery = plan.deliveries.find(d => d.good === carriedGood);
+                    if (carriedDelivery) {
+                        aiState.committedPlan = {
+                            majorCity: null,
+                            deliveries: [{ ...carriedDelivery }],
+                            visitSequence: [{
+                                city: carriedDelivery.destCity,
+                                action: 'deliver',
+                                deliveryIndex: 0,
+                                cardIndex: carriedDelivery.cardIndex,
+                                demandIndex: carriedDelivery.demandIndex
+                            }],
+                            segments: [{ from: '(current)', to: carriedDelivery.destCity, buildCost: 0, cumCashAfter: null }],
+                            totalBuildCost: 0,
+                            totalPayout: carriedDelivery.payout,
+                            totalBuildTurns: 0, operateTurns: 0, estimatedTurns: 0, ecuPerTurn: 0,
+                            buildPath: plan.buildPath,
+                            tripDistance: 0,
+                            currentStopIndex: 0
+                        };
+                    }
+                }
                 return true;
             }
         }
