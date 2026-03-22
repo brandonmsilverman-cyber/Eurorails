@@ -1196,11 +1196,24 @@ function shouldUpgrade(gs, playerIndex, ctx) {
     // the current plan, and exclude those demand cards from the test search.
     // Otherwise the AI may find its *current* delivery as the "next" plan,
     // approve the upgrade, then have no money for a real next plan.
+    // Only count payout from deliveries where the good is already picked up.
+    // Unvisited pickups may never happen if the upgrade leaves cash at 0.
     let pendingPayout = 0;
     const excludeCards = new Set();
-    for (const stop of plan.visitSequence) {
+    for (let i = 0; i < plan.visitSequence.length; i++) {
+        const stop = plan.visitSequence[i];
         if (stop.action === 'deliver') {
-            pendingPayout += plan.deliveries[stop.deliveryIndex].payout;
+            let pickedUp = false;
+            for (let j = 0; j < plan.currentStopIndex; j++) {
+                const prior = plan.visitSequence[j];
+                if (prior.action === 'pickup' && prior.deliveryIndex === stop.deliveryIndex) {
+                    pickedUp = true;
+                    break;
+                }
+            }
+            if (pickedUp) {
+                pendingPayout += plan.deliveries[stop.deliveryIndex].payout;
+            }
             excludeCards.add(stop.cardIndex);
         }
     }
@@ -1392,6 +1405,10 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
         const targetMp = ctx.mileposts_by_id[toId];
         const targetIsMajorCity = targetMp && targetMp.city && MAJOR_CITIES.includes(targetMp.city.name);
         const targetIsUnconnected = targetIsMajorCity && !ownedMileposts.has(toId);
+        if (targetIsMajorCity) {
+            const targetCityName = targetMp.city.name;
+            console.log(`§4.2 check: seg ${fromCity}→${toCity}, target=${targetCityName}, isMajor=${targetIsMajorCity}, isUnconnected=${targetIsUnconnected}, toId=${toId}, segPath len=${segmentPath.length}, first=${segmentPath[0]}, last=${segmentPath[segmentPath.length-1]}`);
+        }
         if (targetIsUnconnected) {
             segmentPath = [...segmentPath].reverse();
         }

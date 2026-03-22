@@ -8,6 +8,7 @@
 
 const hard = require('./ai-hard');
 const gl = require('../shared/game-logic');
+const CITIES = gl.CITIES;
 const GOODS = gl.GOODS;
 const MAJOR_CITIES = gl.MAJOR_CITIES;
 const TRAIN_TYPES = gl.TRAIN_TYPES;
@@ -16,6 +17,146 @@ const getPlayerOwnedMileposts = gl.getPlayerOwnedMileposts;
 const getMileppostCost = gl.getMileppostCost;
 const getFerryKey = gl.getFerryKey;
 const findPathOnTrack = gl.findPathOnTrack;
+
+// ---------------------------------------------------------------------------
+// §1.6 — Scoring constants (Brutal AI exclusive)
+// ---------------------------------------------------------------------------
+
+const NETWORK_VALUE_WEIGHT = 0.15;       // Up to 15% bonus for building through city-rich areas
+const NETWORK_EFFICIENCY_WEIGHT = 0.30;  // Up to 30% bonus for using existing track
+const NETWORK_VALUE_CAP = 8;             // Max raw networkValue before normalization
+const CITY_PROXIMITY_HOPS = 2;           // BFS radius for city proximity tagging
+
+// ---------------------------------------------------------------------------
+// §1.6.1 — buildCityProximityMap (precomputed once per selectPlan call)
+// ---------------------------------------------------------------------------
+
+// Tags each milepost with a score based on nearby cities within CITY_PROXIMITY_HOPS.
+// Major cities = 3, medium cities with goods = 2, small cities with goods = 1.
+// Cities already connected to the player's network score 0 (no incremental value).
+function buildCityProximityMap(ctx, player) {
+    const connectedCities = new Set(hard.getConnectedMajorCities(ctx, player.color));
+    const ownedMps = getPlayerOwnedMileposts(ctx, player.color);
+    const map = new Map();
+
+    for (const cityName in CITIES) {
+        const mpId = ctx.cityToMilepost[cityName];
+        if (!mpId) continue;
+
+        // Skip cities already on the player's network
+        const mp = ctx.mileposts_by_id[mpId];
+        if (ownedMps.has(mpId)) continue;
+
+        // Assign city value based on type and goods
+        const cityData = CITIES[cityName];
+        let value;
+        if (MAJOR_CITIES.includes(cityName)) {
+            value = 3;
+        } else if (cityData.goods && cityData.goods.length > 0) {
+            value = cityData.type === 'medium' ? 2 : 1;
+        } else {
+            continue; // No goods, no strategic value
+        }
+
+        // BFS outward from this city's milepost, tagging nearby mileposts
+        const visited = new Set([mpId]);
+        let frontier = [mpId];
+        for (let hop = 0; hop <= CITY_PROXIMITY_HOPS; hop++) {
+            for (const id of frontier) {
+                map.set(id, (map.get(id) || 0) + value);
+            }
+            if (hop < CITY_PROXIMITY_HOPS) {
+                const nextFrontier = [];
+                for (const id of frontier) {
+                    const m = ctx.mileposts_by_id[id];
+                    if (!m || !m.neighbors) continue;
+                    for (const nId of m.neighbors) {
+                        if (!visited.has(nId)) {
+                            visited.add(nId);
+                            nextFrontier.push(nId);
+                        }
+                    }
+                }
+                frontier = nextFrontier;
+            }
+        }
+    }
+
+    return map;
+}
+
+// ---------------------------------------------------------------------------
+// §1.6.2 — computeNetworkValue
+// ---------------------------------------------------------------------------
+
+// Walk a plan's buildPath and sum proximity values for NEW edges only.
+// Normalized by new edge count to avoid bias toward longer paths.
+function computeNetworkValue(plan, player, ctx, cityProximityMap) {
+    if (!plan.buildPath || plan.buildPath.length < 2) return 0;
+
+    const ownedEdges = new Set();
+    for (const t of ctx.tracks) {
+        if (t.color === player.color) {
+            ownedEdges.add(t.from + '|' + t.to);
+            ownedEdges.add(t.to + '|' + t.from);
+        }
+    }
+
+    let totalValue = 0;
+    let newEdgeCount = 0;
+    const counted = new Set();
+
+    for (let i = 0; i < plan.buildPath.length - 1; i++) {
+        const edgeKey = plan.buildPath[i] + '|' + plan.buildPath[i + 1];
+        if (ownedEdges.has(edgeKey)) continue;
+
+        newEdgeCount++;
+        // Count each milepost's value once
+        for (const mpId of [plan.buildPath[i], plan.buildPath[i + 1]]) {
+            if (!counted.has(mpId)) {
+                counted.add(mpId);
+                totalValue += cityProximityMap.get(mpId) || 0;
+            }
+        }
+    }
+
+    return newEdgeCount > 0 ? totalValue / newEdgeCount : 0;
+}
+
+// ---------------------------------------------------------------------------
+// §1.6.3 — computeNetworkEfficiency
+// ---------------------------------------------------------------------------
+
+// Returns a 0..1 score representing how much of the plan uses existing track.
+// 1.0 = zero build cost (free delivery), 0.5 = build cost equals payout.
+function computeNetworkEfficiency(plan) {
+    return plan.totalPayout / Math.max(plan.totalPayout + plan.totalBuildCost, 1);
+}
+
+// ---------------------------------------------------------------------------
+// §1.6.4 — scorePlan (override)
+// ---------------------------------------------------------------------------
+
+// Extends Hard AI scoring with network reusability and efficiency bonuses.
+function scorePlan(plan, player, gs, ctx, options) {
+    const baseScore = hard.scorePlan(plan, player, gs, ctx, options);
+
+    // Don't modify endgame winning plan scores (inverted, 900-1000 range)
+    if (baseScore >= 900) return baseScore;
+
+    const cityProximityMap = (options && options.cityProximityMap) || new Map();
+    const networkValue = computeNetworkValue(plan, player, ctx, cityProximityMap);
+    const efficiency = computeNetworkEfficiency(plan);
+
+    const normalizedNetworkValue = Math.min(networkValue / NETWORK_VALUE_CAP, 1.0);
+    const bonus = 1.0
+        + NETWORK_VALUE_WEIGHT * normalizedNetworkValue
+        + NETWORK_EFFICIENCY_WEIGHT * efficiency;
+
+    const adjustedScore = baseScore * bonus;
+    plan.ecuPerTurn = adjustedScore;
+    return adjustedScore;
+}
 
 // ---------------------------------------------------------------------------
 // §1.2 — Capacity-aware sequence validation
@@ -451,10 +592,15 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
 // §1.5 — selectPlan (override)
 // ---------------------------------------------------------------------------
 
-// Must override selectPlan to call our enumeratePlans (lexical binding).
+// Must override selectPlan to call our enumeratePlans and scorePlan (lexical binding).
 function selectPlan(gs, playerIndex, ctx, options) {
     const player = gs.players[playerIndex];
     const candidates = enumeratePlans(gs, playerIndex, ctx, options);
+
+    // Precompute city proximity map once for all plan evaluations
+    const enrichedOptions = Object.assign({}, options || {}, {
+        cityProximityMap: buildCityProximityMap(ctx, player)
+    });
 
     let bestPlan = null;
     let bestScore = -Infinity;
@@ -468,7 +614,7 @@ function selectPlan(gs, playerIndex, ctx, options) {
             if (costToPickup1 > 40) continue;
         }
 
-        const score = hard.scorePlan(plan, player, gs, ctx, options);
+        const score = scorePlan(plan, player, gs, ctx, enrichedOptions);
         if (score > bestScore) {
             bestScore = score;
             bestPlan = plan;
@@ -529,11 +675,26 @@ function shouldUpgrade(gs, playerIndex, ctx) {
     if (surplus < upgradeCost) return false;
 
     // Gate 3: Viable next plan post-upgrade
+    // Only count payout from deliveries where the good is already picked up
+    // (i.e. pickup stop already visited). Unvisited deliveries may never
+    // happen if the upgrade leaves the AI with 0 cash.
     let pendingPayout = 0;
     const excludeCards = new Set();
-    for (const stop of plan.visitSequence) {
+    for (let i = 0; i < plan.visitSequence.length; i++) {
+        const stop = plan.visitSequence[i];
         if (stop.action === 'deliver') {
-            pendingPayout += plan.deliveries[stop.deliveryIndex].payout;
+            // Check if the pickup for this delivery was already visited
+            let pickedUp = false;
+            for (let j = 0; j < plan.currentStopIndex; j++) {
+                const prior = plan.visitSequence[j];
+                if (prior.action === 'pickup' && prior.deliveryIndex === stop.deliveryIndex) {
+                    pickedUp = true;
+                    break;
+                }
+            }
+            if (pickedUp) {
+                pendingPayout += plan.deliveries[stop.deliveryIndex].payout;
+            }
             excludeCards.add(stop.cardIndex);
         }
     }
@@ -572,8 +733,14 @@ module.exports = {
     // Inherit everything from Hard AI
     ...hard,
 
-    // Override: 3-delivery batches + 2-stage upgrades
+    // Override: 3-delivery batches, scoring, 2-stage upgrades
     enumeratePlans,
     selectPlan,
+    scorePlan,
     shouldUpgrade,
+
+    // Exported for testing
+    buildCityProximityMap,
+    computeNetworkValue,
+    computeNetworkEfficiency,
 };

@@ -6010,7 +6010,14 @@ document.addEventListener("DOMContentLoaded", function() {
                         for (let fc of gameState.ferryConnections) {
                             if (getFerryKey(fc.fromId, fc.toId) === ferryKey) {
                                 isFerry = true;
-                                segCost = playerOwnsFerry(ferryKey, currentPlayer.color) ? 0 : fc.cost;
+                                if (!playerOwnsFerry(ferryKey, currentPlayer.color)) {
+                                    segCost = fc.cost;
+                                    // Add city entry cost if ferry destination is a city
+                                    const destMp = gameState.mileposts_by_id[toId];
+                                    if (destMp && destMp.city) {
+                                        segCost += MAJOR_CITIES.includes(destMp.city.name) ? 5 : 3;
+                                    }
+                                }
                                 break;
                             }
                         }
