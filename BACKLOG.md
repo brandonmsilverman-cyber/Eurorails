@@ -4,16 +4,12 @@ A running list of planned features, improvements, and known issues.
 
 ---
 
-## AI Players
-
-- [ ] **AI: Hard difficulty** — Intelligent human-level play: opportunistic route batching, payout/cost build scoring with network awareness, situational upgrades, active hand evaluation, deliberate ferry investment
-- [ ] **AI: Brutal difficulty** — Near-optimal play: systematic multi-delivery planning, expected-value build calculations over future hands, optimal upgrade timing, EV-based discard decisions, full landmass access modeling for ferries
-
 ## Gameplay
 
 - [ ] **Set train destination** — Player selects a city as their destination; the train automatically moves toward it each operate phase until it arrives, the player undoes movement, an event card disrupts it (i.e. derail or broken track), or the mode is turned off
 - [ ] **Improved trackage rights payment animation** — Replace falling coins with a more polished visual for trackage rights transfers
 - [ ] **AI hints system** — "What would an expert do?" suggestion feature for learning players
+- [ ] **Persist suggested foreign track selection throughout a single operate phase**
 ## Reconnection Improvement
 - [ ] **localStorage fallback for tab closure recovery** — Add localStorage as a fallback so reconnection credentials survive tab closure and incognito mode, while preserving multi-tab play. Full plan in [`LOCALSTORAGE_FALLBACK_PLAN.md`](LOCALSTORAGE_FALLBACK_PLAN.md).
 
@@ -75,3 +71,5 @@ A running list of planned features, improvements, and known issues.
 - [x] Discard pile reshuffle
 - [x] Overhaul demand card row hover effect (origin/destination distinct colors)
 - [x] Borrowing (borrow up to 20M from bank, repay double via 10M-per-delivery deductions)
+- [x] AI: Hard difficulty (opportunistic route batching, payout/cost build scoring, situational upgrades, active hand evaluation, deliberate ferry investment)
+- [x] AI: Brutal difficulty (systematic multi-delivery planning, EV build calculations, optimal upgrade timing, EV-based discard decisions, full landmass access modeling)

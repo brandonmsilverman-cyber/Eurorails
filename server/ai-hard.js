@@ -66,6 +66,21 @@ function recomputeBuildCost(ctx, player, buildPath) {
     return cost;
 }
 
+// Count ferry crossings in a build path for plan scoring.
+function countFerryCrossings(buildPath, ctx) {
+    let count = 0;
+    for (let i = 0; i < buildPath.length - 1; i++) {
+        const ferryKey = getFerryKey(buildPath[i], buildPath[i + 1]);
+        for (const fc of ctx.ferryConnections) {
+            if (getFerryKey(fc.fromId, fc.toId) === ferryKey) {
+                count++;
+                break;
+            }
+        }
+    }
+    return count;
+}
+
 // Find the cheapest build path between two points, accounting for build
 // direction. When the target is an unconnected major city, compute the path
 // building OUT from the major city (1M exit) rather than INTO it (5M entry).
@@ -531,6 +546,7 @@ function buildBatchPlan(ctx, player, deliveryA, deliveryB, sequenceIndices, majo
         ecuPerTurn: 0,
         buildPath,
         tripDistance,
+        ferryCrossingCount: countFerryCrossings(buildPath, ctx),
         currentStopIndex: 0
     };
 }
@@ -609,11 +625,19 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
     }
     const uniqueSingles = [...bestSingles.values()];
 
+    // Score-gated batch pairing: only pair the top-K singles by payout to
+    // bound Dijkstra calls. The best batches almost always combine the best
+    // singles, so limiting to top-K is nearly lossless.
+    const BATCH_TOP_K = 12;
+    const topSingles = uniqueSingles.length > BATCH_TOP_K
+        ? [...uniqueSingles].sort((a, b) => b.deliveries[0].payout - a.deliveries[0].payout).slice(0, BATCH_TOP_K)
+        : uniqueSingles;
+
     // Pair singles that pass the pruning filter
-    for (let i = 0; i < uniqueSingles.length; i++) {
-        for (let j = i + 1; j < uniqueSingles.length; j++) {
-            const sA = uniqueSingles[i];
-            const sB = uniqueSingles[j];
+    for (let i = 0; i < topSingles.length; i++) {
+        for (let j = i + 1; j < topSingles.length; j++) {
+            const sA = topSingles[i];
+            const sB = topSingles[j];
 
             // Skip pairs from the same card+demand (same delivery)
             const dA = sA.deliveries[0];
@@ -731,6 +755,7 @@ function buildSinglePlan(ctx, player, cardIndex, demandIndex, demand, sourceCity
         ecuPerTurn: 0,         // computed by scorePlan
         buildPath,
         tripDistance,
+        ferryCrossingCount: countFerryCrossings(buildPath, ctx),
         currentStopIndex: 0
     };
 }
@@ -931,7 +956,9 @@ function scorePlan(plan, player, gs, ctx, options) {
     }
 
     // Operate turns: track-based distance / train speed
-    const operateTurns = Math.ceil(plan.tripDistance / trainSpeed);
+    // Ferry crossings cost ~1.5 turns each: 1 turn waiting at port + half-speed crossing turn
+    const ferryPenalty = (plan.ferryCrossingCount || 0) * 1.5;
+    const operateTurns = Math.ceil(plan.tripDistance / trainSpeed) + ferryPenalty;
 
     // Total turns: build and operate are interleaved (§1.4, A.39)
     const estimatedTurns = Math.max(totalBuildTurns, operateTurns);
@@ -985,6 +1012,41 @@ function scorePlan(plan, player, gs, ctx, options) {
 }
 
 // ---------------------------------------------------------------------------
+// §1.5.1 — Cash floor gate
+// ---------------------------------------------------------------------------
+
+// Reject a plan if it would leave the AI unable to afford any future plan
+// from its remaining demand cards. Uses the already-enumerated candidates
+// (no new pathfinding) to check if any single delivery from a different card
+// is affordable with the projected post-plan cash.
+function applyCashFloorGate(bestPlan, player, candidates, playerIndex) {
+    const cashAfterPlan = player.cash - bestPlan.totalBuildCost + bestPlan.totalPayout;
+
+    // Only apply when the plan would leave the AI cash-poor.
+    // Above this threshold, the AI can almost certainly afford something.
+    if (cashAfterPlan >= 20) return bestPlan;
+
+    // Cards consumed by this plan — future plans must use different cards
+    const usedCards = new Set(bestPlan.deliveries.map(d => d.cardIndex));
+
+    // Check if any single from remaining cards is affordable with projected cash
+    for (const plan of candidates) {
+        if (plan.deliveries.length !== 1) continue;
+        if (usedCards.has(plan.deliveries[0].cardIndex)) continue;
+        if (plan.totalBuildCost <= cashAfterPlan - AFFORDABILITY_RESERVE) {
+            return bestPlan; // at least one future plan exists
+        }
+    }
+
+    // No future plan affordable — reject this plan to trigger discard
+    logDecision(playerIndex, 'cash floor',
+        `Rejected ${formatPlanSummary(bestPlan)}: would leave ${cashAfterPlan}M with no affordable future plan. ` +
+        `Discarding instead to draw better cards.`
+    );
+    return null;
+}
+
+// ---------------------------------------------------------------------------
 // §1.5 — selectPlan
 // ---------------------------------------------------------------------------
 
@@ -998,10 +1060,12 @@ function selectPlan(gs, playerIndex, ctx, options) {
 
     let bestPlan = null;
     let bestScore = -Infinity;
+    let affordableCount = 0;
 
     for (const plan of candidates) {
         // Affordability gate
         if (!checkAffordability(plan, player, ctx, options)) continue;
+        affordableCount++;
 
         // Initial building reachability filter (§1.2):
         // Build cost from major city to pickup 1 must be ≤ 40M
@@ -1019,13 +1083,24 @@ function selectPlan(gs, playerIndex, ctx, options) {
         }
     }
 
+    // Cash floor gate: reject plans that leave the AI unable to afford any
+    // future plan. This prevents the AI from draining its cash on low-payout
+    // deliveries and ending up in a discard/borrow loop.
+    // Skip during: initial building, borrowing evaluation, endgame winning plans.
+    if (bestPlan && gs.phase !== 'initialBuilding' &&
+        !(options && options.effectiveCash) && bestPlan.ecuPerTurn < 900) {
+        bestPlan = applyCashFloorGate(bestPlan, player, candidates, playerIndex);
+    }
+
     // §7.1 Target selection logging
-    const affordable = candidates.filter(p => checkAffordability(p, player, ctx, options));
-    const singles = candidates.filter(p => p.deliveries.length === 1);
-    const batches = candidates.filter(p => p.deliveries.length === 2);
+    let singleCount = 0, batchCount = 0;
+    for (const p of candidates) {
+        if (p.deliveries.length === 1) singleCount++;
+        else if (p.deliveries.length === 2) batchCount++;
+    }
     logDecision(playerIndex, 'target selection',
-        `Candidates: ${singles.length} singles, ${batches.length} batches. ` +
-        `Affordable: ${affordable.length}. Cash: ${(options && options.effectiveCash) || player.cash}M. ` +
+        `Candidates: ${singleCount} singles, ${batchCount} batches. ` +
+        `Affordable: ${affordableCount}. Cash: ${(options && options.effectiveCash) || player.cash}M. ` +
         `Selected: ${formatPlanSummary(bestPlan)}`
     );
 
@@ -1405,10 +1480,6 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
         const targetMp = ctx.mileposts_by_id[toId];
         const targetIsMajorCity = targetMp && targetMp.city && MAJOR_CITIES.includes(targetMp.city.name);
         const targetIsUnconnected = targetIsMajorCity && !ownedMileposts.has(toId);
-        if (targetIsMajorCity) {
-            const targetCityName = targetMp.city.name;
-            console.log(`§4.2 check: seg ${fromCity}→${toCity}, target=${targetCityName}, isMajor=${targetIsMajorCity}, isUnconnected=${targetIsUnconnected}, toId=${toId}, segPath len=${segmentPath.length}, first=${segmentPath[0]}, last=${segmentPath[segmentPath.length-1]}`);
-        }
         if (targetIsUnconnected) {
             segmentPath = [...segmentPath].reverse();
         }
@@ -1826,6 +1897,31 @@ function planMovement(gs, playerIndex, ctx, plan) {
         if (trackPath) {
             // 2a: Stop IS reachable on owned track — move along it
             const movePath = trackPath.path;
+
+            // Ferry awareness: if path crosses a ferry, the server will stop
+            // the train at the ferry port and end movement. Truncate here to
+            // prevent planning actions past the ferry crossing.
+            if (trackPath.ferryCrossings.length > 0) {
+                const ferryIdx = trackPath.ferryCrossings[0];
+
+                if (ferryIdx === 0) {
+                    // Already at ferry port — emit crossing
+                    actions.push({ type: 'commitMove', path: [movePath[0], movePath[1]] });
+                } else if (movementRemaining >= ferryIdx) {
+                    // Can reach ferry port — include ferry dest so server processes crossing
+                    const ferryPath = movePath.slice(0, ferryIdx + 2);
+                    actions.push({ type: 'commitMove', path: ferryPath });
+                } else {
+                    // Can't reach ferry port yet — partial move toward it
+                    const partial = movePath.slice(0, movementRemaining + 1);
+                    if (partial.length >= 2) {
+                        actions.push({ type: 'commitMove', path: partial });
+                    }
+                }
+                movementRemaining = 0;
+                break; // No further actions possible after ferry
+            }
+
             // Limit path to available movement
             const stepsToTake = Math.min(movePath.length - 1, movementRemaining);
             const truncatedPath = movePath.slice(0, stepsToTake + 1);
@@ -2504,5 +2600,7 @@ module.exports = {
     buildEndgameCityConnections,
     logDecision,
     formatPlanSummary,
-    checkRemainingAffordability
+    checkRemainingAffordability,
+    countFerryCrossings,
+    applyCashFloorGate
 };

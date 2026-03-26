@@ -402,6 +402,7 @@ function buildTripleBatchPlan(ctx, player, deliveryA, deliveryB, deliveryC, sequ
         ecuPerTurn: 0,
         buildPath,
         tripDistance,
+        ferryCrossingCount: hard.countFerryCrossings(buildPath, ctx),
         currentStopIndex: 0
     };
 }
@@ -490,13 +491,21 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
     }
     const uniqueSingles = [...bestSingles.values()];
 
+    // Score-gated batch pairing: only pair the top-K singles by payout to
+    // bound Dijkstra calls. The best batches almost always combine the best
+    // singles, so limiting to top-K is nearly lossless.
+    const BATCH_TOP_K = 12;
+    const topSingles = uniqueSingles.length > BATCH_TOP_K
+        ? [...uniqueSingles].sort((a, b) => b.deliveries[0].payout - a.deliveries[0].payout).slice(0, BATCH_TOP_K)
+        : uniqueSingles;
+
     // Track viable pairs and their best sequences for triple extension
     const viablePairs = []; // { deliveryA, deliveryB, bestSeq, majorCity, majorId, bestScore }
 
-    for (let i = 0; i < uniqueSingles.length; i++) {
-        for (let j = i + 1; j < uniqueSingles.length; j++) {
-            const sA = uniqueSingles[i];
-            const sB = uniqueSingles[j];
+    for (let i = 0; i < topSingles.length; i++) {
+        for (let j = i + 1; j < topSingles.length; j++) {
+            const sA = topSingles[i];
+            const sB = topSingles[j];
 
             const dA = sA.deliveries[0];
             const dB = sB.deliveries[0];
@@ -604,9 +613,11 @@ function selectPlan(gs, playerIndex, ctx, options) {
 
     let bestPlan = null;
     let bestScore = -Infinity;
+    let affordableCount = 0;
 
     for (const plan of candidates) {
         if (!hard.checkAffordability(plan, player, ctx, options)) continue;
+        affordableCount++;
 
         // Initial building reachability filter
         if (plan.majorCity && plan.segments.length > 0) {
@@ -621,16 +632,24 @@ function selectPlan(gs, playerIndex, ctx, options) {
         }
     }
 
-    // Logging
-    const affordable = candidates.filter(p => hard.checkAffordability(p, player, ctx, options));
-    const singles = candidates.filter(p => p.deliveries.length === 1);
-    const batches = candidates.filter(p => p.deliveries.length === 2);
-    const triples = candidates.filter(p => p.deliveries.length === 3);
+    // Cash floor gate (shared with hard AI)
+    if (bestPlan && gs.phase !== 'initialBuilding' &&
+        !(options && options.effectiveCash) && bestPlan.ecuPerTurn < 900) {
+        bestPlan = hard.applyCashFloorGate(bestPlan, player, candidates, playerIndex);
+    }
+
+    // Logging — count by type without re-checking affordability
+    let singleCount = 0, batchCount = 0, tripleCount = 0;
+    for (const p of candidates) {
+        if (p.deliveries.length === 1) singleCount++;
+        else if (p.deliveries.length === 2) batchCount++;
+        else if (p.deliveries.length === 3) tripleCount++;
+    }
     const tripleTime = candidates._tripleTimeMs || 0;
     const tripleBudgetUsed = candidates._tripleCount || 0;
     hard.logDecision(playerIndex, 'target selection',
-        `Candidates: ${singles.length} singles, ${batches.length} batches, ${triples.length} triples (${tripleBudgetUsed} evaluated, ${tripleTime}ms). ` +
-        `Affordable: ${affordable.length}. Cash: ${(options && options.effectiveCash) || player.cash}M. ` +
+        `Candidates: ${singleCount} singles, ${batchCount} batches, ${tripleCount} triples (${tripleBudgetUsed} evaluated, ${tripleTime}ms). ` +
+        `Affordable: ${affordableCount}. Cash: ${(options && options.effectiveCash) || player.cash}M. ` +
         `Selected: ${hard.formatPlanSummary(bestPlan)}`
     );
 
