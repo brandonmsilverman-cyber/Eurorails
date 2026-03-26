@@ -857,6 +857,44 @@ function rebuildPlanPath(ctx, player, plan) {
     return newPath.length >= 2 ? newPath : null;
 }
 
+// Recompute segment buildCosts and totalBuildCost from the plan's current
+// buildPath against actual owned edges. Called after rebuildPlanPath to
+// sync segment costs with the rebuilt path.
+function recomputeSegmentCosts(gs, player, ctx, plan) {
+    const ownedEdges = new Set();
+    for (const t of gs.tracks) {
+        if (t.color === player.color) {
+            ownedEdges.add(t.from + '|' + t.to);
+            ownedEdges.add(t.to + '|' + t.from);
+        }
+    }
+
+    let totalBuildCost = 0;
+    for (let i = 0; i < plan.segments.length; i++) {
+        const seg = plan.segments[i];
+        const fromCity = seg.from === '(network)' || seg.from === '(current)' ? null : seg.from;
+        const toCity = seg.to;
+        const fromId = fromCity ? ctx.cityToMilepost[fromCity] : null;
+        const toId = toCity ? ctx.cityToMilepost[toCity] : null;
+
+        let segCost = 0;
+        if (toId && plan.buildPath) {
+            const segPath = extractSegmentPath(plan.buildPath, fromId, toId, ctx);
+            if (segPath) {
+                for (let j = 0; j < segPath.length - 1; j++) {
+                    if (ownedEdges.has(segPath[j] + '|' + segPath[j + 1])) continue;
+                    const mp1 = ctx.mileposts_by_id[segPath[j]];
+                    const mp2 = ctx.mileposts_by_id[segPath[j + 1]];
+                    if (mp1 && mp2) segCost += getMileppostCost(mp1, mp2);
+                }
+            }
+        }
+        seg.buildCost = segCost;
+        totalBuildCost += segCost;
+    }
+    plan.totalBuildCost = totalBuildCost;
+}
+
 // ---------------------------------------------------------------------------
 // §1.3 — checkAffordability
 // ---------------------------------------------------------------------------
@@ -956,20 +994,37 @@ function scorePlan(plan, player, gs, ctx, options) {
     }
 
     // Operate turns: track-based distance / train speed
-    // Ferry crossings cost ~1.5 turns each: 1 turn waiting at port + half-speed crossing turn
-    const ferryPenalty = (plan.ferryCrossingCount || 0) * 1.5;
+    // Ferry crossings cost ~1.5 turns each: 1 turn waiting at port + half-speed crossing turn.
+    // Early game multiplier: ferries are far more costly when establishing the initial
+    // network — they lock the AI into an island with limited continental access.
+    const ownedTrackCount = gs.tracks.filter(t => t.color === player.color).length;
+    const earlyGameMultiplier = ownedTrackCount < 30 ? 3.0 : ownedTrackCount < 60 ? 2.0 : 1.0;
+    const ferryPenalty = (plan.ferryCrossingCount || 0) * 1.5 * earlyGameMultiplier;
     const operateTurns = Math.ceil(plan.tripDistance / trainSpeed) + ferryPenalty;
 
     // Total turns: build and operate are interleaved (§1.4, A.39)
     const estimatedTurns = Math.max(totalBuildTurns, operateTurns);
 
+    // Early game overextension penalty: when the AI has little infrastructure,
+    // expensive plans drain cash with no income stream during the long build phase.
+    // Penalize plans that consume >60% of available cash, scaling the turn estimate
+    // up so the AI prefers cheaper plans that keep it liquid.
+    let overextensionTurns = 0;
+    if (ownedTrackCount < 30) {
+        const cashUtilization = plan.totalBuildCost / effectiveCash;
+        if (cashUtilization > 0.6) {
+            overextensionTurns = (cashUtilization - 0.6) * 8;
+        }
+    }
+    const adjustedTurns = estimatedTurns + overextensionTurns;
+
     // ECU/turn (normal scoring)
-    let ecuPerTurn = plan.totalPayout / Math.max(estimatedTurns, 1);
+    let ecuPerTurn = plan.totalPayout / Math.max(adjustedTurns, 1);
 
     // Mutate plan with computed values
     plan.totalBuildTurns = totalBuildTurns;
     plan.operateTurns = operateTurns;
-    plan.estimatedTurns = estimatedTurns;
+    plan.estimatedTurns = adjustedTurns;
     plan.ecuPerTurn = ecuPerTurn;
 
     // §8.4: Endgame scoring — switch to turns-to-win for winning plans
@@ -1826,6 +1881,19 @@ function planMovement(gs, playerIndex, ctx, plan) {
         // Step 1: Am I at the next stop?
         if (currentLoc === stopId) {
             if (nextStop.action === 'pickup') {
+                // Skip pickup if we already carry enough of this good for remaining
+                // deliveries (prevents duplicate pickups when a plan is abandoned
+                // and re-selected at the same city, while still allowing multiple
+                // pickups of the same good for different deliveries in a batch)
+                const neededForDeliveries = plan.visitSequence
+                    .filter((s, idx) => idx >= simStopIndex && s.action === 'deliver' &&
+                            plan.deliveries[s.deliveryIndex].good === nextStop.good)
+                    .length;
+                const alreadyCarried = carriedGoods.filter(g => g === nextStop.good).length;
+                if (alreadyCarried >= neededForDeliveries) {
+                    simStopIndex++;
+                    continue;
+                }
                 // §3.4: Check supply before pickup
                 if (!isGoodAvailable(gs, nextStop.good, carriedGoods)) {
                     // Supply exhausted — abandon plan
@@ -2373,6 +2441,24 @@ function shouldAbandon(gs, playerIndex, ctx, plan) {
     // Uses the same sequential checkpoint logic as checkAffordability —
     // for batch plans, mid-plan delivery payouts replenish cash.
     if (!checkRemainingAffordability(gs, playerIndex, ctx, plan)) {
+        // Before abandoning, try rebuilding the buildPath with current track state.
+        // The committed plan's buildPath may be stale — the AI may have built track
+        // that provides a cheaper route than the original path. Without this rebuild,
+        // the plan is abandoned and immediately re-selected (fresh path is affordable),
+        // causing an infinite abandon→re-select cycle.
+        const rebuiltPath = rebuildPlanPath(ctx, player, plan);
+        if (rebuiltPath) {
+            plan.buildPath = rebuiltPath;
+            // Recompute segment costs from the rebuilt path
+            recomputeSegmentCosts(gs, player, ctx, plan);
+            if (checkRemainingAffordability(gs, playerIndex, ctx, plan)) {
+                logDecision(playerIndex, 'plan path rebuilt',
+                    `Stale path was unaffordable but rebuilt path is affordable (cash=${player.cash}M). ` +
+                    `Plan: ${formatPlanSummary(plan)}`
+                );
+                return false; // don't abandon
+            }
+        }
         logDecision(playerIndex, 'plan abandoned',
             `Reason: unaffordable remaining segments (cash=${player.cash}M). ` +
             `Previous plan: ${formatPlanSummary(plan)}`
