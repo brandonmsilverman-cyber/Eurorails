@@ -1891,6 +1891,7 @@ function planMovement(gs, playerIndex, ctx, plan) {
                     .length;
                 const alreadyCarried = carriedGoods.filter(g => g === nextStop.good).length;
                 if (alreadyCarried >= neededForDeliveries) {
+                    plan.currentStopIndex++;
                     simStopIndex++;
                     continue;
                 }
