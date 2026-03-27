@@ -22,8 +22,8 @@ const findPathOnTrack = gl.findPathOnTrack;
 // §1.6 — Scoring constants (Brutal AI exclusive)
 // ---------------------------------------------------------------------------
 
-const NETWORK_VALUE_WEIGHT = 0.15;       // Up to 15% bonus for building through city-rich areas
-const NETWORK_EFFICIENCY_WEIGHT = 0.30;  // Up to 30% bonus for using existing track
+const NETWORK_VALUE_WEIGHT = 0.25;       // Up to 25% bonus for building through city-rich areas
+const NETWORK_EFFICIENCY_WEIGHT = 0.50;  // Up to 50% bonus for using existing track
 const NETWORK_VALUE_CAP = 8;             // Max raw networkValue before normalization
 const CITY_PROXIMITY_HOPS = 2;           // BFS radius for city proximity tagging
 
@@ -153,7 +153,30 @@ function scorePlan(plan, player, gs, ctx, options) {
         + NETWORK_VALUE_WEIGHT * normalizedNetworkValue
         + NETWORK_EFFICIENCY_WEIGHT * efficiency;
 
-    const adjustedScore = baseScore * bonus;
+    // Disconnection penalty: if the plan's buildPath doesn't touch any
+    // existing track, the AI is building an isolated network. Penalize
+    // heavily in early/mid game when capital is scarce and network
+    // consolidation matters most.
+    let disconnectionMultiplier = 1.0;
+    if (plan.buildPath && plan.buildPath.length >= 2 && plan.totalBuildCost > 0) {
+        const ownedTrackCount = ctx.tracks.filter(t => t.color === player.color).length;
+        if (ownedTrackCount >= 5) { // Skip during very first builds
+            const ownedMileposts = new Set();
+            for (const t of ctx.tracks) {
+                if (t.color === player.color) {
+                    ownedMileposts.add(t.from);
+                    ownedMileposts.add(t.to);
+                }
+            }
+            const touchesNetwork = plan.buildPath.some(mp => ownedMileposts.has(mp));
+            if (!touchesNetwork) {
+                // Harsh penalty that decays as network grows (less important late game)
+                disconnectionMultiplier = ownedTrackCount < 40 ? 0.4 : 0.7;
+            }
+        }
+    }
+
+    const adjustedScore = baseScore * bonus * disconnectionMultiplier;
     plan.ecuPerTurn = adjustedScore;
     return adjustedScore;
 }
@@ -572,7 +595,7 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
 
             const dA = sA.deliveries[0];
             const dB = sB.deliveries[0];
-            if (dA.cardIndex === dB.cardIndex && dA.demandIndex === dB.demandIndex) continue;
+            if (dA.cardIndex === dB.cardIndex) continue;
 
             if (!hard.passesBatchPruning(sA, sB, ctx)) continue;
 

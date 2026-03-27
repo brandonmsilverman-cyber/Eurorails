@@ -645,10 +645,10 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
             const sA = topSingles[i];
             const sB = topSingles[j];
 
-            // Skip pairs from the same card+demand (same delivery)
+            // Skip pairs from the same card (delivering one splices the whole card)
             const dA = sA.deliveries[0];
             const dB = sB.deliveries[0];
-            if (dA.cardIndex === dB.cardIndex && dA.demandIndex === dB.demandIndex) continue;
+            if (dA.cardIndex === dB.cardIndex) continue;
 
             if (!passesBatchPruning(sA, sB, ctx)) continue;
 
@@ -1017,14 +1017,34 @@ function scorePlan(plan, player, gs, ctx, options) {
     // expensive plans drain cash with no income stream during the long build phase.
     // Penalize plans that consume >60% of available cash, scaling the turn estimate
     // up so the AI prefers cheaper plans that keep it liquid.
+    // Two tiers: moderate network (<60 tracks) gets a lighter penalty, early
+    // network (<30 tracks) gets a heavy penalty to protect starting capital.
     let overextensionTurns = 0;
+    const cashUtilization = plan.totalBuildCost / effectiveCash;
     if (ownedTrackCount < 30) {
-        const cashUtilization = plan.totalBuildCost / effectiveCash;
+        if (cashUtilization > 0.5) {
+            overextensionTurns = (cashUtilization - 0.5) * 16;
+        }
+    } else if (ownedTrackCount < 60) {
         if (cashUtilization > 0.6) {
             overextensionTurns = (cashUtilization - 0.6) * 8;
         }
     }
-    const adjustedTurns = estimatedTurns + overextensionTurns;
+
+    // Negative-ROI penalty: plans where buildCost exceeds payout drain cash.
+    // Penalize proportionally to the deficit so the AI avoids spending 21M to
+    // earn 9M when better options exist.
+    let roiPenaltyTurns = 0;
+    if (plan.totalBuildCost > plan.totalPayout) {
+        const deficit = plan.totalBuildCost - plan.totalPayout;
+        // Scale penalty by how much of the AI's cash the deficit represents.
+        // A 12M deficit when the AI has 50M (24%) is less painful than 12M
+        // when it has 20M (60%).
+        const deficitRatio = deficit / effectiveCash;
+        roiPenaltyTurns = deficitRatio * 12;
+    }
+
+    const adjustedTurns = estimatedTurns + overextensionTurns + roiPenaltyTurns;
 
     // Island penalty: during initial building, heavily penalize plans that
     // start on a landmass not land-connected to continental Europe. This
@@ -1589,7 +1609,6 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
         if (targetIsUnconnected) {
             segmentPath = [...segmentPath].reverse();
         }
-
         // Walk the segment path, building unbuilt edges within budget
         let segBuildPath = [];
         let segBuildCost = 0;
@@ -2678,7 +2697,8 @@ function planBuild(gs, playerIndex, ctx, strategy) {
         return [{ type: 'upgradeTo', trainType }, { type: 'endTurn' }];
     }
 
-    const buildActions = strategy.computeBuildOrder(gs, playerIndex, ctx, plan);
+    const majorCity = strategy.selectMajorCity(gs, playerIndex, ctx, plan);
+    const buildActions = strategy.computeBuildOrder(gs, playerIndex, ctx, plan, majorCity);
     return [...buildActions, { type: 'endTurn' }];
 }
 
