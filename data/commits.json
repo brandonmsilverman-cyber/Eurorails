@@ -1,4 +1,5 @@
 [
+  {"message": "Fix AI island-lock, premature upgrade, and ferry/scoring improvements", "date": "Mar 26, 2026"},
   {"message": "Fix AI oscillation loop: advance currentStopIndex when skipping already-carried pickup", "date": "Mar 26, 2026"},
   {"message": "Fix AI early-game overextension, abandon-cycle deadlock, and ferry timing", "date": "Mar 26, 2026"},
   {"message": "Fix AI ferry movement, batch enumeration crash, and cash drain", "date": "Mar 25, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Add train type to player cards and rename Major Cities to Cities", "date": "Mar 15, 2026"},
   {"message": "Add discard pile reshuffle and overhaul demand card hover effect", "date": "Mar 15, 2026"},
   {"message": "Update gale event descriptions to list all effects", "date": "Mar 15, 2026"},
-  {"message": "Add ferry section to How to Play tutorial", "date": "Mar 15, 2026"},
-  {"message": "Add turn duration clock to train card", "date": "Mar 15, 2026"}
+  {"message": "Add ferry section to How to Play tutorial", "date": "Mar 15, 2026"}
 ]

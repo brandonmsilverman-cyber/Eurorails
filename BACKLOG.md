@@ -17,6 +17,7 @@ A running list of planned features, improvements, and known issues.
 
 ## Bug Fixes
 
+- [ ] **Demand card city highlights persist across turn change** — When hovering over a demand card row, source (blue) and destination (yellow) city highlights become persistent if they are visible when the player-to-player transition modal appears. Highlights should be cleared on turn change.
 - [ ] **AI builds into major cities instead of out from them** — AI pathfinding sometimes builds toward a major city (paying the 5M city entry cost) instead of building outward from it (1M for the adjacent milepost). Example: AI 1 spent 5M for 4 mileposts building into Praha, when reversing the build direction would cost only 1M for the same connection
 
 ## Completed

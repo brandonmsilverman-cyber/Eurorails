@@ -159,6 +159,65 @@ function scorePlan(plan, player, gs, ctx, options) {
 }
 
 // ---------------------------------------------------------------------------
+// §1.2.0 — Triple proximity pruning (relaxed vs batch pruning)
+// ---------------------------------------------------------------------------
+
+// Relaxed proximity check for extending a 2-batch into a triple.
+// Passes if either the source or destination of singleC is already on the
+// player's network (free to reach), OR if singleC is within 8 hexes of
+// singleA's route (vs 5 hexes for standard batch pruning).
+function passesTriplePruning(singleA, singleC, ctx, ownedMps) {
+    const dC = singleC.deliveries[0];
+    const srcId = ctx.cityToMilepost[dC.sourceCity];
+    const dstId = ctx.cityToMilepost[dC.destCity];
+
+    // Network connectivity shortcut: if source or dest is on the network,
+    // the 3rd delivery is likely reachable with minimal build cost.
+    if ((srcId && ownedMps.has(srcId)) || (dstId && ownedMps.has(dstId))) return true;
+
+    // Geometric proximity with relaxed threshold
+    const dA = singleA.deliveries[0];
+    const citiesA = [dA.sourceCity, dA.destCity];
+    const citiesC = [dC.sourceCity, dC.destCity];
+
+    // Shared city check
+    for (const c of citiesA) {
+        if (citiesC.includes(c)) return true;
+    }
+
+    const THRESHOLD = 8;
+    const getXY = (city) => {
+        const mpId = ctx.cityToMilepost[city];
+        const mp = mpId ? ctx.mileposts_by_id[mpId] : null;
+        return mp ? { x: mp.x, y: mp.y } : null;
+    };
+
+    const srcA = getXY(dA.sourceCity);
+    const dstA = getXY(dA.destCity);
+    if (srcA && dstA) {
+        for (const city of citiesC) {
+            const p = getXY(city);
+            if (p && hard.pointToSegmentDistance(p.x, p.y, srcA.x, srcA.y, dstA.x, dstA.y) <= THRESHOLD) {
+                return true;
+            }
+        }
+    }
+
+    const srcC = getXY(dC.sourceCity);
+    const dstC = getXY(dC.destCity);
+    if (srcC && dstC) {
+        for (const city of citiesA) {
+            const p = getXY(city);
+            if (p && hard.pointToSegmentDistance(p.x, p.y, srcC.x, srcC.y, dstC.x, dstC.y) <= THRESHOLD) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+// ---------------------------------------------------------------------------
 // §1.2 — Capacity-aware sequence validation
 // ---------------------------------------------------------------------------
 
@@ -377,11 +436,15 @@ function buildTripleBatchPlan(ctx, player, deliveryA, deliveryB, deliveryC, sequ
     for (const sp of segmentPaths) {
         tripDistance += hard.getPathDistance(sp);
     }
+    let transitFerryCrossings = 0;
     if (player.trainLocation && !majorId) {
         const firstStopId = ctx.cityToMilepost[visitSequence[0].city];
         if (firstStopId) {
             const trainPath = findPathOnTrack(ctx, player.trainLocation, firstStopId, player.color, false);
-            if (trainPath) tripDistance += hard.getPathDistance(trainPath.path);
+            if (trainPath) {
+                tripDistance += hard.getPathDistance(trainPath.path);
+                transitFerryCrossings = trainPath.ferryCrossings.length;
+            }
         }
     }
 
@@ -402,7 +465,7 @@ function buildTripleBatchPlan(ctx, player, deliveryA, deliveryB, deliveryC, sequ
         ecuPerTurn: 0,
         buildPath,
         tripDistance,
-        ferryCrossingCount: hard.countFerryCrossings(buildPath, ctx),
+        ferryCrossingCount: hard.countFerryCrossings(buildPath, ctx) + transitFerryCrossings,
         currentStopIndex: 0
     };
 }
@@ -494,7 +557,7 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
     // Score-gated batch pairing: only pair the top-K singles by payout to
     // bound Dijkstra calls. The best batches almost always combine the best
     // singles, so limiting to top-K is nearly lossless.
-    const BATCH_TOP_K = 12;
+    const BATCH_TOP_K = 18;
     const topSingles = uniqueSingles.length > BATCH_TOP_K
         ? [...uniqueSingles].sort((a, b) => b.deliveries[0].payout - a.deliveries[0].payout).slice(0, BATCH_TOP_K)
         : uniqueSingles;
@@ -539,6 +602,7 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
                     deliveryA: dA,
                     deliveryB: dB,
                     bestSeq: bestBatchSeq,
+                    bestBuildCost: bestBatchPlan.totalBuildCost,
                     majorCity,
                     majorId: majorId || null
                 });
@@ -546,16 +610,38 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
         }
     }
 
+    // Sort viable pairs by efficiency (highest payout/cost first) so the
+    // triple budget is spent on the most promising pairs first.
+    viablePairs.sort((a, b) => {
+        const scoreA = (a.deliveryA.payout + a.deliveryB.payout) / Math.max(a.bestBuildCost, 1);
+        const scoreB = (b.deliveryA.payout + b.deliveryB.payout) / Math.max(b.bestBuildCost, 1);
+        return scoreB - scoreA;
+    });
+
     // --- 3-delivery batches (Brutal AI exclusive) ---
     const trainCapacity = TRAIN_TYPES[player.trainType].capacity;
     let tripleCount = 0;
     const tripleStartTime = Date.now();
 
+    // Tier singles by network connectivity: candidates already on the network
+    // are cheaper to add as a 3rd delivery and more likely to produce valid plans.
+    const ownedMps = getPlayerOwnedMileposts(ctx, player.color);
+    const tier1 = [], tier2 = [], tier3 = [];
+    for (const s of uniqueSingles) {
+        const d = s.deliveries[0];
+        const srcOn = ownedMps.has(ctx.cityToMilepost[d.sourceCity]);
+        const dstOn = ownedMps.has(ctx.cityToMilepost[d.destCity]);
+        if (srcOn && dstOn) tier1.push(s);
+        else if (srcOn || dstOn) tier2.push(s);
+        else tier3.push(s);
+    }
+    const tieredSingles = [...tier1, ...tier2, ...tier3];
+
     for (const pair of viablePairs) {
         if (tripleCount >= TRIPLE_BATCH_BUDGET) break;
         if (Date.now() - tripleStartTime > TRIPLE_BATCH_TIME_LIMIT_MS) break;
 
-        for (const sC of uniqueSingles) {
+        for (const sC of tieredSingles) {
             if (tripleCount >= TRIPLE_BATCH_BUDGET) break;
             if (Date.now() - tripleStartTime > TRIPLE_BATCH_TIME_LIMIT_MS) break;
 
@@ -565,16 +651,17 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
             if (dC.cardIndex === pair.deliveryA.cardIndex && dC.demandIndex === pair.deliveryA.demandIndex) continue;
             if (dC.cardIndex === pair.deliveryB.cardIndex && dC.demandIndex === pair.deliveryB.demandIndex) continue;
 
-            // Proximity pruning: dC must be near the pair's route
-            // Use passesBatchPruning against both singles in the pair
+            // Proximity pruning: dC must be near the pair's route or on the network.
+            // Uses relaxed threshold (8 hexes) and network connectivity shortcut.
             const singleA = bestSingles.get(`${pair.deliveryA.cardIndex}:${pair.deliveryA.demandIndex}:${pair.deliveryA.sourceCity}`);
             const singleB = bestSingles.get(`${pair.deliveryB.cardIndex}:${pair.deliveryB.demandIndex}:${pair.deliveryB.sourceCity}`);
             if (!singleA || !singleB) continue;
-            if (!hard.passesBatchPruning(singleA, sC, ctx) && !hard.passesBatchPruning(singleB, sC, ctx)) continue;
+            if (!passesTriplePruning(singleA, sC, ctx, ownedMps) && !passesTriplePruning(singleB, sC, ctx, ownedMps)) continue;
 
             // Generate insertion sequences from the best pair sequence
             const insertions = generateTripleInsertions(pair.bestSeq, trainCapacity);
 
+            let consecutiveNulls = 0;
             for (const tripleSeq of insertions) {
                 if (tripleCount >= TRIPLE_BATCH_BUDGET) break;
 
@@ -584,6 +671,10 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
                 );
                 if (triplePlan) {
                     candidates.push(triplePlan);
+                    consecutiveNulls = 0;
+                } else {
+                    consecutiveNulls++;
+                    if (consecutiveNulls >= 3) break;
                 }
                 tripleCount++;
             }
@@ -614,6 +705,7 @@ function selectPlan(gs, playerIndex, ctx, options) {
     let bestPlan = null;
     let bestScore = -Infinity;
     let affordableCount = 0;
+    const scoredPlans = [];
 
     for (const plan of candidates) {
         if (!hard.checkAffordability(plan, player, ctx, options)) continue;
@@ -626,6 +718,7 @@ function selectPlan(gs, playerIndex, ctx, options) {
         }
 
         const score = scorePlan(plan, player, gs, ctx, enrichedOptions);
+        scoredPlans.push({ plan, score });
         if (score > bestScore) {
             bestScore = score;
             bestPlan = plan;
@@ -652,6 +745,15 @@ function selectPlan(gs, playerIndex, ctx, options) {
         `Affordable: ${affordableCount}. Cash: ${(options && options.effectiveCash) || player.cash}M. ` +
         `Selected: ${hard.formatPlanSummary(bestPlan)}`
     );
+
+    // Log runner-up plans for debugging route selection decisions
+    if (scoredPlans.length > 1) {
+        scoredPlans.sort((a, b) => b.score - a.score);
+        const runnerUps = scoredPlans.slice(1, 4).map((sp, i) =>
+            `  #${i + 2}: ${hard.formatPlanSummary(sp.plan)}`
+        );
+        hard.logDecision(playerIndex, 'target selection', `Runner-ups:\n${runnerUps.join('\n')}`);
+    }
 
     return bestPlan;
 }
@@ -726,6 +828,17 @@ function shouldUpgrade(gs, playerIndex, ctx) {
         return false;
     }
 
+    // Gate 3b: Sustainability — after completing the next plan, will the AI
+    // still have enough cash to avoid a discard spiral?
+    const cashAfterNextPlan = cashAfterAll - testPlan.totalBuildCost + testPlan.totalPayout;
+    if (cashAfterNextPlan < 15) {
+        hard.logDecision(playerIndex, 'build',
+            `Upgrade to ${targetTrain} skipped: Gate 3b — post-next-plan cash ${cashAfterNextPlan}M < 15M sustainability floor ` +
+            `(next plan: ${hard.formatPlanSummary(testPlan)})`
+        );
+        return false;
+    }
+
     // Gate 4: Endgame — would upgrading starve city connections?
     const aiState = hard.getAIState(player);
     if (aiState.endgameMode) {
@@ -743,7 +856,8 @@ function shouldUpgrade(gs, playerIndex, ctx) {
 
     hard.logDecision(playerIndex, 'build',
         `Upgrade to ${targetTrain}: surplus=${surplus}M, remaining route=${remainingBuildCost}M, ` +
-        `post-upgrade cash=${cashAfterAll}M, next plan viable: ${hard.formatPlanSummary(testPlan)}`
+        `post-upgrade cash=${cashAfterAll}M, next plan viable: ${hard.formatPlanSummary(testPlan)}, ` +
+        `post-next-plan cash=${cashAfterNextPlan}M`
     );
     return targetTrain;
 }

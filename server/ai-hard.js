@@ -10,6 +10,8 @@
 const gl = require('../shared/game-logic');
 const GOODS = gl.GOODS;
 const MAJOR_CITIES = gl.MAJOR_CITIES;
+const CITIES = gl.CITIES;
+const landmassesConnected = gl.landmassesConnected;
 const findPath = gl.findPath;
 const findPathOnTrack = gl.findPathOnTrack;
 const getPlayerOwnedMileposts = gl.getPlayerOwnedMileposts;
@@ -522,11 +524,15 @@ function buildBatchPlan(ctx, player, deliveryA, deliveryB, sequenceIndices, majo
         tripDistance += getPathDistance(sp);
     }
     // For subsequent plans, add distance from train to first stop
+    let transitFerryCrossings = 0;
     if (player.trainLocation && !majorId) {
         const firstStopId = ctx.cityToMilepost[visitSequence[0].city];
         if (firstStopId) {
             const trainPath = findPathOnTrack(ctx, player.trainLocation, firstStopId, player.color, false);
-            if (trainPath) tripDistance += getPathDistance(trainPath.path);
+            if (trainPath) {
+                tripDistance += getPathDistance(trainPath.path);
+                transitFerryCrossings = trainPath.ferryCrossings.length;
+            }
         }
     }
 
@@ -546,7 +552,7 @@ function buildBatchPlan(ctx, player, deliveryA, deliveryB, sequenceIndices, majo
         ecuPerTurn: 0,
         buildPath,
         tripDistance,
-        ferryCrossingCount: countFerryCrossings(buildPath, ctx),
+        ferryCrossingCount: countFerryCrossings(buildPath, ctx) + transitFerryCrossings,
         currentStopIndex: 0
     };
 }
@@ -717,10 +723,12 @@ function buildSinglePlan(ctx, player, cardIndex, demandIndex, demand, sourceCity
 
     // Compute trip distance (track-based milepost count)
     let tripDistance;
+    let transitFerryCrossings = 0;
     if (player.trainLocation && majorId === null) {
         // Subsequent plan: include distance from train to first stop
         const trainToSource = findPathOnTrack(ctx, player.trainLocation, srcId, player.color, false);
         const distToSource = trainToSource ? getPathDistance(trainToSource.path) : 0;
+        transitFerryCrossings = trainToSource ? trainToSource.ferryCrossings.length : 0;
         tripDistance = distToSource + getPathDistance(segToDest.path);
     } else {
         // First plan: train deploys at pickup 1, so distance is source → dest only
@@ -755,7 +763,7 @@ function buildSinglePlan(ctx, player, cardIndex, demandIndex, demand, sourceCity
         ecuPerTurn: 0,         // computed by scorePlan
         buildPath,
         tripDistance,
-        ferryCrossingCount: countFerryCrossings(buildPath, ctx),
+        ferryCrossingCount: countFerryCrossings(buildPath, ctx) + transitFerryCrossings,
         currentStopIndex: 0
     };
 }
@@ -1018,8 +1026,25 @@ function scorePlan(plan, player, gs, ctx, options) {
     }
     const adjustedTurns = estimatedTurns + overextensionTurns;
 
+    // Island penalty: during initial building, heavily penalize plans that
+    // start on a landmass not land-connected to continental Europe. This
+    // prevents the AI from locking itself onto Great Britain (or similar)
+    // where all future expansion requires expensive ferry crossings.
+    let islandPenaltyTurns = 0;
+    if (gs.phase === 'initialBuilding' && plan.majorCity) {
+        const cityData = CITIES[plan.majorCity];
+        if (cityData) {
+            const cityMp = ctx.mileposts_by_id[ctx.cityToMilepost[plan.majorCity]];
+            const lm = cityMp ? cityMp.landmass : null;
+            if (lm && !landmassesConnected(lm, 'continental')) {
+                islandPenaltyTurns = 20;
+            }
+        }
+    }
+    const finalTurns = adjustedTurns + islandPenaltyTurns;
+
     // ECU/turn (normal scoring)
-    let ecuPerTurn = plan.totalPayout / Math.max(adjustedTurns, 1);
+    let ecuPerTurn = plan.totalPayout / Math.max(finalTurns, 1);
 
     // Mutate plan with computed values
     plan.totalBuildTurns = totalBuildTurns;
@@ -1079,15 +1104,16 @@ function applyCashFloorGate(bestPlan, player, candidates, playerIndex) {
 
     // Only apply when the plan would leave the AI cash-poor.
     // Above this threshold, the AI can almost certainly afford something.
-    if (cashAfterPlan >= 20) return bestPlan;
+    if (cashAfterPlan >= 15) return bestPlan;
 
     // Cards consumed by this plan — future plans must use different cards
     const usedCards = new Set(bestPlan.deliveries.map(d => d.cardIndex));
 
-    // Check if any single from remaining cards is affordable with projected cash
+    // Check if any single or batch from remaining cards is affordable with projected cash
     for (const plan of candidates) {
-        if (plan.deliveries.length !== 1) continue;
-        if (usedCards.has(plan.deliveries[0].cardIndex)) continue;
+        if (plan.deliveries.length > 2) continue; // skip triples
+        // All of the plan's delivery cards must be available (not consumed by bestPlan)
+        if (plan.deliveries.some(d => usedCards.has(d.cardIndex))) continue;
         if (plan.totalBuildCost <= cashAfterPlan - AFFORDABILITY_RESERVE) {
             return bestPlan; // at least one future plan exists
         }
@@ -1116,6 +1142,7 @@ function selectPlan(gs, playerIndex, ctx, options) {
     let bestPlan = null;
     let bestScore = -Infinity;
     let affordableCount = 0;
+    const scoredPlans = [];
 
     for (const plan of candidates) {
         // Affordability gate
@@ -1131,6 +1158,7 @@ function selectPlan(gs, playerIndex, ctx, options) {
 
         // Score the plan
         const score = scorePlan(plan, player, gs, ctx, options);
+        scoredPlans.push({ plan, score });
 
         if (score > bestScore) {
             bestScore = score;
@@ -1158,6 +1186,15 @@ function selectPlan(gs, playerIndex, ctx, options) {
         `Affordable: ${affordableCount}. Cash: ${(options && options.effectiveCash) || player.cash}M. ` +
         `Selected: ${formatPlanSummary(bestPlan)}`
     );
+
+    // Log runner-up plans for debugging route selection decisions
+    if (scoredPlans.length > 1) {
+        scoredPlans.sort((a, b) => b.score - a.score);
+        const runnerUps = scoredPlans.slice(1, 4).map((sp, i) =>
+            `  #${i + 2}: ${formatPlanSummary(sp.plan)}`
+        );
+        logDecision(playerIndex, 'target selection', `Runner-ups:\n${runnerUps.join('\n')}`);
+    }
 
     return bestPlan;
 }
@@ -1349,9 +1386,22 @@ function shouldUpgrade(gs, playerIndex, ctx) {
     }
     const cashAfterAll = surplus - 20 + pendingPayout; // cash after upgrade + route + deliveries
     const testPlan = selectPlan(gs, playerIndex, ctx, { effectiveCash: cashAfterAll, excludeCardIndices: excludeCards });
-    if (!testPlan) {
+    if (!testPlan || testPlan.ecuPerTurn < 2.0) {
         logDecision(playerIndex, 'build',
-            `Upgrade skipped: Gate 3 — no affordable plan with ${cashAfterAll}M post-upgrade cash (pending payout: ${pendingPayout}M)`
+            `Upgrade skipped: Gate 3 — ${!testPlan ? 'no affordable plan' : `best plan too weak (${testPlan.ecuPerTurn.toFixed(2)} ECU/turn < 2.0)`} with ${cashAfterAll}M post-upgrade cash (pending payout: ${pendingPayout}M)`
+        );
+        return false;
+    }
+
+    // Gate 3b: Sustainability — after completing the next plan, will the AI
+    // still have enough cash to avoid a discard spiral? This prevents upgrading
+    // into a situation where the AI can afford exactly 1 follow-up plan and
+    // then gets stuck.
+    const cashAfterNextPlan = cashAfterAll - testPlan.totalBuildCost + testPlan.totalPayout;
+    if (cashAfterNextPlan < 15) {
+        logDecision(playerIndex, 'build',
+            `Upgrade skipped: Gate 3b — post-next-plan cash ${cashAfterNextPlan}M < 15M sustainability floor ` +
+            `(next plan: ${formatPlanSummary(testPlan)})`
         );
         return false;
     }
@@ -1373,7 +1423,8 @@ function shouldUpgrade(gs, playerIndex, ctx) {
 
     logDecision(playerIndex, 'build',
         `Upgrade to Fast Freight: surplus=${surplus}M, remaining route=${remainingBuildCost}M, ` +
-        `post-upgrade cash=${cashAfterAll}M, next plan viable: ${formatPlanSummary(testPlan)}`
+        `post-upgrade cash=${cashAfterAll}M, next plan viable: ${formatPlanSummary(testPlan)}, ` +
+        `post-next-plan cash=${cashAfterNextPlan}M`
     );
     return true;
 }
