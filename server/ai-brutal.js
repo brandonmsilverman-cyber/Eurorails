@@ -819,28 +819,45 @@ function shouldUpgrade(gs, playerIndex, ctx) {
     if (surplus < upgradeCost) return false;
 
     // Gate 3: Viable next plan post-upgrade
-    // Only count payout from deliveries where the good is already picked up
-    // (i.e. pickup stop already visited). Unvisited deliveries may never
-    // happen if the upgrade leaves the AI with 0 cash.
+    // Credit pending delivery payouts to project post-upgrade cash.
+    // If the route is fully funded post-upgrade, ALL deliveries will complete,
+    // so credit the full remaining plan payout. Otherwise, conservatively
+    // count only goods already picked up.
     let pendingPayout = 0;
     const excludeCards = new Set();
-    for (let i = 0; i < plan.visitSequence.length; i++) {
-        const stop = plan.visitSequence[i];
-        if (stop.action === 'deliver') {
-            // Check if the pickup for this delivery was already visited
-            let pickedUp = false;
-            for (let j = 0; j < plan.currentStopIndex; j++) {
-                const prior = plan.visitSequence[j];
-                if (prior.action === 'pickup' && prior.deliveryIndex === stop.deliveryIndex) {
-                    pickedUp = true;
-                    break;
+    const routeAffordablePostUpgrade = remainingBuildCost <= surplus - upgradeCost;
+    if (routeAffordablePostUpgrade) {
+        const deliveredIndices = new Set();
+        for (let j = 0; j < plan.currentStopIndex; j++) {
+            const prior = plan.visitSequence[j];
+            if (prior.action === 'deliver') deliveredIndices.add(prior.deliveryIndex);
+        }
+        for (let di = 0; di < plan.deliveries.length; di++) {
+            if (!deliveredIndices.has(di)) {
+                pendingPayout += plan.deliveries[di].payout;
+            }
+        }
+    } else {
+        for (let i = 0; i < plan.visitSequence.length; i++) {
+            const stop = plan.visitSequence[i];
+            if (stop.action === 'deliver') {
+                let pickedUp = false;
+                for (let j = 0; j < plan.currentStopIndex; j++) {
+                    const prior = plan.visitSequence[j];
+                    if (prior.action === 'pickup' && prior.deliveryIndex === stop.deliveryIndex) {
+                        pickedUp = true;
+                        break;
+                    }
+                }
+                if (pickedUp) {
+                    pendingPayout += plan.deliveries[stop.deliveryIndex].payout;
                 }
             }
-            if (pickedUp) {
-                pendingPayout += plan.deliveries[stop.deliveryIndex].payout;
-            }
-            excludeCards.add(stop.cardIndex);
         }
+    }
+    for (let i = 0; i < plan.visitSequence.length; i++) {
+        const stop = plan.visitSequence[i];
+        if (stop.action === 'deliver') excludeCards.add(stop.cardIndex);
     }
     const cashAfterAll = surplus - upgradeCost + pendingPayout;
     const testPlan = selectPlan(gs, playerIndex, ctx, { effectiveCash: cashAfterAll, excludeCardIndices: excludeCards });

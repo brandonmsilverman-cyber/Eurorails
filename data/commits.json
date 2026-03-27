@@ -1,4 +1,5 @@
 [
+  {"message": "AI tempo improvements: net profit scoring, upgrade gate fix, and delivery density bonus", "date": "Mar 27, 2026"},
   {"message": "Fix AI plan scoring: negative-ROI penalty, stronger overextension, network bonuses, and same-card batch bug", "date": "Mar 27, 2026"},
   {"message": "Fix AI island-lock, premature upgrade, and ferry/scoring improvements", "date": "Mar 26, 2026"},
   {"message": "Fix AI oscillation loop: advance currentStopIndex when skipping already-carried pickup", "date": "Mar 26, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Fix hard AI diamond track and batch delivery card index bugs", "date": "Mar 19, 2026"},
   {"message": "Add borrowing feature: borrow up to 20M from bank, repay double from deliveries", "date": "Mar 15, 2026"},
   {"message": "Add train type to player cards and rename Major Cities to Cities", "date": "Mar 15, 2026"},
-  {"message": "Add discard pile reshuffle and overhaul demand card hover effect", "date": "Mar 15, 2026"},
-  {"message": "Update gale event descriptions to list all effects", "date": "Mar 15, 2026"}
+  {"message": "Add discard pile reshuffle and overhaul demand card hover effect", "date": "Mar 15, 2026"}
 ]

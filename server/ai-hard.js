@@ -1031,20 +1031,7 @@ function scorePlan(plan, player, gs, ctx, options) {
         }
     }
 
-    // Negative-ROI penalty: plans where buildCost exceeds payout drain cash.
-    // Penalize proportionally to the deficit so the AI avoids spending 21M to
-    // earn 9M when better options exist.
-    let roiPenaltyTurns = 0;
-    if (plan.totalBuildCost > plan.totalPayout) {
-        const deficit = plan.totalBuildCost - plan.totalPayout;
-        // Scale penalty by how much of the AI's cash the deficit represents.
-        // A 12M deficit when the AI has 50M (24%) is less painful than 12M
-        // when it has 20M (60%).
-        const deficitRatio = deficit / effectiveCash;
-        roiPenaltyTurns = deficitRatio * 12;
-    }
-
-    const adjustedTurns = estimatedTurns + overextensionTurns + roiPenaltyTurns;
+    const adjustedTurns = estimatedTurns + overextensionTurns;
 
     // Island penalty: during initial building, heavily penalize plans that
     // start on a landmass not land-connected to continental Europe. This
@@ -1061,10 +1048,24 @@ function scorePlan(plan, player, gs, ctx, options) {
             }
         }
     }
-    const finalTurns = adjustedTurns + islandPenaltyTurns;
+    // Delivery density bonus: reward plans with high payout relative to travel
+    // distance. Short high-value routes generate better tempo, especially with
+    // upgraded trains where speed amplifies short routes.
+    const payoutPerHex = plan.totalPayout / Math.max(plan.tripDistance, 1);
+    const densityBonus = Math.min(payoutPerHex / 3.0, 1.0); // 0..1, capped
+    const densityReduction = densityBonus * 1.5;
 
-    // ECU/turn (normal scoring)
-    let ecuPerTurn = plan.totalPayout / Math.max(finalTurns, 1);
+    let finalTurns = adjustedTurns + islandPenaltyTurns;
+    finalTurns = Math.max(finalTurns - densityReduction, estimatedTurns * 0.7);
+
+    // Net profit per turn: deduct buildCost from payout. In early game,
+    // buildCost is partly infrastructure investment that pays off later,
+    // so discount it. Late game: fully deduct for pure profit optimization.
+    const buildCostWeight = ownedTrackCount < 40 ? 0.5
+                          : ownedTrackCount < 80 ? 0.75
+                          : 1.0;
+    const netProfit = plan.totalPayout - (plan.totalBuildCost * buildCostWeight);
+    let ecuPerTurn = netProfit / Math.max(finalTurns, 1);
 
     // Mutate plan with computed values
     plan.totalBuildTurns = totalBuildTurns;
@@ -1262,8 +1263,8 @@ function shouldDiscard(gs, playerIndex, ctx, plan) {
         }
     }
 
-    // §5.2: Threshold check
-    const ECU_THRESHOLD = 2.0;
+    // §5.2: Threshold check (calibrated for net-profit-per-turn scoring)
+    const ECU_THRESHOLD = 0.75;
     if (plan.ecuPerTurn >= ECU_THRESHOLD) return false;
 
     // After 2 consecutive weak discards, accept the marginal plan
@@ -1383,32 +1384,54 @@ function shouldUpgrade(gs, playerIndex, ctx) {
     // the current plan, and exclude those demand cards from the test search.
     // Otherwise the AI may find its *current* delivery as the "next" plan,
     // approve the upgrade, then have no money for a real next plan.
-    // Only count payout from deliveries where the good is already picked up.
-    // Unvisited pickups may never happen if the upgrade leaves cash at 0.
+    // Credit pending delivery payouts to project post-upgrade cash.
+    // If the route is fully funded post-upgrade, ALL deliveries will complete,
+    // so credit the full remaining plan payout. Otherwise, conservatively
+    // count only goods already picked up.
     let pendingPayout = 0;
     const excludeCards = new Set();
-    for (let i = 0; i < plan.visitSequence.length; i++) {
-        const stop = plan.visitSequence[i];
-        if (stop.action === 'deliver') {
-            let pickedUp = false;
-            for (let j = 0; j < plan.currentStopIndex; j++) {
-                const prior = plan.visitSequence[j];
-                if (prior.action === 'pickup' && prior.deliveryIndex === stop.deliveryIndex) {
-                    pickedUp = true;
-                    break;
+    const routeAffordablePostUpgrade = remainingBuildCost <= surplus - 20;
+    if (routeAffordablePostUpgrade) {
+        // Route is fully funded even after upgrade — all deliveries will complete.
+        // Credit all remaining (undelivered) payouts.
+        const deliveredIndices = new Set();
+        for (let j = 0; j < plan.currentStopIndex; j++) {
+            const prior = plan.visitSequence[j];
+            if (prior.action === 'deliver') deliveredIndices.add(prior.deliveryIndex);
+        }
+        for (let di = 0; di < plan.deliveries.length; di++) {
+            if (!deliveredIndices.has(di)) {
+                pendingPayout += plan.deliveries[di].payout;
+            }
+        }
+    } else {
+        // Route may not complete — only count goods already on the train.
+        for (let i = 0; i < plan.visitSequence.length; i++) {
+            const stop = plan.visitSequence[i];
+            if (stop.action === 'deliver') {
+                let pickedUp = false;
+                for (let j = 0; j < plan.currentStopIndex; j++) {
+                    const prior = plan.visitSequence[j];
+                    if (prior.action === 'pickup' && prior.deliveryIndex === stop.deliveryIndex) {
+                        pickedUp = true;
+                        break;
+                    }
+                }
+                if (pickedUp) {
+                    pendingPayout += plan.deliveries[stop.deliveryIndex].payout;
                 }
             }
-            if (pickedUp) {
-                pendingPayout += plan.deliveries[stop.deliveryIndex].payout;
-            }
-            excludeCards.add(stop.cardIndex);
         }
+    }
+    for (let i = 0; i < plan.visitSequence.length; i++) {
+        const stop = plan.visitSequence[i];
+        if (stop.action === 'deliver') excludeCards.add(stop.cardIndex);
     }
     const cashAfterAll = surplus - 20 + pendingPayout; // cash after upgrade + route + deliveries
     const testPlan = selectPlan(gs, playerIndex, ctx, { effectiveCash: cashAfterAll, excludeCardIndices: excludeCards });
-    if (!testPlan || testPlan.ecuPerTurn < 2.0) {
+    if (!testPlan || testPlan.ecuPerTurn < 0.75) {
         logDecision(playerIndex, 'build',
-            `Upgrade skipped: Gate 3 — ${!testPlan ? 'no affordable plan' : `best plan too weak (${testPlan.ecuPerTurn.toFixed(2)} ECU/turn < 2.0)`} with ${cashAfterAll}M post-upgrade cash (pending payout: ${pendingPayout}M)`
+            `Upgrade skipped: Gate 3 — ${!testPlan ? 'no affordable plan' : `best plan too weak (${testPlan.ecuPerTurn.toFixed(2)} ECU/turn < 0.75)`} with ${cashAfterAll}M post-upgrade cash (pending payout: ${pendingPayout}M)`
         );
         return false;
     }
