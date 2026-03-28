@@ -7,7 +7,10 @@ const { randomUUID } = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+    pingTimeout: 30000,
+    pingInterval: 25000,
+});
 
 const PORT = process.env.PORT || 3000;
 const DISCONNECT_GRACE_MS = parseInt(process.env.DISCONNECT_GRACE_MS) || 300000; // 5 minutes
@@ -954,10 +957,17 @@ function executeTwoPhaseAITurn(roomCode, room, strategy, label) {
     }
 
     // Phase 1: Operate
+    const turnStartTime = performance.now();
     let operateActions;
     try {
+        let t0 = performance.now();
         const ctx = buildPathfindingCtx(gs);
+        let t1 = performance.now();
+        if (t1 - t0 > 50) console.log(`Room ${roomCode}: [TIMING] buildPathfindingCtx(operate) took ${(t1 - t0).toFixed(0)}ms`);
+        t0 = performance.now();
         operateActions = strategy.planOperate(gs, playerIndex, ctx, strategy);
+        t1 = performance.now();
+        console.log(`Room ${roomCode}: [TIMING] planOperate took ${(t1 - t0).toFixed(0)}ms`);
     } catch (err) {
         console.warn(`Room ${roomCode}: ${label} AI planOperate error: ${err.message}`);
         console.warn(err.stack);
@@ -989,8 +999,15 @@ function executeTwoPhaseAITurn(roomCode, room, strategy, label) {
 
         let buildActions;
         try {
+            let t0 = performance.now();
             const freshCtx = buildPathfindingCtx(freshGs);
+            let t1 = performance.now();
+            if (t1 - t0 > 50) console.log(`Room ${roomCode}: [TIMING] buildPathfindingCtx(build) took ${(t1 - t0).toFixed(0)}ms`);
+            t0 = performance.now();
             buildActions = strategy.planBuild(freshGs, freshGs.currentPlayerIndex, freshCtx, strategy);
+            t1 = performance.now();
+            console.log(`Room ${roomCode}: [TIMING] planBuild took ${(t1 - t0).toFixed(0)}ms`);
+            console.log(`Room ${roomCode}: [TIMING] total AI turn planning: ${(t1 - turnStartTime).toFixed(0)}ms`);
         } catch (err) {
             console.warn(`Room ${roomCode}: ${label} AI planBuild error: ${err.message}`);
             console.warn(err.stack);
@@ -1071,7 +1088,7 @@ function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete
                   : player.difficulty === 'hard' ? 'HARD' : 'EASY';
     const aiModule = player.difficulty === 'brutal' ? aiBrutal
                    : player.difficulty === 'hard' ? aiHard : aiEasy;
-    console.log(`Room ${roomCode}: ${player.name} [${aiLabel}] action: ${actionSummary}${result.logs ? ' — ' + result.logs[result.logs.length - 1] : ''}`);
+    console.log(`Room ${roomCode}: ${player.name} [${aiLabel}] action: ${actionSummary}${result.logs ? ' — ' + result.logs.join(' | ') : ''}`);
     broadcastStateUpdate(roomCode, room, result.uiEvent);
 
     // Advance committedPlan.currentStopIndex when a pickup/deliver action succeeds.
@@ -1167,13 +1184,19 @@ function executeHardAIActionSequence(roomCode, room, plan, stepIndex, onComplete
             const replanLabel = p.difficulty === 'brutal' ? 'BRUTAL'
                               : p.difficulty === 'hard' ? 'HARD' : 'EASY';
             try {
+                let t0 = performance.now();
                 const freshCtx = buildPathfindingCtx(freshGs);
+                let t1 = performance.now();
+                if (t1 - t0 > 50) console.log(`Room ${roomCode}: [TIMING] buildPathfindingCtx(replan) took ${(t1 - t0).toFixed(0)}ms`);
                 const committedPlan = replanModule.getCommittedPlan(freshGs, pi);
+                t0 = performance.now();
                 if (committedPlan) {
                     replan = replanModule.planMovement(freshGs, pi, freshCtx, committedPlan);
                 } else {
                     replan = replanModule.planOperate(freshGs, pi, freshCtx, replanModule);
                 }
+                t1 = performance.now();
+                console.log(`Room ${roomCode}: [TIMING] post-delivery replan (${committedPlan ? 'planMovement' : 'planOperate'}) took ${(t1 - t0).toFixed(0)}ms`);
             } catch (err) {
                 console.warn(`Room ${roomCode}: ${replanLabel} AI post-delivery re-plan error: ${err.message}`);
                 replan = [{ type: 'endOperatePhase' }];
@@ -1210,7 +1233,7 @@ function executeAIActionSequence(roomCode, room, plan, stepIndex) {
         : action.type;
     const result = executeAIAction(gs, playerIndex, action);
     if (result.success) {
-        console.log(`Room ${roomCode}: ${player.name} AI action: ${actionSummary}${result.logs ? ' — ' + result.logs[result.logs.length - 1] : ''}`);
+        console.log(`Room ${roomCode}: ${player.name} AI action: ${actionSummary}${result.logs ? ' — ' + result.logs.join(' | ') : ''}`);
     }
 
     if (!result.success) {
@@ -2279,7 +2302,7 @@ io.on('connection', (socket) => {
                 if (!moveResult.success) {
                     return callback && callback({ success: false, error: moveResult.error });
                 }
-                console.log(`Room ${socket.roomCode}: ${gs.players[playerIndex].name} ${moveResult.logs[moveResult.logs.length - 1]}`);
+                console.log(`Room ${socket.roomCode}: ${gs.players[playerIndex].name} ${moveResult.logs.join(' | ')}`);
                 broadcastStateUpdate(socket.roomCode, room, moveResult.uiEvent);
                 callback && callback({ success: true });
                 break;

@@ -631,19 +631,28 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
     }
     const uniqueSingles = [...bestSingles.values()];
 
-    // Score-gated batch pairing: only pair the top-K singles by payout to
-    // bound Dijkstra calls. The best batches almost always combine the best
-    // singles, so limiting to top-K is nearly lossless.
-    const BATCH_TOP_K = 12;
-    const topSingles = uniqueSingles.length > BATCH_TOP_K
-        ? [...uniqueSingles].sort((a, b) => b.deliveries[0].payout - a.deliveries[0].payout).slice(0, BATCH_TOP_K)
-        : uniqueSingles;
+    // Sort by payout descending so the O(n²) pairing loop evaluates
+    // high-value combinations first. If the time budget cuts the tail,
+    // we only lose low-payout × low-payout pairs.
+    uniqueSingles.sort((a, b) => b.totalPayout - a.totalPayout);
 
-    // Pair singles that pass the pruning filter
-    for (let i = 0; i < topSingles.length; i++) {
-        for (let j = i + 1; j < topSingles.length; j++) {
-            const sA = topSingles[i];
-            const sB = topSingles[j];
+    // Time budget for batch evaluation. enumeratePlans runs synchronously and
+    // blocks the event loop; selectPlan can be called 2-3× per turn, so
+    // budget per call × 3 must stay well under the Socket.IO pingTimeout.
+    const BATCH_TIME_LIMIT_MS = 3000;
+    const batchStartTime = Date.now();
+
+    // Pair all unique singles — proximity pruning and scoring filter out poor
+    // combinations. Removing the old top-K cap allows low-payout singles to
+    // participate in batches where they're directionally aligned with
+    // high-payout deliveries (e.g., a $19 Coal→Bilbao paired with a $47
+    // Potatoes→Sevilla on the same southbound route).
+    for (let i = 0; i < uniqueSingles.length; i++) {
+        if (Date.now() - batchStartTime > BATCH_TIME_LIMIT_MS) break;
+        for (let j = i + 1; j < uniqueSingles.length; j++) {
+            if (Date.now() - batchStartTime > BATCH_TIME_LIMIT_MS) break;
+            const sA = uniqueSingles[i];
+            const sB = uniqueSingles[j];
 
             // Skip pairs from the same card (delivering one splices the whole card)
             const dA = sA.deliveries[0];
@@ -887,7 +896,12 @@ function recomputeSegmentCosts(gs, player, ctx, plan) {
 
         let segCost = 0;
         if (toId && plan.buildPath) {
-            const segPath = extractSegmentPath(plan.buildPath, fromId, toId, ctx);
+            let segPath = extractSegmentPath(plan.buildPath, fromId, toId, ctx);
+            // Fall back if segment boundaries are stale (after rebuildPlanPath
+            // replaced the path from train's current location)
+            if (!segPath) {
+                segPath = extractSegmentPath(plan.buildPath, null, toId, ctx);
+            }
             if (segPath) {
                 for (let j = 0; j < segPath.length - 1; j++) {
                     if (ownedEdges.has(segPath[j] + '|' + segPath[j + 1])) continue;
@@ -1058,6 +1072,19 @@ function scorePlan(plan, player, gs, ctx, options) {
     let finalTurns = adjustedTurns + islandPenaltyTurns;
     finalTurns = Math.max(finalTurns - densityReduction, estimatedTurns * 0.7);
 
+    // Single delivery penalty: with a mature network and multi-good capacity,
+    // singles waste cargo slots. Penalize to push the AI toward batches/triples
+    // that earn more per turn cycle (pickup + travel + delivery).
+    const trainCapacity = gl.TRAIN_TYPES[player.trainType].capacity;
+    let singlePenaltyTurns = 0;
+    if (plan.deliveries.length === 1 && trainCapacity >= 2 && ownedTrackCount >= 60) {
+        // Scale penalty by how much capacity is wasted: 1 slot used out of 2-3
+        const wastedSlots = trainCapacity - 1;
+        singlePenaltyTurns = wastedSlots * 1.0;
+    }
+
+    finalTurns += singlePenaltyTurns;
+
     // Net profit per turn: deduct buildCost from payout. In early game,
     // buildCost is partly infrastructure investment that pays off later,
     // so discount it. Late game: fully deduct for pure profit optimization.
@@ -1165,10 +1192,21 @@ function selectPlan(gs, playerIndex, ctx, options) {
     let affordableCount = 0;
     const scoredPlans = [];
 
+    // Minimum payout floor: in late game with a mature network, reject
+    // low-payout singles that waste a full turn cycle for trivial income.
+    // An 8M delivery scoring 12 ECU/turn looks efficient but earns less per
+    // round than a 40M+ delivery that takes a few more turns.
+    const ownedTrackCount = gs.tracks.filter(t => t.color === player.color).length;
+    const minPayoutFloor = ownedTrackCount >= 80 ? 15 : 0;
+
     for (const plan of candidates) {
         // Affordability gate
         if (!checkAffordability(plan, player, ctx, options)) continue;
         affordableCount++;
+
+        // Late-game payout floor: skip low-value singles
+        if (minPayoutFloor > 0 && plan.deliveries.length === 1 &&
+            plan.totalPayout < minPayoutFloor) continue;
 
         // Initial building reachability filter (§1.2):
         // Build cost from major city to pickup 1 must be ≤ 40M
@@ -1264,7 +1302,12 @@ function shouldDiscard(gs, playerIndex, ctx, plan) {
     }
 
     // §5.2: Threshold check (calibrated for net-profit-per-turn scoring)
-    const ECU_THRESHOLD = 0.75;
+    // Scale threshold up with network maturity — a mature network should
+    // demand higher-quality plans since good routes are readily available.
+    const ownedTrackCount = gs.tracks.filter(t => t.color === player.color).length;
+    const ECU_THRESHOLD = ownedTrackCount >= 80 ? 1.5
+                        : ownedTrackCount >= 60 ? 1.0
+                        : 0.75;
     if (plan.ecuPerTurn >= ECU_THRESHOLD) return false;
 
     // After 2 consecutive weak discards, accept the marginal plan
@@ -1272,7 +1315,7 @@ function shouldDiscard(gs, playerIndex, ctx, plan) {
 
     // §7.4 Discard logging
     logDecision(playerIndex, 'discard',
-        `Best plan ECU/turn: ${plan.ecuPerTurn.toFixed(2)} (threshold: ${ECU_THRESHOLD}). ` +
+        `Best plan ECU/turn: ${plan.ecuPerTurn.toFixed(2)} (threshold: ${ECU_THRESHOLD.toFixed(2)}). ` +
         `Carrying: ${player.loads.length > 0 ? player.loads.join(',') : 'none'}. ` +
         `Decision: discard (weak plan, consecutive=${aiState.consecutiveWeakDiscards + 1})`
     );
@@ -1623,7 +1666,17 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
 
         // Find the sub-path for this segment
         let segmentPath = extractSegmentPath(plan.buildPath, fromId, toId, ctx);
-        if (!segmentPath || segmentPath.length < 2) continue;
+        if (!segmentPath || segmentPath.length < 2) {
+            // Segment boundaries may be stale after rebuildPlanPath replaced
+            // the buildPath (the rebuilt path starts from the train's current
+            // location and may no longer contain the original fromCity).
+            // Fall back: try extracting from buildPath start to toId, or use
+            // the full buildPath for the last segment.
+            if (plan.buildPath && plan.buildPath.length >= 2) {
+                segmentPath = extractSegmentPath(plan.buildPath, null, toId, ctx);
+            }
+            if (!segmentPath || segmentPath.length < 2) continue;
+        }
 
         // §4.2: Check if target is an unconnected major city — reverse build direction
         const targetMp = ctx.mileposts_by_id[toId];

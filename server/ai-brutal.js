@@ -501,10 +501,8 @@ function buildTripleBatchPlan(ctx, player, deliveryA, deliveryB, deliveryC, sequ
 // Keep this low — enumeratePlans runs synchronously and blocks the event loop.
 // selectPlan can be called multiple times per turn (planOperate, shouldUpgrade
 // gate 3, handleNoPlan borrowing), so the total cost multiplies.
-// enumeratePlans blocks the event loop synchronously. Socket.IO ping timeout
-// is 20s — we must stay well under that. selectPlan can be called 2-3 times in
-// a single synchronous block (planOperate + handleNoPlan borrowing), so budget
-// per call × 3 must be < 20s. At ~17ms per triple, 3s ≈ ~175 triples.
+// Socket.IO pingTimeout is 30s. With batch budget (3s) + triple budget (3s)
+// per call × 3 calls = ~18s worst case, staying under the limit.
 const TRIPLE_BATCH_BUDGET = 200;
 const TRIPLE_BATCH_TIME_LIMIT_MS = 3000;
 
@@ -577,21 +575,24 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
     }
     const uniqueSingles = [...bestSingles.values()];
 
-    // Score-gated batch pairing: only pair the top-K singles by payout to
-    // bound Dijkstra calls. The best batches almost always combine the best
-    // singles, so limiting to top-K is nearly lossless.
-    const BATCH_TOP_K = 18;
-    const topSingles = uniqueSingles.length > BATCH_TOP_K
-        ? [...uniqueSingles].sort((a, b) => b.deliveries[0].payout - a.deliveries[0].payout).slice(0, BATCH_TOP_K)
-        : uniqueSingles;
+    // Sort by payout descending so the O(n²) pairing loop evaluates
+    // high-value combinations first. If the time budget cuts the tail,
+    // we only lose low-payout × low-payout pairs.
+    uniqueSingles.sort((a, b) => b.totalPayout - a.totalPayout);
+
+    // Time budget for batch evaluation (matches ai-hard.js).
+    const BATCH_TIME_LIMIT_MS = 3000;
+    const batchStartTime = Date.now();
 
     // Track viable pairs and their best sequences for triple extension
-    const viablePairs = []; // { deliveryA, deliveryB, bestSeq, majorCity, majorId, bestScore }
+    const viablePairs = []; // { deliveryA, deliveryB, bestSeq, majorCity, majorId, bestBatchScore }
 
-    for (let i = 0; i < topSingles.length; i++) {
-        for (let j = i + 1; j < topSingles.length; j++) {
-            const sA = topSingles[i];
-            const sB = topSingles[j];
+    for (let i = 0; i < uniqueSingles.length; i++) {
+        if (Date.now() - batchStartTime > BATCH_TIME_LIMIT_MS) break;
+        for (let j = i + 1; j < uniqueSingles.length; j++) {
+            if (Date.now() - batchStartTime > BATCH_TIME_LIMIT_MS) break;
+            const sA = uniqueSingles[i];
+            const sB = uniqueSingles[j];
 
             const dA = sA.deliveries[0];
             const dB = sB.deliveries[0];
@@ -604,6 +605,7 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
 
             let bestBatchPlan = null;
             let bestBatchSeq = null;
+            let bestBatchScore = -Infinity;
 
             for (const seq of hard.BATCH_VISIT_SEQUENCES) {
                 const batchPlan = hard.buildBatchPlan(
@@ -611,10 +613,12 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
                     majorId || null, majorCity, effectiveCash
                 );
                 if (batchPlan) {
+                    const score = hard.scorePlan(batchPlan, player, gs, ctx, options);
                     candidates.push(batchPlan);
-                    if (!bestBatchPlan || batchPlan.totalBuildCost < bestBatchPlan.totalBuildCost) {
+                    if (score > bestBatchScore) {
                         bestBatchPlan = batchPlan;
                         bestBatchSeq = seq;
+                        bestBatchScore = score;
                     }
                 }
             }
@@ -626,6 +630,7 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
                     deliveryB: dB,
                     bestSeq: bestBatchSeq,
                     bestBuildCost: bestBatchPlan.totalBuildCost,
+                    bestBatchScore,
                     majorCity,
                     majorId: majorId || null
                 });
@@ -633,13 +638,10 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
         }
     }
 
-    // Sort viable pairs by efficiency (highest payout/cost first) so the
-    // triple budget is spent on the most promising pairs first.
-    viablePairs.sort((a, b) => {
-        const scoreA = (a.deliveryA.payout + a.deliveryB.payout) / Math.max(a.bestBuildCost, 1);
-        const scoreB = (b.deliveryA.payout + b.deliveryB.payout) / Math.max(b.bestBuildCost, 1);
-        return scoreB - scoreA;
-    });
+    // Sort viable pairs by actual batch ECU/turn score so the triple budget
+    // is spent on the most promising pairs first. This ensures high-scoring
+    // directionally-aligned pairs get triple extension priority.
+    viablePairs.sort((a, b) => b.bestBatchScore - a.bestBatchScore);
 
     // --- 3-delivery batches (Brutal AI exclusive) ---
     const trainCapacity = TRAIN_TYPES[player.trainType].capacity;
@@ -730,9 +732,18 @@ function selectPlan(gs, playerIndex, ctx, options) {
     let affordableCount = 0;
     const scoredPlans = [];
 
+    // Minimum payout floor: in late game with a mature network, reject
+    // low-payout singles that waste a full turn cycle for trivial income.
+    const ownedTrackCount = gs.tracks.filter(t => t.color === player.color).length;
+    const minPayoutFloor = ownedTrackCount >= 80 ? 15 : 0;
+
     for (const plan of candidates) {
         if (!hard.checkAffordability(plan, player, ctx, options)) continue;
         affordableCount++;
+
+        // Late-game payout floor: skip low-value singles
+        if (minPayoutFloor > 0 && plan.deliveries.length === 1 &&
+            plan.totalPayout < minPayoutFloor) continue;
 
         // Initial building reachability filter
         if (plan.majorCity && plan.segments.length > 0) {
