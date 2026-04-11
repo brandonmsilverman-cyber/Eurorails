@@ -523,15 +523,33 @@ function buildBatchPlan(ctx, player, deliveryA, deliveryB, sequenceIndices, majo
     for (const sp of segmentPaths) {
         tripDistance += getPathDistance(sp);
     }
-    // For subsequent plans, add distance from train to first stop
+    // For subsequent plans, add distance from train to first stop.
+    // segmentPaths[0] already covers the build path from an owned-city entry
+    // point to the first stop; we need to add the train's owned-track
+    // distance from its current location to that entry point.
+    // Prior to this fix, when the direct owned-track path to the first stop
+    // didn't exist, positioning distance was silently dropped, causing
+    // systematic 2x turn underestimates on long-haul plans.
     let transitFerryCrossings = 0;
     if (player.trainLocation && !majorId) {
         const firstStopId = ctx.cityToMilepost[visitSequence[0].city];
         if (firstStopId) {
             const trainPath = findPathOnTrack(ctx, player.trainLocation, firstStopId, player.color, false);
             if (trainPath) {
+                // First stop already on owned network; segmentPaths[0] is
+                // trivial in this case. Add the owned-track distance.
                 tripDistance += getPathDistance(trainPath.path);
                 transitFerryCrossings = trainPath.ferryCrossings.length;
+            } else if (segmentPaths.length > 0 && segmentPaths[0].length > 0) {
+                // First stop not reachable via owned track yet. Add only the
+                // train→segStart portion; segmentPaths[0] (segStart→firstStop)
+                // is already summed above.
+                const segStartId = segmentPaths[0][0];
+                const trainToSegStart = findPathOnTrack(ctx, player.trainLocation, segStartId, player.color, false);
+                if (trainToSegStart) {
+                    tripDistance += getPathDistance(trainToSegStart.path);
+                    transitFerryCrossings = trainToSegStart.ferryCrossings.length;
+                }
             }
         }
     }
@@ -734,10 +752,27 @@ function buildSinglePlan(ctx, player, cardIndex, demandIndex, demand, sourceCity
     let tripDistance;
     let transitFerryCrossings = 0;
     if (player.trainLocation && majorId === null) {
-        // Subsequent plan: include distance from train to first stop
+        // Subsequent plan: include distance from train to first stop.
+        // Try the direct owned-track route first. When the source isn't yet
+        // reachable via owned track (common for cross-corridor plans in late
+        // game), fall back to train→start-of-segToSource (via owned track)
+        // plus the segToSource length (which represents newly-built track).
+        // Prior to this fix, distToSource silently fell back to 0, causing
+        // systematic 2x turn underestimates on long-haul plans.
         const trainToSource = findPathOnTrack(ctx, player.trainLocation, srcId, player.color, false);
-        const distToSource = trainToSource ? getPathDistance(trainToSource.path) : 0;
-        transitFerryCrossings = trainToSource ? trainToSource.ferryCrossings.length : 0;
+        let distToSource;
+        if (trainToSource) {
+            distToSource = getPathDistance(trainToSource.path);
+            transitFerryCrossings = trainToSource.ferryCrossings.length;
+        } else if (segToSource && segToSource.path && segToSource.path.length > 0) {
+            const segStartId = segToSource.path[0];
+            const trainToSegStart = findPathOnTrack(ctx, player.trainLocation, segStartId, player.color, false);
+            const distTrainToSegStart = trainToSegStart ? getPathDistance(trainToSegStart.path) : 0;
+            transitFerryCrossings = trainToSegStart ? trainToSegStart.ferryCrossings.length : 0;
+            distToSource = distTrainToSegStart + getPathDistance(segToSource.path);
+        } else {
+            distToSource = 0;
+        }
         tripDistance = distToSource + getPathDistance(segToDest.path);
     } else {
         // First plan: train deploys at pickup 1, so distance is source → dest only
