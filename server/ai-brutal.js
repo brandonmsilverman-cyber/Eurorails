@@ -672,9 +672,12 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
 
             const dC = sC.deliveries[0];
 
-            // Skip if dC duplicates either delivery in the pair
-            if (dC.cardIndex === pair.deliveryA.cardIndex && dC.demandIndex === pair.deliveryA.demandIndex) continue;
-            if (dC.cardIndex === pair.deliveryB.cardIndex && dC.demandIndex === pair.deliveryB.demandIndex) continue;
+            // Skip if dC shares a card with either delivery in the pair.
+            // Each demand card has 3 demands, but delivering any one of them
+            // splices the entire card out (see ai-actions.js applyDeliverGood),
+            // so a plan can never legally fulfill two demands from the same card.
+            if (dC.cardIndex === pair.deliveryA.cardIndex) continue;
+            if (dC.cardIndex === pair.deliveryB.cardIndex) continue;
 
             // Proximity pruning: dC must be near the pair's route or on the network.
             // Uses relaxed threshold (8 hexes) and network connectivity shortcut.
@@ -816,6 +819,22 @@ function shouldUpgrade(gs, playerIndex, ctx) {
         targetTrain = 'Superfreight';
     } else {
         // Already at Superfreight or Heavy Freight — no upgrade
+        return false;
+    }
+
+    // Gate 0: Network maturity. An upgrade only pays off when the AI has
+    // enough owned track to exploit the speed/capacity gains. Upgrading
+    // on a tiny network buys speed the AI can't use and drains cash that
+    // was needed for the next plan, triggering discard spirals.
+    //
+    // Thresholds match the "early"/"mid"/"late" tiers used elsewhere in
+    // scoring (ai-hard.js buildCostWeight, earlyGameMultiplier).
+    const ownedTrackCount = gs.tracks.filter(t => t.color === player.color).length;
+    const maturityThreshold = targetTrain === 'Fast Freight' ? 30 : 60;
+    if (ownedTrackCount < maturityThreshold) {
+        hard.logDecision(playerIndex, 'build',
+            `Upgrade to ${targetTrain} skipped: Gate 0 — ownedTrackCount=${ownedTrackCount} < ${maturityThreshold} (network too small)`
+        );
         return false;
     }
 

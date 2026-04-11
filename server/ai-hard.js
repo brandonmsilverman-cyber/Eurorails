@@ -1407,6 +1407,19 @@ function shouldUpgrade(gs, playerIndex, ctx) {
     const plan = getCommittedPlan(gs, playerIndex);
     if (!plan) return false;
 
+    // Gate 0: Network maturity. Fast Freight's speed gain only pays off
+    // when the AI has enough owned track to exploit it. Upgrading on a
+    // tiny network drains cash that was needed for the next plan and
+    // triggers discard spirals. Threshold matches the buildCostWeight
+    // "early game" tier used in scorePlan.
+    const ownedTrackCount = gs.tracks.filter(t => t.color === player.color).length;
+    if (ownedTrackCount < 30) {
+        logDecision(playerIndex, 'build',
+            `Upgrade to Fast Freight skipped: Gate 0 — ownedTrackCount=${ownedTrackCount} < 30 (network too small)`
+        );
+        return false;
+    }
+
     // Compute remaining build cost for unbuilt segments
     const remainingBuildCost = computeRemainingBuildCost(gs, playerIndex, ctx, plan);
 
