@@ -154,6 +154,101 @@ function isRailClosureActive(gs, playerIndex) {
     return false;
 }
 
+// Compute the unbuilt cost of a path slice, matching the cost semantics used
+// at plan construction time (see buildBatchPlan recompute loop). Handles ferry
+// edges specially (ferry fee + entry city fee) and records built edges in the
+// provided `builtEdges` set so that shared edges across segments are counted
+// exactly once — mirroring the selection-time builtEdges tracking.
+//
+// Without this, execution-time cost calculators (checkRemainingAffordability,
+// recomputeSegmentCosts, computeRemainingBuildCostFromIndex) double-count
+// shared edges, inflating buildCost by 30M+ on batch plans with overlapping
+// segments. This creates a bogus "unaffordable" abandon → reselect cycle.
+function computePathSliceCost(ctx, player, segPath, ownedEdges, builtEdges) {
+    let cost = 0;
+    for (let j = 0; j < segPath.length - 1; j++) {
+        const edgeKey = segPath[j] + '|' + segPath[j + 1];
+        if (ownedEdges.has(edgeKey)) continue;
+        if (builtEdges && builtEdges.has(edgeKey)) continue;
+
+        // Ferry handling matches buildBatchPlan's recompute loop
+        const ferryKey = getFerryKey(segPath[j], segPath[j + 1]);
+        let isFerry = false;
+        for (const fc of ctx.ferryConnections) {
+            if (getFerryKey(fc.fromId, fc.toId) === ferryKey) {
+                isFerry = true;
+                if (!gl.playerOwnsFerry(ctx, ferryKey, player.color)) {
+                    let ferryCost = fc.cost;
+                    const destMp = ctx.mileposts_by_id[segPath[j + 1]];
+                    if (destMp && destMp.city) {
+                        ferryCost += MAJOR_CITIES.includes(destMp.city.name) ? 5 : 3;
+                    }
+                    cost += ferryCost;
+                }
+                break;
+            }
+        }
+        if (!isFerry) {
+            const mp1 = ctx.mileposts_by_id[segPath[j]];
+            const mp2 = ctx.mileposts_by_id[segPath[j + 1]];
+            if (mp1 && mp2) cost += getMileppostCost(mp1, mp2);
+        }
+
+        if (builtEdges) {
+            builtEdges.add(edgeKey);
+            builtEdges.add(segPath[j + 1] + '|' + segPath[j]);
+        }
+    }
+    return cost;
+}
+
+// Walk plan.segments using a cursor through plan.buildPath, yielding the slice
+// for each segment in order. Correctly handles plans that revisit the same
+// city (e.g., batch out-and-back) by searching for each segment's destination
+// only AFTER the prior segment's endpoint — the prior version of
+// extractSegmentPath found the first occurrence, misattributing huge swaths
+// of buildPath to the wrong segment.
+//
+// Yields an array of { index, segPath } for i in [startStopIndex, end).
+// Segments whose destination is not found after the cursor are skipped.
+function walkSegmentSlices(plan, ctx, startStopIndex) {
+    const slices = [];
+    if (!plan || !plan.buildPath || plan.buildPath.length < 2) return slices;
+
+    // First pass: advance cursor through segments before startStopIndex without
+    // yielding slices. Each segment's toId advances the cursor to its position.
+    let cursor = 0;
+    for (let i = 0; i < startStopIndex; i++) {
+        const seg = plan.segments[i];
+        const toId = seg.to ? ctx.cityToMilepost[seg.to] : null;
+        if (toId === undefined || toId === null) continue;
+        for (let j = cursor; j < plan.buildPath.length; j++) {
+            if (plan.buildPath[j] === toId) {
+                cursor = j;
+                break;
+            }
+        }
+    }
+
+    // Second pass: yield slices for segments from startStopIndex forward.
+    for (let i = startStopIndex; i < plan.segments.length; i++) {
+        const seg = plan.segments[i];
+        const toId = seg.to ? ctx.cityToMilepost[seg.to] : null;
+        if (toId === undefined || toId === null) continue;
+
+        let endIdx = -1;
+        for (let j = cursor; j < plan.buildPath.length; j++) {
+            if (plan.buildPath[j] === toId) { endIdx = j; break; }
+        }
+        if (endIdx < 0 || endIdx <= cursor) continue;
+
+        slices.push({ index: i, segPath: plan.buildPath.slice(cursor, endIdx + 1) });
+        cursor = endIdx;
+    }
+
+    return slices;
+}
+
 // Compute remaining build cost from a specific stop index forward (§1.3 mid-execution re-check).
 // Only counts segments at or after startStopIndex. Uses player's current built track.
 function computeRemainingBuildCostFromIndex(gs, playerIndex, ctx, plan, startStopIndex) {
@@ -168,30 +263,12 @@ function computeRemainingBuildCostFromIndex(gs, playerIndex, ctx, plan, startSto
         }
     }
 
+    const builtEdges = new Set();
     let cost = 0;
-    // Walk segments from startStopIndex forward
-    for (let i = startStopIndex; i < plan.segments.length; i++) {
-        const seg = plan.segments[i];
-        const fromCity = seg.from === '(network)' || seg.from === '(current)' ? null : seg.from;
-        const toCity = seg.to;
-        const fromId = fromCity ? ctx.cityToMilepost[fromCity] : null;
-        const toId = toCity ? ctx.cityToMilepost[toCity] : null;
-        if (!toId) continue;
-
-        // Extract this segment's path and sum unbuilt edge costs
-        const segPath = extractSegmentPath(plan.buildPath, fromId, toId, ctx);
-        if (!segPath) continue;
-
-        for (let j = 0; j < segPath.length - 1; j++) {
-            const edgeKey = segPath[j] + '|' + segPath[j + 1];
-            if (ownedEdges.has(edgeKey)) continue;
-
-            const mp1 = ctx.mileposts_by_id[segPath[j]];
-            const mp2 = ctx.mileposts_by_id[segPath[j + 1]];
-            if (mp1 && mp2) cost += getMileppostCost(mp1, mp2);
-        }
+    const slices = walkSegmentSlices(plan, ctx, startStopIndex);
+    for (const { segPath } of slices) {
+        cost += computePathSliceCost(ctx, player, segPath, ownedEdges, builtEdges);
     }
-
     return cost;
 }
 
@@ -200,43 +277,32 @@ function computeRemainingBuildCostFromIndex(gs, playerIndex, ctx, plan, startSto
 // checkAffordability — it accounts for delivery payouts between remaining segments.
 function checkRemainingAffordability(gs, playerIndex, ctx, plan) {
     const player = gs.players[playerIndex];
+    const ownedEdges = new Set();
+    for (const t of gs.tracks) {
+        if (t.color === player.color) {
+            ownedEdges.add(t.from + '|' + t.to);
+            ownedEdges.add(t.to + '|' + t.from);
+        }
+    }
+
+    // Pre-compute segment slices once (shared builtEdges set across segments
+    // so shared edges only count once — matching buildBatchPlan's selection-
+    // time calculation).
+    const slices = walkSegmentSlices(plan, ctx, plan.currentStopIndex);
+    const segCostByIndex = new Map();
+    const builtEdges = new Set();
+    for (const { index, segPath } of slices) {
+        segCostByIndex.set(index, computePathSliceCost(ctx, player, segPath, ownedEdges, builtEdges));
+    }
+
+    // Sequential cash checkpoint walk
     let cash = player.cash;
     let accumulatedBuildCost = 0;
-
     for (let i = plan.currentStopIndex; i < plan.segments.length; i++) {
-        // Compute actual remaining build cost for this segment from the buildPath
-        const seg = plan.segments[i];
-        const fromCity = seg.from === '(network)' || seg.from === '(current)' ? null : seg.from;
-        const toCity = seg.to;
-        const fromId = fromCity ? ctx.cityToMilepost[fromCity] : null;
-        const toId = toCity ? ctx.cityToMilepost[toCity] : null;
-
-        // Sum unbuilt edge costs for this segment
-        let segCost = 0;
-        if (toId && plan.buildPath) {
-            const segPath = extractSegmentPath(plan.buildPath, fromId, toId, ctx);
-            if (segPath) {
-                const ownedEdges = new Set();
-                for (const t of gs.tracks) {
-                    if (t.color === player.color) {
-                        ownedEdges.add(t.from + '|' + t.to);
-                        ownedEdges.add(t.to + '|' + t.from);
-                    }
-                }
-                for (let j = 0; j < segPath.length - 1; j++) {
-                    if (ownedEdges.has(segPath[j] + '|' + segPath[j + 1])) continue;
-                    const mp1 = ctx.mileposts_by_id[segPath[j]];
-                    const mp2 = ctx.mileposts_by_id[segPath[j + 1]];
-                    if (mp1 && mp2) segCost += getMileppostCost(mp1, mp2);
-                }
-            }
-        }
-
-        accumulatedBuildCost += segCost;
+        accumulatedBuildCost += segCostByIndex.get(i) || 0;
 
         const stop = plan.visitSequence[i];
         if (stop && stop.action === 'deliver') {
-            // Cash checkpoint
             if (accumulatedBuildCost > cash) return false;
             const delivery = plan.deliveries[stop.deliveryIndex];
             cash = cash - accumulatedBuildCost + delivery.payout;
@@ -244,9 +310,7 @@ function checkRemainingAffordability(gs, playerIndex, ctx, plan) {
         }
     }
 
-    // Any leftover cost after last segment (defensive — shouldn't happen)
     if (accumulatedBuildCost > cash) return false;
-
     return true;
 }
 
@@ -322,47 +386,95 @@ function pointToSegmentDistance(px, py, ax, ay, bx, by) {
     return Math.hypot(px - projX, py - projY);
 }
 
-// §1.2 Batch pruning: two singles pass if they share a city OR any city of
-// one is within 5 hex units of the other's source→dest line segment.
+// §1.2 Region-based batch pruning.
+//
+// Two deliveries pass if they share a city OR their source regions and
+// destination regions are compatible (same or adjacent). This replaced a
+// 5-hex point-to-segment-distance check that was too tight for continental-
+// scale directional alignment. Two deliveries going "southwest across Europe"
+// from cities 15 hexes apart (e.g., Wroclaw→Sevilla + Beograd→Lisboa) make
+// an excellent batch but failed the 5-hex check. The region approach captures
+// "both going in the same direction" which is what strong human players
+// optimise for — filling Superfreight with 3 goods sweeping one direction.
+//
+// Regions reflect the Eurorails map's natural routing corridors. Adjacency
+// means a direct overland or ferry route exists between the regions.
+
+const CITY_REGIONS = {
+    // BRITISH_ISLES — separated by ferries
+    'Aberdeen': 'BRITISH_ISLES', 'Glasgow': 'BRITISH_ISLES',
+    'Belfast': 'BRITISH_ISLES', 'Edinburgh': 'BRITISH_ISLES',
+    'Newcastle': 'BRITISH_ISLES', 'Dublin': 'BRITISH_ISLES',
+    'Manchester': 'BRITISH_ISLES', 'Birmingham': 'BRITISH_ISLES',
+    'Cardiff': 'BRITISH_ISLES', 'London': 'BRITISH_ISLES',
+    'Cork': 'BRITISH_ISLES',
+    // SCANDINAVIA — Nordic + Baltic
+    'Oslo': 'SCANDINAVIA', 'Stockholm': 'SCANDINAVIA',
+    'Göteborg': 'SCANDINAVIA', 'København': 'SCANDINAVIA',
+    'Århus': 'SCANDINAVIA', 'Kaliningrad': 'SCANDINAVIA',
+    // IBERIA — south of the Pyrenees
+    'Porto': 'IBERIA', 'Madrid': 'IBERIA', 'Lisboa': 'IBERIA',
+    'Sevilla': 'IBERIA', 'Valencia': 'IBERIA', 'Barcelona': 'IBERIA',
+    'Bilbao': 'IBERIA', 'Marseille': 'IBERIA',
+    // FRANCE_BENELUX — continental crossroads
+    'Paris': 'FRANCE_BENELUX', 'Nantes': 'FRANCE_BENELUX',
+    'Bordeaux': 'FRANCE_BENELUX', 'Toulouse': 'FRANCE_BENELUX',
+    'Lyon': 'FRANCE_BENELUX', 'Amsterdam': 'FRANCE_BENELUX',
+    'Antwerpen': 'FRANCE_BENELUX', 'Bruxelles': 'FRANCE_BENELUX',
+    'Luxembourg': 'FRANCE_BENELUX',
+    // CENTRAL — Germany/Switzerland/Austria/Czech
+    'Hamburg': 'CENTRAL', 'Bremen': 'CENTRAL', 'Essen': 'CENTRAL',
+    'Berlin': 'CENTRAL', 'Leipzig': 'CENTRAL', 'Frankfurt': 'CENTRAL',
+    'Stuttgart': 'CENTRAL', 'München': 'CENTRAL', 'Bern': 'CENTRAL',
+    'Zürich': 'CENTRAL', 'Vienna': 'CENTRAL', 'Praha': 'CENTRAL',
+    'Szczecin': 'CENTRAL',
+    // ITALY — alpine/Mediterranean
+    'Milano': 'ITALY', 'Torino': 'ITALY', 'Venezia': 'ITALY',
+    'Firenze': 'ITALY', 'Roma': 'ITALY', 'Napoli': 'ITALY',
+    // EASTERN_EUROPE — Balkans + Poland
+    'Zagreb': 'EASTERN_EUROPE', 'Budapest': 'EASTERN_EUROPE',
+    'Sarajevo': 'EASTERN_EUROPE', 'Beograd': 'EASTERN_EUROPE',
+    'Warszawa': 'EASTERN_EUROPE', 'Lodz': 'EASTERN_EUROPE',
+    'Wroclaw': 'EASTERN_EUROPE', 'Krakow': 'EASTERN_EUROPE',
+};
+
+const REGION_ADJACENCY = {
+    'BRITISH_ISLES':   new Set(['FRANCE_BENELUX', 'SCANDINAVIA', 'CENTRAL']),
+    'SCANDINAVIA':     new Set(['BRITISH_ISLES', 'CENTRAL', 'EASTERN_EUROPE', 'FRANCE_BENELUX']),
+    'IBERIA':          new Set(['FRANCE_BENELUX', 'CENTRAL', 'ITALY']),
+    'FRANCE_BENELUX':  new Set(['BRITISH_ISLES', 'IBERIA', 'CENTRAL', 'ITALY', 'SCANDINAVIA']),
+    'CENTRAL':         new Set(['FRANCE_BENELUX', 'SCANDINAVIA', 'ITALY', 'EASTERN_EUROPE', 'BRITISH_ISLES']),
+    'ITALY':           new Set(['FRANCE_BENELUX', 'CENTRAL', 'EASTERN_EUROPE', 'IBERIA']),
+    'EASTERN_EUROPE':  new Set(['CENTRAL', 'ITALY', 'SCANDINAVIA']),
+};
+
+function regionsCompatible(r1, r2) {
+    if (r1 === r2) return true;
+    return REGION_ADJACENCY[r1] && REGION_ADJACENCY[r1].has(r2);
+}
+
 function passesBatchPruning(singleA, singleB, ctx) {
     const dA = singleA.deliveries[0];
     const dB = singleB.deliveries[0];
+
+    // Shared city — always pair
     const citiesA = [dA.sourceCity, dA.destCity];
     const citiesB = [dB.sourceCity, dB.destCity];
-
-    // Check shared city
     for (const c of citiesA) {
         if (citiesB.includes(c)) return true;
     }
 
-    // Check proximity: any city of A within 5 hexes of B's route, or vice versa
-    const THRESHOLD = 5;
-    const getXY = (city) => {
-        const mpId = ctx.cityToMilepost[city];
-        const mp = mpId ? ctx.mileposts_by_id[mpId] : null;
-        return mp ? { x: mp.x, y: mp.y } : null;
-    };
+    // Region compatibility: source regions must be compatible AND
+    // destination regions must be compatible. This ensures both
+    // deliveries are heading in the same general direction.
+    const srcRegionA = CITY_REGIONS[dA.sourceCity];
+    const srcRegionB = CITY_REGIONS[dB.sourceCity];
+    const dstRegionA = CITY_REGIONS[dA.destCity];
+    const dstRegionB = CITY_REGIONS[dB.destCity];
 
-    const srcB = getXY(dB.sourceCity);
-    const dstB = getXY(dB.destCity);
-    if (srcB && dstB) {
-        for (const city of citiesA) {
-            const p = getXY(city);
-            if (p && pointToSegmentDistance(p.x, p.y, srcB.x, srcB.y, dstB.x, dstB.y) <= THRESHOLD) {
-                return true;
-            }
-        }
-    }
-
-    const srcA = getXY(dA.sourceCity);
-    const dstA = getXY(dA.destCity);
-    if (srcA && dstA) {
-        for (const city of citiesB) {
-            const p = getXY(city);
-            if (p && pointToSegmentDistance(p.x, p.y, srcA.x, srcA.y, dstA.x, dstA.y) <= THRESHOLD) {
-                return true;
-            }
-        }
+    if (srcRegionA && srcRegionB && dstRegionA && dstRegionB) {
+        return regionsCompatible(srcRegionA, srcRegionB) &&
+               regionsCompatible(dstRegionA, dstRegionB);
     }
 
     return false;
@@ -911,7 +1023,9 @@ function rebuildPlanPath(ctx, player, plan) {
 
 // Recompute segment buildCosts and totalBuildCost from the plan's current
 // buildPath against actual owned edges. Called after rebuildPlanPath to
-// sync segment costs with the rebuilt path.
+// sync segment costs with the rebuilt path. Uses the same cursor-based walk
+// and shared builtEdges set as checkRemainingAffordability so that execution-
+// time totalBuildCost matches selection-time totalBuildCost.
 function recomputeSegmentCosts(gs, player, ctx, plan) {
     const ownedEdges = new Set();
     for (const t of gs.tracks) {
@@ -921,32 +1035,19 @@ function recomputeSegmentCosts(gs, player, ctx, plan) {
         }
     }
 
-    let totalBuildCost = 0;
+    // Reset all segment costs first; walkSegmentSlices only returns segments
+    // whose destination is actually found in buildPath, so segments missing
+    // from buildPath are correctly left at 0.
     for (let i = 0; i < plan.segments.length; i++) {
-        const seg = plan.segments[i];
-        const fromCity = seg.from === '(network)' || seg.from === '(current)' ? null : seg.from;
-        const toCity = seg.to;
-        const fromId = fromCity ? ctx.cityToMilepost[fromCity] : null;
-        const toId = toCity ? ctx.cityToMilepost[toCity] : null;
+        plan.segments[i].buildCost = 0;
+    }
 
-        let segCost = 0;
-        if (toId && plan.buildPath) {
-            let segPath = extractSegmentPath(plan.buildPath, fromId, toId, ctx);
-            // Fall back if segment boundaries are stale (after rebuildPlanPath
-            // replaced the path from train's current location)
-            if (!segPath) {
-                segPath = extractSegmentPath(plan.buildPath, null, toId, ctx);
-            }
-            if (segPath) {
-                for (let j = 0; j < segPath.length - 1; j++) {
-                    if (ownedEdges.has(segPath[j] + '|' + segPath[j + 1])) continue;
-                    const mp1 = ctx.mileposts_by_id[segPath[j]];
-                    const mp2 = ctx.mileposts_by_id[segPath[j + 1]];
-                    if (mp1 && mp2) segCost += getMileppostCost(mp1, mp2);
-                }
-            }
-        }
-        seg.buildCost = segCost;
+    const builtEdges = new Set();
+    let totalBuildCost = 0;
+    const slices = walkSegmentSlices(plan, ctx, 0);
+    for (const { index, segPath } of slices) {
+        const segCost = computePathSliceCost(ctx, player, segPath, ownedEdges, builtEdges);
+        plan.segments[index].buildCost = segCost;
         totalBuildCost += segCost;
     }
     plan.totalBuildCost = totalBuildCost;
@@ -1052,11 +1153,16 @@ function scorePlan(plan, player, gs, ctx, options) {
 
     // Operate turns: track-based distance / train speed
     // Ferry crossings cost ~1.5 turns each: 1 turn waiting at port + half-speed crossing turn.
-    // Early game multiplier: ferries are far more costly when establishing the initial
-    // network — they lock the AI into an island with limited continental access.
+    // Previously this was multiplied by an earlyGameMultiplier (3.0x/2.0x/1.0x by
+    // track count) to deter early-game ferry plans. That multiplier was originally
+    // compensating for the positioning-distance bug in buildSinglePlan/buildBatchPlan —
+    // cross-continent plans looked artificially fast in early game because half their
+    // movement was silently dropped. With the positioning fix in place, the multiplier
+    // is double-penalizing: once through honest distance, again through virtual turns.
+    // The "don't lock into an island" concern is still handled by the islandPenaltyTurns
+    // during initialBuilding phase.
     const ownedTrackCount = gs.tracks.filter(t => t.color === player.color).length;
-    const earlyGameMultiplier = ownedTrackCount < 30 ? 3.0 : ownedTrackCount < 60 ? 2.0 : 1.0;
-    const ferryPenalty = (plan.ferryCrossingCount || 0) * 1.5 * earlyGameMultiplier;
+    const ferryPenalty = (plan.ferryCrossingCount || 0) * 1.5;
     const operateTurns = Math.ceil(plan.tripDistance / trainSpeed) + ferryPenalty;
 
     // Total turns: build and operate are interleaved (§1.4, A.39)
@@ -1339,7 +1445,15 @@ function shouldDiscard(gs, playerIndex, ctx, plan) {
     // §5.2: Threshold check (calibrated for net-profit-per-turn scoring)
     // Scale threshold up with network maturity — a mature network should
     // demand higher-quality plans since good routes are readily available.
+    //
+    // Early game (<30 tracks): never discard. Every affordable plan builds
+    // track, which is the primary goal when establishing the network. A plan
+    // with negative ECU/turn (e.g., $16 delivery for $36 build) is still a
+    // good investment — the track opens future corridors, and discarding
+    // wastes the turn with zero infrastructure built.
     const ownedTrackCount = gs.tracks.filter(t => t.color === player.color).length;
+    if (ownedTrackCount < 30) return false;
+
     const ECU_THRESHOLD = ownedTrackCount >= 80 ? 1.5
                         : ownedTrackCount >= 60 ? 1.0
                         : 0.75;
@@ -2870,6 +2984,9 @@ module.exports = {
     computeRemainingBuildCost,
     pointToSegmentDistance,
     passesBatchPruning,
+    CITY_REGIONS,
+    REGION_ADJACENCY,
+    regionsCompatible,
     buildBatchPlan,
     BATCH_VISIT_SEQUENCES,
     updateStuckCounter,

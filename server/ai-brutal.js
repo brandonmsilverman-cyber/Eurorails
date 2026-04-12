@@ -189,52 +189,31 @@ function scorePlan(plan, player, gs, ctx, options) {
 // Passes if either the source or destination of singleC is already on the
 // player's network (free to reach), OR if singleC is within 8 hexes of
 // singleA's route (vs 5 hexes for standard batch pruning).
-function passesTriplePruning(singleA, singleC, ctx, ownedMps) {
-    const dC = singleC.deliveries[0];
-    const srcId = ctx.cityToMilepost[dC.sourceCity];
-    const dstId = ctx.cityToMilepost[dC.destCity];
-
-    // Network connectivity shortcut: if source or dest is on the network,
-    // the 3rd delivery is likely reachable with minimal build cost.
-    if ((srcId && ownedMps.has(srcId)) || (dstId && ownedMps.has(dstId))) return true;
-
-    // Geometric proximity with relaxed threshold
+// Region-based triple pruning: the 3rd delivery passes if it shares a city
+// with delivery A, or if its source and destination regions are compatible
+// with delivery A's regions. Uses the same CITY_REGIONS / regionsCompatible
+// from ai-hard.js. Replaces the old 8-hex geometric check + network
+// connectivity shortcut.
+function passesTriplePruning(singleA, singleC) {
     const dA = singleA.deliveries[0];
-    const citiesA = [dA.sourceCity, dA.destCity];
-    const citiesC = [dC.sourceCity, dC.destCity];
+    const dC = singleC.deliveries[0];
 
     // Shared city check
+    const citiesA = [dA.sourceCity, dA.destCity];
+    const citiesC = [dC.sourceCity, dC.destCity];
     for (const c of citiesA) {
         if (citiesC.includes(c)) return true;
     }
 
-    const THRESHOLD = 8;
-    const getXY = (city) => {
-        const mpId = ctx.cityToMilepost[city];
-        const mp = mpId ? ctx.mileposts_by_id[mpId] : null;
-        return mp ? { x: mp.x, y: mp.y } : null;
-    };
+    // Region compatibility
+    const srcRegionA = hard.CITY_REGIONS[dA.sourceCity];
+    const srcRegionC = hard.CITY_REGIONS[dC.sourceCity];
+    const dstRegionA = hard.CITY_REGIONS[dA.destCity];
+    const dstRegionC = hard.CITY_REGIONS[dC.destCity];
 
-    const srcA = getXY(dA.sourceCity);
-    const dstA = getXY(dA.destCity);
-    if (srcA && dstA) {
-        for (const city of citiesC) {
-            const p = getXY(city);
-            if (p && hard.pointToSegmentDistance(p.x, p.y, srcA.x, srcA.y, dstA.x, dstA.y) <= THRESHOLD) {
-                return true;
-            }
-        }
-    }
-
-    const srcC = getXY(dC.sourceCity);
-    const dstC = getXY(dC.destCity);
-    if (srcC && dstC) {
-        for (const city of citiesA) {
-            const p = getXY(city);
-            if (p && hard.pointToSegmentDistance(p.x, p.y, srcC.x, srcC.y, dstC.x, dstC.y) <= THRESHOLD) {
-                return true;
-            }
-        }
+    if (srcRegionA && srcRegionC && dstRegionA && dstRegionC) {
+        return hard.regionsCompatible(srcRegionA, srcRegionC) &&
+               hard.regionsCompatible(dstRegionA, dstRegionC);
     }
 
     return false;
@@ -703,7 +682,7 @@ function enumeratePlans(gs, playerIndex, ctx, options) {
             const singleA = bestSingles.get(`${pair.deliveryA.cardIndex}:${pair.deliveryA.demandIndex}:${pair.deliveryA.sourceCity}`);
             const singleB = bestSingles.get(`${pair.deliveryB.cardIndex}:${pair.deliveryB.demandIndex}:${pair.deliveryB.sourceCity}`);
             if (!singleA || !singleB) continue;
-            if (!passesTriplePruning(singleA, sC, ctx, ownedMps) && !passesTriplePruning(singleB, sC, ctx, ownedMps)) continue;
+            if (!passesTriplePruning(singleA, sC) && !passesTriplePruning(singleB, sC)) continue;
 
             // Generate insertion sequences from the best pair sequence
             const insertions = generateTripleInsertions(pair.bestSeq, trainCapacity);
