@@ -2632,10 +2632,21 @@ function checkEndgame(gs, playerIndex, ctx) {
     // Already in endgame — never unset
     if (aiState.endgameMode) return true;
 
+    const settings = gs.gameSettings || { winCashThreshold: 250 };
+
+    // Cash alone already meets threshold — enter endgame immediately.
+    // This handles the case where deliveries pushed cash over 250M but
+    // checkEndgame wasn't called at the time (e.g., mid-turn delivery).
+    if (player.cash >= settings.winCashThreshold) {
+        aiState.endgameMode = true;
+        logDecision(playerIndex, 'endgame', `Entered endgame: cash ${player.cash}M >= ${settings.winCashThreshold}M threshold`);
+        return true;
+    }
+
+    // Check if committed plan would push over threshold
     const plan = getCommittedPlan(gs, playerIndex);
     if (!plan) return false;
 
-    const settings = gs.gameSettings || { winCashThreshold: 250 };
     const debtDeductions = Math.min(
         player.debtRemaining || 0,
         plan.deliveries.length * 10
@@ -2644,6 +2655,8 @@ function checkEndgame(gs, playerIndex, ctx) {
 
     if (player.cash + netPayout >= settings.winCashThreshold) {
         aiState.endgameMode = true;
+        logDecision(playerIndex, 'endgame',
+            `Entered endgame: cash ${player.cash}M + pending payout ${netPayout}M >= ${settings.winCashThreshold}M threshold`);
         return true;
     }
 
@@ -2822,7 +2835,53 @@ function shouldAbandon(gs, playerIndex, ctx, plan) {
         }
     }
 
-    // 5. Stuck counter — 3+ turns with no progress
+    // 5. Stranding check — flood destroyed track that connected the train
+    //    to the rest of the network or to the plan's build frontier.
+    //    Detect: train can't reach next stop via owned track AND can't
+    //    reach any frontier milepost on the build path. Rebuild the plan
+    //    path so the destroyed (now unbuilt) edges are included in the
+    //    buildPath and can be rebuilt by computeBuildOrder.
+    if (plan.currentStopIndex < plan.visitSequence.length) {
+        const nextStop = plan.visitSequence[plan.currentStopIndex];
+        const stopId = nextStop ? ctx.cityToMilepost[nextStop.city] : null;
+        if (stopId && player.trainLocation) {
+            const trackPath = findPathOnTrack(ctx, player.trainLocation, stopId, player.color, false);
+            if (!trackPath) {
+                // Can't reach next stop — check if frontier is reachable
+                const frontierPath = findFrontierPath(ctx, player.trainLocation, plan, player.color, plan.currentStopIndex);
+                if (!frontierPath || frontierPath.length < 2) {
+                    // Stranded: can't reach stop or frontier. Rebuild path
+                    // to include destroyed edges as unbuilt segments.
+                    const newPath = rebuildPlanPath(ctx, player, plan);
+                    if (newPath) {
+                        plan.buildPath = newPath;
+                        recomputeSegmentCosts(gs, player, ctx, plan);
+                        logDecision(playerIndex, 'plan path rebuilt (stranded)',
+                            `Train stranded — flood or event severed track to next stop. ` +
+                            `Rebuilt path includes destroyed edges (new cost: ${plan.totalBuildCost}M). ` +
+                            `Plan: ${formatPlanSummary(plan)}`
+                        );
+                        if (!checkRemainingAffordability(gs, playerIndex, ctx, plan)) {
+                            logDecision(playerIndex, 'plan abandoned',
+                                `Reason: rebuilt path after stranding unaffordable (cost: ${plan.totalBuildCost}M, cash: ${player.cash}M). ` +
+                                `Previous plan: ${formatPlanSummary(plan)}`
+                            );
+                            return true;
+                        }
+                        return false; // path rebuilt, don't abandon
+                    }
+                    // Can't rebuild — abandon
+                    logDecision(playerIndex, 'plan abandoned',
+                        `Reason: train stranded and no alternative route found. ` +
+                        `Previous plan: ${formatPlanSummary(plan)}`
+                    );
+                    return true;
+                }
+            }
+        }
+    }
+
+    // 6. Stuck counter — 3+ turns with no progress
     if (aiState.stuckTurnCounter >= 3) {
         logDecision(playerIndex, 'plan abandoned',
             `Reason: stuck ${aiState.stuckTurnCounter}+ turns (cash=${player.cash}M). ` +
@@ -2876,6 +2935,13 @@ function planOperate(gs, playerIndex, ctx, strategy) {
     strategy = strategy || module.exports;
     let plan = getCommittedPlan(gs, playerIndex);
 
+    // Check endgame before plan handling — if cash or cash+plan payout
+    // crosses the win threshold, endgameMode activates. This affects:
+    // - scorePlan: winning plans score 1000-turnsToWin (dominating normal ECU/turn)
+    // - planBuild: remaining budget goes to major city connections
+    // - shouldUpgrade: Gate 4 blocks upgrades that starve city connections
+    strategy.checkEndgame(gs, playerIndex, ctx);
+
     if (plan) {
         if (strategy.shouldAbandon(gs, playerIndex, ctx, plan)) {
             const wasStuck = getAIState(gs.players[playerIndex]).stuckAbandoned;
@@ -2914,11 +2980,28 @@ function planOperate(gs, playerIndex, ctx, strategy) {
 
 function planBuild(gs, playerIndex, ctx, strategy) {
     strategy = strategy || module.exports;
+
+    // Check endgame at start of build phase
+    strategy.checkEndgame(gs, playerIndex, ctx);
+
     let plan = getCommittedPlan(gs, playerIndex);
 
     if (!plan) {
-        // No committed plan (completed mid-turn or discarded). Try to select
-        // a new plan so we can build toward it instead of wasting the build phase.
+        // No committed plan (completed mid-turn or discarded).
+        // In endgame mode with no plan, use the FULL build budget for
+        // major city connections — don't waste time selecting a new
+        // delivery plan when the priority is connecting cities to win.
+        const aiState = getAIState(gs.players[playerIndex]);
+        if (aiState.endgameMode) {
+            const endgameActions = buildEndgameCityConnections(gs, playerIndex, ctx);
+            if (endgameActions.length > 0) {
+                return [...endgameActions, { type: 'endTurn' }];
+            }
+            // All cities connected or can't build — fall through to normal plan selection
+        }
+
+        // Try to select a new plan so we can build toward it instead of
+        // wasting the build phase.
         plan = strategy.selectPlan(gs, playerIndex, ctx);
         if (plan) {
             commitPlan(gs, playerIndex, plan);
