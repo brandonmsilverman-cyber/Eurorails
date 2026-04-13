@@ -714,10 +714,12 @@ function serverEndTurn(gs, depth = 0) {
     // Move to next player
     gs.currentPlayerIndex = (gs.currentPlayerIndex + 1) % gs.players.length;
 
-    // Check if final round is complete (we've cycled back to player 0 = start of new round)
-    // This ensures equal turns: all players after the triggering player finish the round.
-    // If the last player triggers endgame, index wraps to 0 immediately — no extra round.
-    if (gs.endgameTriggeredBy && gs.currentPlayerIndex === 0) {
+    // Check if final round is complete. A round boundary is when
+    // currentPlayerIndex wraps to 0. If the triggering player is index 0,
+    // skip this check on their trigger turn (the round hasn't started yet).
+    // For any other trigger index, wrapping to 0 means the round is done.
+    if (gs.endgameTriggeredBy && gs.currentPlayerIndex === 0
+        && !(result.endgameTriggered && gs.endgameTriggeredBy.playerIndex === 0)) {
         // Update qualifier cash values to latest
         for (const q of gs.endgameQualifiers) {
             q.cash = gs.players[q.playerIndex].cash;
@@ -1319,7 +1321,9 @@ function executeAIActionSequence(roomCode, room, plan, stepIndex) {
         }
         const endResult = aiActions.applyEndTurn(gs);
         broadcastStateUpdate(roomCode, room, endResult.uiEvent);
-        if (!endResult.uiEvent.gameOver) {
+        if (endResult.uiEvent.gameOver) {
+            console.log(`Room ${roomCode}: Game over! Winner: ${endResult.uiEvent.winner}`);
+        } else {
             maybeScheduleAITurn(roomCode, room);
             startTurnTimerIfNeeded(roomCode, room);
         }
@@ -1329,7 +1333,10 @@ function executeAIActionSequence(roomCode, room, plan, stepIndex) {
     broadcastStateUpdate(roomCode, room, result.uiEvent);
 
     if (action.type === 'endTurn' || action.type === 'discardHand') {
-        if (result.uiEvent?.gameOver) return;
+        if (result.uiEvent?.gameOver) {
+            console.log(`Room ${roomCode}: Game over! Winner: ${result.uiEvent.winner}`);
+            return;
+        }
         maybeScheduleAITurn(roomCode, room);
         startTurnTimerIfNeeded(roomCode, room);
         return;
@@ -2196,7 +2203,9 @@ io.on('connection', (socket) => {
                     broadcastStateUpdate(socket.roomCode, room, { type: 'action', logs: [`Game saved (ID: ${gs.gameId})`, seatMsg] });
                 }
 
-                if (!endTurnResult.uiEvent.gameOver) {
+                if (endTurnResult.uiEvent.gameOver) {
+                    console.log(`Room ${socket.roomCode}: Game over! Winner: ${endTurnResult.uiEvent.winner}`);
+                } else {
                     maybeScheduleAITurn(socket.roomCode, room);
                     startTurnTimerIfNeeded(socket.roomCode, room);
                 }
