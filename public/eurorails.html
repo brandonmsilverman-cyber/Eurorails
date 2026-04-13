@@ -7221,6 +7221,32 @@ function removeSavedGame(gameId) {
     } catch (e) {}
 }
 
+function confirmDeleteSave(btn, gameId) {
+    if (btn.dataset.confirming === 'true') {
+        socket.emit('deleteSavedGame', gameId, (res) => {
+            if (res && res.success) {
+                removeSavedGame(gameId);
+                renderSavedGames();
+            } else {
+                alert('Failed to delete save: ' + (res?.error || 'Unknown error'));
+            }
+        });
+    } else {
+        btn.dataset.confirming = 'true';
+        btn.textContent = 'Confirm?';
+        btn.style.background = '#c0392b';
+        btn.style.color = '#fff';
+        setTimeout(() => {
+            if (btn.isConnected) {
+                btn.dataset.confirming = '';
+                btn.textContent = 'Delete';
+                btn.style.background = '#555';
+                btn.style.color = '#ccc';
+            }
+        }, 3000);
+    }
+}
+
 function renderSavedGames() {
     const saved = getSavedGames();
     const gameIds = Object.keys(saved);
@@ -7232,10 +7258,11 @@ function renderSavedGames() {
         return;
     }
 
-    // Validate which saves still exist on server
+    // Validate which saves still exist on server and fetch player metadata
     socket.emit('checkSavedGames', gameIds, (res) => {
         if (!res.success) return;
         const validIds = new Set(res.validGameIds);
+        const gameMetadata = res.gameMetadata || {};
 
         // Remove stale entries
         for (const id of gameIds) {
@@ -7251,32 +7278,48 @@ function renderSavedGames() {
             return;
         }
 
+        // Sort by most recent first
+        remaining.sort((a, b) => {
+            const ta = saved[a].savedAt ? new Date(saved[a].savedAt).getTime() : 0;
+            const tb = saved[b].savedAt ? new Date(saved[b].savedAt).getTime() : 0;
+            return tb - ta;
+        });
+
         section.style.display = '';
         list.innerHTML = '';
 
         for (const gameId of remaining) {
             const entry = saved[gameId];
+            const meta = gameMetadata[gameId];
             const div = document.createElement('div');
             div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid #333; cursor: pointer;';
             div.onmouseenter = () => div.style.background = '#3a3a3a';
             div.onmouseleave = () => div.style.background = '';
 
-            const seatColors = entry.seats ? Object.keys(entry.seats) : [];
-            const colorDots = seatColors.map(c =>
-                `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${COLOR_DISPLAY[c] || c};margin-right:3px;" title="${c}"></span>`
+            // Build color dots — use server metadata if available for AI distinction
+            const players = meta ? meta.players : (entry.seats ? Object.keys(entry.seats).map(c => ({ color: c, isAI: false })) : []);
+            const colorDots = players.map(p =>
+                `<span style="display:inline-block;width:${p.isAI ? '8' : '10'}px;height:${p.isAI ? '8' : '10'}px;border-radius:50%;background:${COLOR_DISPLAY[p.color] || p.color};margin-right:3px;${p.isAI ? 'border:1.5px dashed rgba(255,255,255,0.6);' : ''}" title="${p.color}${p.isAI ? ' (AI)' : ''}"></span>`
             ).join('');
 
-            const savedDate = entry.savedAt ? new Date(entry.savedAt).toLocaleDateString() : 'Unknown';
-            const name = entry.gameName || 'Unnamed game';
+            const savedDate = entry.savedAt
+                ? new Date(entry.savedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+                : 'Unknown';
+            const title = meta && meta.players
+                ? meta.players.map(p => escapeHtml(p.name)).join(', ')
+                : (entry.gameName || 'Saved game');
 
             div.innerHTML = `
-                <div>
-                    <div style="font-size: 14px;">${escapeHtml(name)}</div>
+                <div style="min-width: 0;">
+                    <div style="font-size: 14px;">${title}</div>
                     <div style="font-size: 12px; color: #888; margin-top: 2px;">${colorDots} Saved ${savedDate}</div>
                 </div>
-                <button onclick="event.stopPropagation(); startResume('${gameId}')" style="padding: 6px 16px; font-size: 13px; background: #2980b9;">Resume</button>
+                <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                    <button onclick="event.stopPropagation(); confirmDeleteSave(this, '${gameId}')" style="padding: 6px 12px; font-size: 13px; background: #555; color: #ccc; border: 1px solid #666; border-radius: 3px; cursor: pointer;">Delete</button>
+                    <button onclick="event.stopPropagation(); startResume('${gameId}')" style="padding: 6px 16px; font-size: 13px; background: #2980b9;">Resume</button>
+                </div>
             `;
-            div.onclick = () => startResume(gameId);
+            div.onclick = (e) => { if (!e.target.closest('button')) startResume(gameId); };
             list.appendChild(div);
         }
     });

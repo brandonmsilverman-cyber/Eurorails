@@ -2569,10 +2569,44 @@ io.on('connection', (socket) => {
         if (!Array.isArray(gameIds)) {
             return callback && callback({ success: false, error: 'Expected array of game IDs' });
         }
-        const valid = gameIds.filter(id =>
-            typeof id === 'string' && fs.existsSync(path.join(SAVES_DIR, `${id}.json`))
-        );
-        callback && callback({ success: true, validGameIds: valid });
+        const valid = [];
+        const gameMetadata = {};
+        for (const id of gameIds) {
+            if (typeof id !== 'string') continue;
+            const filePath = path.join(SAVES_DIR, `${id}.json`);
+            if (!fs.existsSync(filePath)) continue;
+            valid.push(id);
+            try {
+                const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                gameMetadata[id] = {
+                    players: data.state.players
+                        .filter(p => !p.abandoned)
+                        .map(p => ({ name: p.name, color: p.color, isAI: p.isAI || false }))
+                };
+            } catch (e) {
+                // File exists but couldn't read metadata — still valid for resume
+            }
+        }
+        callback && callback({ success: true, validGameIds: valid, gameMetadata });
+    });
+
+    socket.on('deleteSavedGame', (gameId, callback) => {
+        if (!gameId || typeof gameId !== 'string') {
+            return callback && callback({ success: false, error: 'Invalid game ID' });
+        }
+        if (gameId.includes('/') || gameId.includes('\\') || gameId.includes('..')) {
+            return callback && callback({ success: false, error: 'Invalid game ID' });
+        }
+        const filePath = path.join(SAVES_DIR, `${gameId}.json`);
+        if (!fs.existsSync(filePath)) {
+            return callback && callback({ success: false, error: 'Save not found' });
+        }
+        try {
+            fs.unlinkSync(filePath);
+            callback && callback({ success: true });
+        } catch (e) {
+            callback && callback({ success: false, error: 'Failed to delete save' });
+        }
     });
 
     socket.on('resumeGame', ({ gameId, seatCode }, callback) => {
