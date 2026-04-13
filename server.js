@@ -714,8 +714,10 @@ function serverEndTurn(gs, depth = 0) {
     // Move to next player
     gs.currentPlayerIndex = (gs.currentPlayerIndex + 1) % gs.players.length;
 
-    // Check if final round is complete (we've cycled back to the triggering player)
-    if (gs.endgameTriggeredBy && gs.currentPlayerIndex === gs.endgameTriggeredBy.playerIndex) {
+    // Check if final round is complete (we've cycled back to player 0 = start of new round)
+    // This ensures equal turns: all players after the triggering player finish the round.
+    // If the last player triggers endgame, index wraps to 0 immediately — no extra round.
+    if (gs.endgameTriggeredBy && gs.currentPlayerIndex === 0) {
         // Update qualifier cash values to latest
         for (const q of gs.endgameQualifiers) {
             q.cash = gs.players[q.playerIndex].cash;
@@ -1012,6 +1014,14 @@ function executeTwoPhaseAITurn(roomCode, room, strategy, label) {
         if (!actions || actions.length === 0) actions = [{ type: 'endTurn' }];
         console.log(`Room ${roomCode}: ${player.name} [${label}] initialBuilding: [${actions.map(a => a.type).join(', ')}]`);
         executeAIActionSequence(roomCode, room, actions, 0);
+        return;
+    }
+
+    // If the AI already meets the win condition, just end turn immediately — don't
+    // spend money on building or deliveries that could drop cash below the threshold.
+    if (checkWinCondition(gs, player)) {
+        console.log(`Room ${roomCode}: ${player.name} [${label}] already meets win condition — ending turn immediately`);
+        executeAIActionSequence(roomCode, room, [{ type: 'endTurn' }], 0);
         return;
     }
 

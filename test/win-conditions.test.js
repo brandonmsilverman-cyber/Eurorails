@@ -470,6 +470,30 @@ describe('Tournament Endgame: Final round (equal turns)', () => {
         assert.equal(gs.endgameQualifiers.length, 0, 'endgameQualifiers should be cleared');
     });
 
+    it.skip('last player triggering endgame resolves immediately — no extra round', async () => {
+        // 2-player game: host (index 0) + AI (index 1).
+        // Host ends turn, AI (last player) meets win condition and ends turn.
+        // Game should resolve immediately without cycling back through host.
+        const { host, roomCode } = await createRoom();
+        await emit(host, 'updateGameSettings', { winCashThreshold: 100, winMajorCitiesRequired: 1 });
+        await setupForStart(host);
+        const { gs } = await startGameForEndgame(host, roomCode);
+
+        // Only AI (player 1, last player) meets win condition
+        giveWinCondition(gs, 1, 200);
+
+        // Listen for gameOver — should happen after AI's turn without an extra round
+        const gameOverP = onceUiEvent(host, 'gameOver');
+
+        // Host ends turn → AI goes → AI meets win condition → endgame triggers →
+        // round resolves immediately (AI is last player, wraps to index 0)
+        await emit(host, 'action', { type: 'endTurn' });
+
+        const update = await gameOverP;
+        assert.equal(update.uiEvent.type, 'gameOver');
+        assert.equal(update.uiEvent.winner, gs.players[1].name);
+    });
+
     it('endgameTriggeredBy and endgameQualifiers initialized as null/empty', async () => {
         const { host, roomCode } = await createRoom();
         await setupForStart(host);

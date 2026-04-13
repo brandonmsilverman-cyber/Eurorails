@@ -1,4 +1,5 @@
 [
+  {"message": "Fix endgame: AI ends turn immediately when win condition met, last-player trigger resolves without extra round", "date": "Apr 12, 2026"},
   {"message": "Tournament endgame (equal turns), randomized turn order, early-game ferry penalty, and first-turn overlay", "date": "Apr 12, 2026"},
   {"message": "Wire up endgame system and add flood stranding detection", "date": "Apr 12, 2026"},
   {"message": "Region-based batch pruning, ferry multiplier removal, affordability fix, and early-game discard bypass", "date": "Apr 12, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Replace capacity abandon with smart drop: AI drops irrelevant goods at pickup", "date": "Mar 20, 2026"},
   {"message": "Fix AI capacity overflow loop: abandon plan when train is full at pickup", "date": "Mar 20, 2026"},
   {"message": "Fix AI ferry oscillation and update affordability reserve test", "date": "Mar 20, 2026"},
-  {"message": "Add Brutal AI with 3-delivery batches, Superfreight upgrades, and fix AI stuck loops", "date": "Mar 20, 2026"},
-  {"message": "Rewrite easy AI to inherit from hard AI (singles only, no batches)", "date": "Mar 20, 2026"}
+  {"message": "Add Brutal AI with 3-delivery batches, Superfreight upgrades, and fix AI stuck loops", "date": "Mar 20, 2026"}
 ]
