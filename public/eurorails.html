@@ -4598,6 +4598,9 @@ function borrowFromBank(amount) {
 }
 
 function showTurnOverlay(playerName, playerColor, phaseLabel) {
+    // Clear demand card city highlights (mouseleave won't fire once the overlay covers the row)
+    gameState.highlightedCities = { origins: [], destination: null };
+
     document.getElementById("turnOverlayPlayer").textContent = playerName;
     document.getElementById("turnOverlayPlayer").style.color = COLOR_MAP[playerColor] || playerColor;
     document.getElementById("turnOverlayPhase").textContent = phaseLabel;
