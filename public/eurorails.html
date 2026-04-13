@@ -4631,6 +4631,17 @@ function dismissTurnOverlay() {
     }
 }
 
+function showEndgameOverlay(playerName, playerColor) {
+    const color = COLOR_MAP[playerColor] || playerColor;
+    document.getElementById("endgameOverlayText").innerHTML =
+        `<span style="color: ${color}">${escapeHtml(playerName)}</span> triggered endgame.`;
+    document.getElementById("endgameOverlay").classList.add("show");
+}
+
+function dismissEndgameOverlay() {
+    document.getElementById("endgameOverlay").classList.remove("show");
+}
+
 // Determine which opponents own foreign track segments being traversed.
 // Returns a Set of owner colors.
 function getForeignTrackOwners(path, endIdx, playerColor, foreignSegments) {
@@ -6767,6 +6778,14 @@ document.getElementById("zoomOutBtn")?.addEventListener("click", function() {
     </div>
 </div>
 
+<div class="turn-overlay" id="endgameOverlay">
+    <div class="turn-overlay-content">
+        <h2 id="endgameOverlayText"></h2>
+        <div class="phase-label">Final Round</div>
+        <button onclick="dismissEndgameOverlay()" style="padding: 10px 40px; font-size: 16px;">OK</button>
+    </div>
+</div>
+
 <script>
 // ============================================================================
 // MULTIPLAYER LOBBY
@@ -7584,6 +7603,12 @@ function initializeGameView(state, isRejoin) {
             updateUI();
             flushCardAnimationQueue();
         }
+
+        // Show turn overlay at game start if it's not our turn
+        const firstPlayer = gameState.players[gameState.currentPlayerIndex];
+        if (firstPlayer && firstPlayer.id !== myPlayerId) {
+            showTurnOverlay(firstPlayer.name, firstPlayer.color, 'Initial Building Phase');
+        }
     }
 }
 
@@ -7790,7 +7815,10 @@ socket.on('stateUpdate', ({ state, uiEvent }) => {
         }
     }
 
-    if (uiEvent?.type === 'turnChanged' && uiEvent.overlay) {
+    if (uiEvent?.type === 'turnChanged' && uiEvent.endgameTriggered) {
+        startTurnTimer();
+        showEndgameOverlay(uiEvent.endgameTriggered.name, uiEvent.endgameTriggered.color);
+    } else if (uiEvent?.type === 'turnChanged' && uiEvent.overlay) {
         startTurnTimer();
         showTurnOverlay(uiEvent.overlay.playerName, uiEvent.overlay.playerColor, uiEvent.overlay.phaseLabel);
     }

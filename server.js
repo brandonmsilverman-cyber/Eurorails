@@ -660,7 +660,7 @@ function serverDrawCardForPlayer(gs, player, logs, drawnEvents) {
 
 // Server-side endTurn: mutates gameState, returns UI hints for clients
 function serverEndTurn(gs, depth = 0) {
-    const result = { logs: [], overlay: null, gameOver: false, winner: null };
+    const result = { logs: [], overlay: null, gameOver: false, winner: null, endgameTriggered: null };
 
     // Clean up any spurious track segments overlapping ferry routes (from prior bug)
     cleanupSpuriousFerryTracks(gs);
@@ -670,14 +670,28 @@ function serverEndTurn(gs, depth = 0) {
         return result;
     }
 
-    // Check win condition
+    // Check win condition (tournament rules: equal turns)
     const currentPlayer = gs.players[gs.currentPlayerIndex];
     if (checkWinCondition(gs, currentPlayer)) {
-        result.gameOver = true;
-        result.winner = currentPlayer.name;
-        result.logs.push(`${currentPlayer.name} wins the game!`);
-        gs.gameLog.push(`${currentPlayer.name} wins the game!`);
-        return result;
+        if (!gs.endgameTriggeredBy) {
+            // First player to meet win condition — trigger final round
+            gs.endgameTriggeredBy = {
+                name: currentPlayer.name,
+                color: currentPlayer.color,
+                playerIndex: gs.currentPlayerIndex
+            };
+            gs.endgameQualifiers = [{ name: currentPlayer.name, color: currentPlayer.color, cash: currentPlayer.cash, playerIndex: gs.currentPlayerIndex }];
+            result.endgameTriggered = { name: currentPlayer.name, color: currentPlayer.color };
+            const msg = `${currentPlayer.name} has met the victory conditions! Final round — all players get one more turn.`;
+            result.logs.push(msg);
+            gs.gameLog.push(msg);
+        } else {
+            // Another player also qualifies during the final round
+            gs.endgameQualifiers.push({ name: currentPlayer.name, color: currentPlayer.color, cash: currentPlayer.cash, playerIndex: gs.currentPlayerIndex });
+            const msg = `${currentPlayer.name} also meets the victory conditions!`;
+            result.logs.push(msg);
+            gs.gameLog.push(msg);
+        }
     }
 
     // Expire persistent events
@@ -700,6 +714,49 @@ function serverEndTurn(gs, depth = 0) {
     // Move to next player
     gs.currentPlayerIndex = (gs.currentPlayerIndex + 1) % gs.players.length;
 
+    // Check if final round is complete (we've cycled back to the triggering player)
+    if (gs.endgameTriggeredBy && gs.currentPlayerIndex === gs.endgameTriggeredBy.playerIndex) {
+        // Update qualifier cash values to latest
+        for (const q of gs.endgameQualifiers) {
+            q.cash = gs.players[q.playerIndex].cash;
+        }
+        if (gs.endgameQualifiers.length === 1) {
+            // Single qualifier wins
+            const winner = gs.endgameQualifiers[0];
+            result.gameOver = true;
+            result.winner = winner.name;
+            result.logs.push(`${winner.name} wins the game!`);
+            gs.gameLog.push(`${winner.name} wins the game!`);
+        } else if (gs.endgameQualifiers.length > 1) {
+            // Multiple qualifiers — highest cash wins
+            gs.endgameQualifiers.sort((a, b) => b.cash - a.cash);
+            if (gs.endgameQualifiers[0].cash > gs.endgameQualifiers[1].cash) {
+                const winner = gs.endgameQualifiers[0];
+                result.gameOver = true;
+                result.winner = winner.name;
+                result.logs.push(`Multiple players met victory conditions. ${winner.name} wins with ECU ${winner.cash}M!`);
+                gs.gameLog.push(`Multiple players met victory conditions. ${winner.name} wins with ECU ${winner.cash}M!`);
+            } else {
+                // Tied cash — bump threshold by 50M and continue
+                gs.gameSettings.winCashThreshold += 50;
+                const msg = `Tied at ECU ${gs.endgameQualifiers[0].cash}M! Victory threshold raised to ECU ${gs.gameSettings.winCashThreshold}M. Play continues.`;
+                result.logs.push(msg);
+                gs.gameLog.push(msg);
+                gs.endgameTriggeredBy = null;
+                gs.endgameQualifiers = [];
+            }
+        } else {
+            // No qualifiers (edge case: player lost cash/cities after triggering)
+            // Endgame fizzles, continue playing
+            gs.endgameTriggeredBy = null;
+            gs.endgameQualifiers = [];
+            const msg = `No players currently meet victory conditions. Play continues.`;
+            result.logs.push(msg);
+            gs.gameLog.push(msg);
+        }
+        if (result.gameOver) return result;
+    }
+
     // Check if next player is abandoned - skip turn
     const nextPlayer = gs.players[gs.currentPlayerIndex];
     if (nextPlayer.abandoned) {
@@ -712,6 +769,7 @@ function serverEndTurn(gs, depth = 0) {
         result.overlay = innerResult.overlay;
         result.gameOver = innerResult.gameOver;
         result.winner = innerResult.winner;
+        if (!result.endgameTriggered) result.endgameTriggered = innerResult.endgameTriggered;
         return result;
     }
 
@@ -730,6 +788,7 @@ function serverEndTurn(gs, depth = 0) {
         result.overlay = innerResult.overlay;
         result.gameOver = innerResult.gameOver;
         result.winner = innerResult.winner;
+        if (!result.endgameTriggered) result.endgameTriggered = innerResult.endgameTriggered;
         return result;
     }
 
@@ -1372,7 +1431,9 @@ function createGameState(playerList, gameSettings) {
         ferryConnections: grid.ferryConnections,
         coastDistance,
         eventZones,
-        gameSettings: gameSettings || { winCashThreshold: 250, winMajorCitiesRequired: 7, speedTier: "Standard" }
+        gameSettings: gameSettings || { winCashThreshold: 250, winMajorCitiesRequired: 7, speedTier: "Standard" },
+        endgameTriggeredBy: null,    // { name, color, playerIndex } of player who first met win condition
+        endgameQualifiers: []        // all players who meet win condition during final round
     };
 }
 
@@ -2047,6 +2108,12 @@ io.on('connection', (socket) => {
                 entry.difficulty = p.difficulty;
             }
             playerList.push(entry);
+        }
+
+        // Randomize turn order
+        for (let i = playerList.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [playerList[i], playerList[j]] = [playerList[j], playerList[i]];
         }
 
         // Create authoritative game state on server

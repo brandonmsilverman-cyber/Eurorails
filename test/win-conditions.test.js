@@ -92,6 +92,24 @@ function once(socket, event, timeoutMs = 2000) {
     });
 }
 
+/** Wait for a stateUpdate whose uiEvent matches a predicate (or type string) */
+function onceUiEvent(socket, typeOrPredicate, timeoutMs = 10000) {
+    const predicate = typeof typeOrPredicate === 'function'
+        ? typeOrPredicate
+        : (data) => data.uiEvent && data.uiEvent.type === typeOrPredicate;
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`Timeout waiting for matching uiEvent`)), timeoutMs);
+        function handler(data) {
+            if (predicate(data)) {
+                clearTimeout(timer);
+                socket.off('stateUpdate', handler);
+                resolve(data);
+            }
+        }
+        socket.on('stateUpdate', handler);
+    });
+}
+
 /** Create a room and return { roomCode, sessionToken, host } */
 async function createRoom(hostName = 'Host') {
     const host = await createClient();
@@ -282,5 +300,188 @@ describe('Configurable Win Conditions: checkWinCondition (server-side)', () => {
 
         assert.equal(state.gameSettings.winCashThreshold, 250);
         assert.equal(state.gameSettings.winMajorCitiesRequired, 7);
+    });
+});
+
+// ===========================================================================
+// Tournament Endgame (Equal Turns)
+// ===========================================================================
+
+/**
+ * Helper: start a game with easy win settings and skip past initial building.
+ * Returns { roomCode, host, gs } with gs in operate phase, player 0's turn.
+ */
+async function startGameForEndgame(host, roomCode) {
+    const gameStartP = once(host, 'gameStart', 15000);
+    host.emit('startGame');
+    await gameStartP;
+
+    const room = rooms.get(roomCode);
+    const gs = room.gameState;
+
+    // Skip initial building — go straight to operate phase
+    gs.phase = 'operate';
+    gs.currentPlayerIndex = 0;
+    for (const p of gs.players) {
+        p.movement = 12;
+    }
+
+    return { gs, room };
+}
+
+/**
+ * Helper: give a player the win condition (connect 1 major city + enough cash).
+ * Requires the game to have cityToMilepost populated (which it does after createGameState).
+ */
+function giveWinCondition(gs, playerIndex, cash = 200) {
+    const player = gs.players[playerIndex];
+    player.cash = cash;
+
+    // Add a track at a major city milepost so the BFS finds it
+    const majorCityMilepost = gs.cityToMilepost['Paris'];
+    gs.tracks.push({ from: majorCityMilepost, to: majorCityMilepost, color: player.color });
+}
+
+describe('Tournament Endgame: Final round (equal turns)', () => {
+    it('game does NOT end immediately when player meets win condition', async () => {
+        const { host, roomCode } = await createRoom();
+        await emit(host, 'updateGameSettings', { winCashThreshold: 100, winMajorCitiesRequired: 1 });
+        await setupForStart(host);
+        const { gs } = await startGameForEndgame(host, roomCode);
+
+        // Player 0 (host) meets win condition
+        giveWinCondition(gs, 0, 200);
+
+        // End player 0's turn — should NOT end the game
+        const stateP = once(host, 'stateUpdate', 5000);
+        await emit(host, 'action', { type: 'endTurn' });
+        const update = await stateP;
+
+        assert.ok(update.uiEvent, 'should have a uiEvent');
+        assert.equal(update.uiEvent.type, 'turnChanged', 'should be turnChanged, not gameOver');
+        assert.ok(update.uiEvent.endgameTriggered, 'should have endgameTriggered');
+        assert.equal(update.uiEvent.endgameTriggered.name, gs.players[0].name);
+        assert.ok(gs.endgameTriggeredBy, 'gs.endgameTriggeredBy should be set');
+        assert.equal(gs.endgameQualifiers.length, 1);
+    });
+
+    it('game ends after full round completes back to triggering player', async () => {
+        const { host, roomCode } = await createRoom();
+        await emit(host, 'updateGameSettings', { winCashThreshold: 100, winMajorCitiesRequired: 1 });
+        await setupForStart(host);
+        const { gs } = await startGameForEndgame(host, roomCode);
+
+        // Player 0 meets win condition
+        giveWinCondition(gs, 0, 200);
+
+        // Start listening for gameOver BEFORE ending turn (AI actions emit multiple stateUpdates)
+        const gameOverP = onceUiEvent(host, 'gameOver');
+
+        // End player 0's turn — triggers endgame, AI plays, then round resolves
+        await emit(host, 'action', { type: 'endTurn' });
+
+        const update = await gameOverP;
+        assert.equal(update.uiEvent.type, 'gameOver');
+        assert.equal(update.uiEvent.winner, gs.players[0].name);
+    });
+
+    it('multiple qualifiers — highest cash wins', async () => {
+        const { host, roomCode } = await createRoom();
+        await emit(host, 'updateGameSettings', { winCashThreshold: 100, winMajorCitiesRequired: 1 });
+        await setupForStart(host);
+        const { gs } = await startGameForEndgame(host, roomCode);
+
+        // Player 0 meets win condition with 200 cash
+        giveWinCondition(gs, 0, 200);
+
+        // Give player 1 (AI) win condition with MORE cash BEFORE triggering endgame
+        // Use high value so AI still qualifies after spending on build
+        giveWinCondition(gs, 1, 500);
+
+        // Start listening for gameOver
+        const gameOverP = onceUiEvent(host, 'gameOver');
+
+        // End player 0's turn — triggers endgame
+        await emit(host, 'action', { type: 'endTurn' });
+
+        const update = await gameOverP;
+        // Player 1 should win because they have more cash
+        assert.equal(update.uiEvent.type, 'gameOver');
+        assert.equal(update.uiEvent.winner, gs.players[1].name);
+    });
+
+    it('tied cash bumps threshold and continues play', async () => {
+        // This test verifies tie resolution logic by using a 3-player setup
+        // where 2 human players both qualify with identical cash, and the AI
+        // is abandoned so it auto-skips.
+        const { host, roomCode } = await createRoom('Player1');
+        await emit(host, 'updateGameSettings', { winCashThreshold: 100, winMajorCitiesRequired: 1 });
+
+        // Set up host color
+        await emit(host, 'selectColor', { color: 'red' });
+
+        // Add a second human player
+        const { client: player2 } = await joinRoom(roomCode, 'Player2');
+        await emit(player2, 'selectColor', { color: 'green' });
+
+        // Add AI as third player
+        const aiUpdateP = once(host, 'roomUpdate');
+        await emit(host, 'addAIPlayer', { difficulty: 'easy' });
+        const info = await aiUpdateP;
+        const aiPlayer = info.players.find(p => p.isAI);
+        await emit(host, 'updateAIPlayer', { sessionToken: aiPlayer.id, color: 'blue' });
+
+        // Start game
+        const gameStartP = once(host, 'gameStart', 15000);
+        host.emit('startGame');
+        await gameStartP;
+
+        const room = rooms.get(roomCode);
+        const gs = room.gameState;
+
+        // Skip to operate phase
+        gs.phase = 'operate';
+        gs.currentPlayerIndex = 0;
+        for (const p of gs.players) p.movement = 12;
+
+        // Player 0 and Player 1 both meet win condition with identical cash
+        giveWinCondition(gs, 0, 200);
+        giveWinCondition(gs, 1, 200);
+
+        // Abandon the AI so its turn auto-skips (no cash spending)
+        gs.players[2].abandoned = true;
+
+        // Player 0 ends turn → triggers endgame
+        const endgameP = onceUiEvent(host, (data) =>
+            data.uiEvent?.type === 'turnChanged' && data.uiEvent.endgameTriggered);
+        await emit(host, 'action', { type: 'endTurn' });
+        await endgameP;
+
+        // Now it's player 1's turn. They also qualify.
+        // Player 1 ends turn → AI is skipped → round resolves → tie detected
+        const turnP = onceUiEvent(host, (data) =>
+            data.uiEvent?.type === 'turnChanged' && !data.uiEvent.endgameTriggered);
+        await emit(player2, 'action', { type: 'endTurn' });
+        await turnP;
+
+        // Threshold should have been bumped by 50
+        assert.equal(gs.gameSettings.winCashThreshold, 150, 'threshold should bump by 50');
+        assert.equal(gs.endgameTriggeredBy, null, 'endgameTriggeredBy should be cleared');
+        assert.equal(gs.endgameQualifiers.length, 0, 'endgameQualifiers should be cleared');
+    });
+
+    it('endgameTriggeredBy and endgameQualifiers initialized as null/empty', async () => {
+        const { host, roomCode } = await createRoom();
+        await setupForStart(host);
+
+        const gameStartP = once(host, 'gameStart', 15000);
+        host.emit('startGame');
+        await gameStartP;
+
+        const room = rooms.get(roomCode);
+        const gs = room.gameState;
+
+        assert.equal(gs.endgameTriggeredBy, null);
+        assert.deepEqual(gs.endgameQualifiers, []);
     });
 });

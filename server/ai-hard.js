@@ -1203,6 +1203,14 @@ function scorePlan(plan, player, gs, ctx, options) {
             }
         }
     }
+    // Early-game ferry penalty: before the AI has established a solid network
+    // (< 30 segments), ferries are costly detours that slow expansion. Penalize
+    // plans with ferry crossings to steer toward continental routes first.
+    let earlyFerryPenaltyTurns = 0;
+    if (ownedTrackCount < 30 && plan.ferryCrossingCount > 0) {
+        earlyFerryPenaltyTurns = plan.ferryCrossingCount * 10;
+    }
+
     // Delivery density bonus: reward plans with high payout relative to travel
     // distance. Short high-value routes generate better tempo, especially with
     // upgraded trains where speed amplifies short routes.
@@ -1210,7 +1218,7 @@ function scorePlan(plan, player, gs, ctx, options) {
     const densityBonus = Math.min(payoutPerHex / 3.0, 1.0); // 0..1, capped
     const densityReduction = densityBonus * 1.5;
 
-    let finalTurns = adjustedTurns + islandPenaltyTurns;
+    let finalTurns = adjustedTurns + islandPenaltyTurns + earlyFerryPenaltyTurns;
     finalTurns = Math.max(finalTurns - densityReduction, estimatedTurns * 0.7);
 
     // Single delivery penalty: with a mature network and multi-good capacity,

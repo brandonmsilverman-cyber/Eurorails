@@ -35,11 +35,11 @@ module.exports = function(deps) {
                 uiEvent: { type: 'gameOver', winner: result.winner, logs: result.logs }
             };
         }
-        return {
-            success: true,
-            logs: result.logs,
-            uiEvent: { type: 'turnChanged', overlay: result.overlay, logs: result.logs }
-        };
+        const uiEvent = { type: 'turnChanged', overlay: result.overlay, logs: result.logs };
+        if (result.endgameTriggered) {
+            uiEvent.endgameTriggered = result.endgameTriggered;
+        }
+        return { success: true, logs: result.logs, uiEvent };
     }
 
     function applyUpgradeTo(gs, playerIndex, { trainType }) {
