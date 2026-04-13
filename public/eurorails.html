@@ -7695,9 +7695,9 @@ function applyServerState(state) {
     gameState.pathPreviewCost = null;
     gameState.pathPreviewCutoff = null;
     gameState.pathPreviewForeignSegments = [];
-    // Preserve build preferences (buildPathMode, useForeignTrackInBuild) within
-    // the same build phase — only reset on phase transitions (handled in endTurn/endBuildPhase)
-    gameState.useTrackageRights = false;
+    // Preserve build preferences (buildPathMode, useForeignTrackInBuild) and operate
+    // preferences (useTrackageRights) within the same phase — only reset on phase
+    // transitions (handled in endTurn/endBuildPhase)
 }
 
 socket.on('stateUpdate', ({ state, uiEvent }) => {

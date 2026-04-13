@@ -1,4 +1,5 @@
 [
+  {"message": "Persist foreign track selection throughout operate phase and update backlog", "date": "Apr 13, 2026"},
   {"message": "Fix demand card city highlights persisting across turn change", "date": "Apr 13, 2026"},
   {"message": "Simplify endgame resolution: use plain round-boundary check", "date": "Apr 12, 2026"},
   {"message": "Fix endgame round resolution and add game-over logging", "date": "Apr 12, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Fix AI ferry movement, batch enumeration crash, and cash drain", "date": "Mar 25, 2026"},
   {"message": "Add Brutal AI network-aware scoring, fix upgrade payout bug and ferry city entry cost", "date": "Mar 22, 2026"},
   {"message": "Fix AI building on foreign track: detect, skip, and reroute around opponent rails", "date": "Mar 20, 2026"},
-  {"message": "Fix Brutal AI WebSocket crash: add time limit to triple batch enumeration", "date": "Mar 20, 2026"},
-  {"message": "Replace capacity abandon with smart drop: AI drops irrelevant goods at pickup", "date": "Mar 20, 2026"}
+  {"message": "Fix Brutal AI WebSocket crash: add time limit to triple batch enumeration", "date": "Mar 20, 2026"}
 ]
