@@ -715,11 +715,8 @@ function serverEndTurn(gs, depth = 0) {
     gs.currentPlayerIndex = (gs.currentPlayerIndex + 1) % gs.players.length;
 
     // Check if final round is complete. A round boundary is when
-    // currentPlayerIndex wraps to 0. If the triggering player is index 0,
-    // skip this check on their trigger turn (the round hasn't started yet).
-    // For any other trigger index, wrapping to 0 means the round is done.
-    if (gs.endgameTriggeredBy && gs.currentPlayerIndex === 0
-        && !(result.endgameTriggered && gs.endgameTriggeredBy.playerIndex === 0)) {
+    // currentPlayerIndex wraps to 0 (all players have had equal turns).
+    if (gs.endgameTriggeredBy && gs.currentPlayerIndex === 0) {
         // Update qualifier cash values to latest
         for (const q of gs.endgameQualifiers) {
             q.cash = gs.players[q.playerIndex].cash;
