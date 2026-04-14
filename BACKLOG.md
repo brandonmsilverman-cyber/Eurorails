@@ -6,7 +6,6 @@ A running list of planned features, improvements, and known issues.
 
 ## Gameplay
 
-- [ ] **Set train destination** — Player selects a city as their destination; the train automatically moves toward it each operate phase until it arrives, the player undoes movement, an event card disrupts it (i.e. derail or broken track), or the mode is turned off
 - [ ] **Improved trackage rights payment animation** — Replace falling coins with a more polished visual for trackage rights transfers
 - [ ] **AI hints system** — "What would an expert do?" suggestion feature for learning players
 ## Reconnection Improvement
@@ -16,7 +15,6 @@ A running list of planned features, improvements, and known issues.
 
 ## Bug Fixes
 
-- [ ] **AI builds into major cities instead of out from them** — AI pathfinding sometimes builds toward a major city (paying the 5M city entry cost) instead of building outward from it (1M for the adjacent milepost). Example: AI 1 spent 5M for 4 mileposts building into Praha, when reversing the build direction would cost only 1M for the same connection
 - [ ] **AI triple budget allocation misses best candidates** — The 200-triple evaluation budget (3-second time limit) is allocated top-down by pair ECU/turn: the best-scoring 2-delivery pairs get all the triple extension budget. With region-based pruning passing ~661 candidate triples, only ~30% are actually evaluated. A directionally-aligned triple built from a mediocre-scoring pair (rank 15+) is never generated because the budget is exhausted extending top-ranked pairs. Fix direction: pre-score candidate triples with a cheap heuristic (e.g. total payout / estimated trip distance from region centroids) before spending the budget on full `buildTripleBatchPlan` pathfinding. Alternatively, cap triples-per-pair at ~10 to spread the budget across more pairs, or make `buildTripleBatchPlan` cheaper to evaluate (cache shared path segments).
 
 
@@ -76,3 +74,4 @@ A running list of planned features, improvements, and known issues.
 - [x] AI: Brutal difficulty (systematic multi-delivery planning, EV build calculations, optimal upgrade timing, EV-based discard decisions, full landmass access modeling)
 - [x] Demand card city highlights persist across turn change fix
 - [x] Persist suggested foreign track selection throughout a single operate phase
+- [x] Set train destination (auto-move toward selected city each operate phase)

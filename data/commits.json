@@ -1,4 +1,5 @@
 [
+  {"message": "Use player color for destination marker, add Enter key bindings, defer auto-move until Ready", "date": "Apr 14, 2026"},
   {"message": "Change destination marker and sidebar accent from cyan to magenta", "date": "Apr 13, 2026"},
   {"message": "Add set train destination feature for auto-movement across turns", "date": "Apr 13, 2026"},
   {"message": "Clean up saved games lobby: add timestamps, sorting, delete, and player names", "date": "Apr 13, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Fix AI plan scoring: negative-ROI penalty, stronger overextension, network bonuses, and same-card batch bug", "date": "Mar 27, 2026"},
   {"message": "Fix AI island-lock, premature upgrade, and ferry/scoring improvements", "date": "Mar 26, 2026"},
   {"message": "Fix AI oscillation loop: advance currentStopIndex when skipping already-carried pickup", "date": "Mar 26, 2026"},
-  {"message": "Fix AI early-game overextension, abandon-cycle deadlock, and ferry timing", "date": "Mar 26, 2026"},
-  {"message": "Fix AI ferry movement, batch enumeration crash, and cash drain", "date": "Mar 25, 2026"}
+  {"message": "Fix AI early-game overextension, abandon-cycle deadlock, and ferry timing", "date": "Mar 26, 2026"}
 ]
