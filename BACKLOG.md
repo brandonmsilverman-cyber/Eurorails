@@ -6,7 +6,6 @@ A running list of planned features, improvements, and known issues.
 
 ## Gameplay
 
-- [ ] **Improved trackage rights payment animation** — Replace falling coins with a more polished visual for trackage rights transfers
 - [ ] **AI hints system** — "What would an expert do?" suggestion feature for learning players
 ## Reconnection Improvement
 - [ ] **localStorage fallback for tab closure recovery** — Add localStorage as a fallback so reconnection credentials survive tab closure and incognito mode, while preserving multi-tab play. Full plan in [`LOCALSTORAGE_FALLBACK_PLAN.md`](LOCALSTORAGE_FALLBACK_PLAN.md).
@@ -75,3 +74,4 @@ A running list of planned features, improvements, and known issues.
 - [x] Demand card city highlights persist across turn change fix
 - [x] Persist suggested foreign track selection throughout a single operate phase
 - [x] Set train destination (auto-move toward selected city each operate phase)
+- [x] Improved trackage rights payment animation (coin arc transfer with fanned 4-coin stagger)

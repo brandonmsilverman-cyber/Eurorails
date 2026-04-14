@@ -968,56 +968,6 @@
             cursor: pointer;
         }
 
-        .trackage-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.6);
-            z-index: 999;
-            align-items: center;
-            justify-content: center;
-        }
-        .trackage-modal.show {
-            display: flex;
-        }
-        .trackage-modal-content {
-            background: linear-gradient(135deg, #2d1a00, #3d2a00);
-            padding: 24px 36px;
-            border-radius: 10px;
-            text-align: center;
-            box-shadow: 0 6px 24px rgba(0,0,0,0.6);
-            border: 2px solid #cc8800;
-            min-width: 280px;
-        }
-        .trackage-modal-content h3 {
-            color: #ffcc44;
-            margin: 0 0 16px 0;
-            font-size: 18px;
-        }
-        .trackage-transfer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 12px;
-            margin-bottom: 6px;
-            background: rgba(0,0,0,0.3);
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        .trackage-transfer .arrow {
-            color: #ffaa44;
-            margin: 0 10px;
-            font-size: 18px;
-        }
-        .trackage-transfer .amount {
-            color: #ffcc44;
-            font-weight: bold;
-            font-size: 16px;
-        }
-
         .event-overlay {
             display: flex;
             position: fixed;
@@ -2081,8 +2031,11 @@ function showCardDrawAnimation(cardData, isEvent, drawnBy) {
             setTimeout(() => preview.classList.add("reveal"), 100);
         });
         const btn = overlay.querySelector(".event-dismiss-btn");
-        if (btn) btn.addEventListener("click", (e) => {
-            e.stopPropagation();
+        let eventDismissed = false;
+        function dismissEventCard() {
+            if (eventDismissed) return;
+            eventDismissed = true;
+            document.removeEventListener("keydown", onEventKey);
             preview.style.transition = "transform 0.4s ease, opacity 0.4s ease";
             preview.style.transform = "scale(0.8)";
             preview.style.opacity = "0";
@@ -2092,7 +2045,13 @@ function showCardDrawAnimation(cardData, isEvent, drawnBy) {
                 if (document.body.contains(overlay)) overlay.remove();
                 setTimeout(() => processNextCardAnimation(), 100);
             }, 500);
+        }
+        if (btn) btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            dismissEventCard();
         });
+        function onEventKey(e) { if (e.key === "Enter") { e.stopPropagation(); dismissEventCard(); } }
+        document.addEventListener("keydown", onEventKey);
         return;
     }
 
@@ -4780,27 +4739,208 @@ function chargeTrackageRightsIfNeeded(currentPlayer, path, foreignSegments, actu
     return { ok: true, newlyPaidOwners: unpaid };
 }
 
-function showTrackageModal() {
-    if (gameState.trackageRightsLog.length === 0) return;
-    const transfersEl = document.getElementById("trackageTransfers");
-    transfersEl.innerHTML = gameState.trackageRightsLog.map(t => `
-        <div class="trackage-transfer">
-            <span>${t.from}</span>
-            <span class="arrow">→</span>
-            <span>${t.to}</span>
-            <span class="amount">ECU ${t.amount}M</span>
-        </div>
-    `).join("");
-    document.getElementById("trackageModal").classList.add("show");
-    // Auto-dismiss after 4 seconds
-    gameState._trackageModalTimer = setTimeout(dismissTrackageModal, 4000);
+// Show animated trackage rights transfer overlay with coin arcs
+// transfers: [{from, fromColor, to, toColor, amount}]
+function showTrackageModal(transfers) {
+    if (!transfers || transfers.length === 0) return;
+
+    // Dismiss any existing trackage overlay
+    dismissTrackageModal();
+
+    const ARC_DURATION = 800;
+    const STAGGER = 200;
+
+    // Create full-screen overlay
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 2000; pointer-events: auto; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        overflow: hidden;
+    `;
+    gameState._trackageOverlay = overlay;
+
+    // Create modal container
+    const modal = document.createElement("div");
+    modal.style.cssText = `
+        background: linear-gradient(135deg, #2d1a00, #3d2a00);
+        padding: 24px 36px;
+        border-radius: 10px;
+        text-align: center;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+        border: 2px solid #cc8800;
+        min-width: 480px;
+        opacity: 0; transition: opacity 0.3s ease;
+    `;
+
+    // Title
+    const title = document.createElement("h3");
+    title.style.cssText = "color: #ffcc44; margin: 0 0 16px 0; font-size: 18px;";
+    title.textContent = "🚂 Trackage Rights";
+    modal.appendChild(title);
+
+    // Build transfer rows
+    const COINS_PER_TRANSFER = 4; // 4 x 1M coins per 4M payment
+    const COIN_STAGGER = 80; // ms between each coin in a fan
+    const rows = [];
+    const coinGroups = []; // array of arrays, one per transfer
+
+    transfers.forEach((t, i) => {
+        const row = document.createElement("div");
+        row.style.cssText = `
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            margin-bottom: ${i < transfers.length - 1 ? '10' : '0'}px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 6px;
+            min-height: 70px;
+            overflow: visible;
+        `;
+
+        // Left side: payer name
+        const leftBlock = document.createElement("div");
+        leftBlock.style.cssText = "display: flex; flex-direction: column; align-items: flex-start; min-width: 110px; z-index: 3;";
+        const payerName = document.createElement("div");
+        payerName.style.cssText = `font-size: 15px; font-weight: bold; color: ${t.fromColor};`;
+        payerName.textContent = t.from;
+        leftBlock.appendChild(payerName);
+
+        // Center spacer for coin flight path
+        const centerSpacer = document.createElement("div");
+        centerSpacer.style.cssText = "flex: 1; min-width: 220px;";
+
+        // Right side: recipient name
+        const rightBlock = document.createElement("div");
+        rightBlock.style.cssText = "display: flex; flex-direction: column; align-items: flex-end; min-width: 110px; z-index: 3;";
+        const recipientName = document.createElement("div");
+        recipientName.style.cssText = `font-size: 15px; font-weight: bold; color: ${t.toColor};`;
+        recipientName.textContent = t.to;
+        rightBlock.appendChild(recipientName);
+
+        // Create 4 coins matching delivery celebration style
+        const rowCoins = [];
+        for (let c = 0; c < COINS_PER_TRANSFER; c++) {
+            const coin = document.createElement("div");
+            coin.style.cssText = `
+                position: absolute;
+                width: 50px; height: 50px;
+                border-radius: 50%;
+                background: radial-gradient(circle at 35% 35%, #ffe066, #daa520, #b8860b);
+                border: 3px solid #b8860b;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.4), inset 0 -2px 4px rgba(0,0,0,0.2);
+                display: flex; align-items: center; justify-content: center;
+                font-size: 10px; font-weight: bold; color: #5c3a00;
+                text-align: center; line-height: 1.1;
+                left: 110px; top: 50%;
+                transform: translateY(-50%);
+                opacity: 0;
+                z-index: 2;
+            `;
+            coin.textContent = "1M\nECU";
+            row.appendChild(coin);
+            rowCoins.push(coin);
+        }
+        coinGroups.push(rowCoins);
+
+        row.appendChild(leftBlock);
+        row.appendChild(centerSpacer);
+        row.appendChild(rightBlock);
+        modal.appendChild(row);
+        rows.push(row);
+    });
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // Fade in modal
+    requestAnimationFrame(() => { modal.style.opacity = "1"; });
+
+    // After layout, compute coin arc positions and inject keyframes
+    requestAnimationFrame(() => {
+        const uid = Date.now();
+        transfers.forEach((t, i) => {
+            const row = rows[i];
+            const rowRect = row.getBoundingClientRect();
+            const rowW = rowRect.width;
+            const coinSize = 50;
+
+            // Arc: start after left name block, end before right name block (with generous margin)
+            const startX = 110;
+            const endX = rowW - 110 - coinSize - 20; // extra 20px gap before right name
+            const midX = (startX + endX) / 2;
+
+            // Create fanned keyframes for each of the 4 coins
+            // Each coin gets a slightly different arc height for the fan effect
+            const arcHeights = [55, 45, 35, 25]; // fanned vertically
+
+            for (let c = 0; c < COINS_PER_TRANSFER; c++) {
+                const arcH = arcHeights[c];
+                // Offset each coin's landing position slightly left so they appear stacked
+                const stackOffset = (COINS_PER_TRANSFER - 1 - c) * 6; // 0, 6, 12, 18px
+                const coinEndX = endX - stackOffset;
+                const keyframeName = `trackageCoinArc${i}_${c}_${uid}`;
+                const style = document.createElement("style");
+                style.textContent = `
+                    @keyframes ${keyframeName} {
+                        0%   { left: ${startX}px; top: 50%; transform: translateY(-50%); opacity: 1; }
+                        50%  { left: ${midX}px; top: calc(50% - ${arcH}px); transform: translateY(-50%); opacity: 1; }
+                        100% { left: ${coinEndX}px; top: 50%; transform: translateY(-50%); opacity: 1; }
+                    }
+                `;
+                overlay.appendChild(style);
+            }
+
+            // Trigger coin animations with row stagger + per-coin fan stagger
+            const rowDelay = i * STAGGER;
+            const rowCoinsRef = coinGroups[i];
+
+            setTimeout(() => {
+                for (let c = 0; c < COINS_PER_TRANSFER; c++) {
+                    const coinDelay = c * COIN_STAGGER;
+                    const keyframeName = `trackageCoinArc${i}_${c}_${uid}`;
+                    setTimeout(() => {
+                        rowCoinsRef[c].style.opacity = "1";
+                        rowCoinsRef[c].style.animation = `${keyframeName} ${ARC_DURATION}ms ease-in-out forwards`;
+                    }, coinDelay);
+                }
+            }, rowDelay);
+        });
+    });
+
+    // Dismiss logic
+    let dismissed = false;
+    function dismiss() {
+        if (dismissed) return;
+        dismissed = true;
+        dismissTrackageModal();
+    }
+    overlay.addEventListener("click", dismiss);
+    function onKeyDown(e) { if (e.key === "Enter") { e.stopPropagation(); dismiss(); } }
+    document.addEventListener("keydown", onKeyDown);
+    // Store ref so dismissTrackageModal can clean up
+    gameState._trackageKeyHandler = onKeyDown;
+
+    const totalAnimTime = (transfers.length - 1) * STAGGER + (COINS_PER_TRANSFER - 1) * COIN_STAGGER + ARC_DURATION + 1000;
+    const dismissTime = Math.max(totalAnimTime, 3500);
+    gameState._trackageModalTimer = setTimeout(dismiss, dismissTime);
 }
 
 function dismissTrackageModal() {
-    document.getElementById("trackageModal").classList.remove("show");
+    if (gameState._trackageOverlay && document.body.contains(gameState._trackageOverlay)) {
+        gameState._trackageOverlay.remove();
+    }
+    gameState._trackageOverlay = null;
     if (gameState._trackageModalTimer) {
         clearTimeout(gameState._trackageModalTimer);
         gameState._trackageModalTimer = null;
+    }
+    if (gameState._trackageKeyHandler) {
+        document.removeEventListener("keydown", gameState._trackageKeyHandler);
+        gameState._trackageKeyHandler = null;
     }
 }
 
@@ -5029,10 +5169,8 @@ function undoLastOperate() {
 }
 
 function endOperatePhase() {
-    // In multiplayer, send action to server
+    // In multiplayer, send action to server; trackage animation triggered via uiEvent broadcast
     if (typeof socket !== 'undefined' && myPlayerId) {
-        // Show trackage rights transfer modal before sending
-        showTrackageModal();
         socket.emit('action', { type: 'endOperatePhase' }, (res) => {
             if (res && !res.success) {
                 handleActionError('endOperatePhase', res.error);
@@ -5041,8 +5179,20 @@ function endOperatePhase() {
         return;
     }
 
-    // Local fallback
-    showTrackageModal();
+    // Local fallback — build transfer data from local state before clearing
+    if (gameState.trackageRightsLog.length > 0) {
+        const transfers = gameState.trackageRightsLog.map(t => {
+            const fromPlayer = gameState.players.find(p => p.name === t.from);
+            const toPlayer = gameState.players.find(p => p.name === t.to);
+            return {
+                from: t.from, fromColor: fromPlayer ? fromPlayer.color : '#ccc',
+                to: t.to, toColor: toPlayer ? toPlayer.color : '#ccc',
+                amount: t.amount
+            };
+        });
+        showTrackageModal(transfers);
+    }
+
     gameState.phase = "build";
     gameState.selectedMilepost = null;
     gameState.pathPreview = null;
@@ -6807,6 +6957,11 @@ window.addEventListener("keydown", function(e) {
     const tag = document.activeElement?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
+    // Don't progress turns while a modal overlay is open (trackage rights, event cards, etc.)
+    // Those modals consume their own Enter keystrokes separately.
+    if (gameState._trackageOverlay) return;
+    if (document.querySelector(".card-draw-overlay.show")) return;
+
     // 1. Turn overlay "Ready" button
     const turnOverlay = document.getElementById("turnOverlay");
     if (turnOverlay && turnOverlay.classList.contains("show")) {
@@ -6950,14 +7105,6 @@ document.getElementById("zoomOutBtn")?.addEventListener("click", function() {
     zoomMap(0.9);
 });
 </script>
-
-<div class="trackage-modal" id="trackageModal" onclick="dismissTrackageModal()">
-    <div class="trackage-modal-content" id="trackageModalContent">
-        <h3>🚂 Trackage Rights</h3>
-        <div id="trackageTransfers"></div>
-        <div style="color:#888; font-size:11px; margin-top:12px;">Click anywhere to dismiss</div>
-    </div>
-</div>
 
 <div class="turn-overlay" id="confirmDiscardOverlay">
     <div class="turn-overlay-content" style="border-color: #cc6600;">
@@ -8079,6 +8226,11 @@ socket.on('stateUpdate', ({ state, uiEvent }) => {
                 flushCardAnimationQueue();
             });
         }
+    }
+
+    // Animate trackage rights transfers (visible to all players)
+    if (uiEvent?.trackageTransfers && uiEvent.trackageTransfers.length > 0) {
+        showTrackageModal(uiEvent.trackageTransfers);
     }
 
     if (uiEvent?.type === 'turnChanged' && uiEvent.endgameTriggered) {

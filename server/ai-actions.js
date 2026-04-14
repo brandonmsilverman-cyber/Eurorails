@@ -453,6 +453,22 @@ module.exports = function(deps) {
             return { success: false, error: 'Not in operate phase' };
         }
 
+        // Snapshot trackage transfers before clearing for animation broadcast
+        let trackageTransfers = [];
+        if (gs.trackageRightsLog.length > 0) {
+            trackageTransfers = gs.trackageRightsLog.map(t => {
+                const fromPlayer = gs.players.find(p => p.name === t.from);
+                const toPlayer = gs.players.find(p => p.name === t.to);
+                return {
+                    from: t.from,
+                    fromColor: fromPlayer ? fromPlayer.color : '#ccc',
+                    to: t.to,
+                    toColor: toPlayer ? toPlayer.color : '#ccc',
+                    amount: t.amount
+                };
+            });
+        }
+
         gs.phase = 'build';
         gs.buildingThisTurn = 0;
         gs.majorCitiesThisTurn = 0;
@@ -464,10 +480,15 @@ module.exports = function(deps) {
         const msg = `${gs.players[playerIndex].name} moved to Build Phase`;
         gs.gameLog.push(msg);
 
+        const uiEvent = { type: 'action', logs: [msg] };
+        if (trackageTransfers.length > 0) {
+            uiEvent.trackageTransfers = trackageTransfers;
+        }
+
         return {
             success: true,
             logs: [msg],
-            uiEvent: { type: 'action', logs: [msg] }
+            uiEvent
         };
     }
 
