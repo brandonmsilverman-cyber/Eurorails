@@ -243,8 +243,11 @@ module.exports = function(deps) {
         if (buildCost > player.cash) {
             return { success: false, error: 'Not enough cash' };
         }
-        if (gs.majorCitiesThisTurn + (majorCityCount || 0) > 2) {
-            return { success: false, error: 'Major city limit exceeded' };
+        // Rule: max 2 builds initiated FROM a major city per turn
+        const startMpForMajorCheck = gs.mileposts_by_id[buildPath[0]];
+        const computedMajorCityCount = (startMpForMajorCheck && startMpForMajorCheck.city && MAJOR_CITIES.includes(startMpForMajorCheck.city.name)) ? 1 : 0;
+        if (gs.majorCitiesThisTurn + computedMajorCityCount > 2) {
+            return { success: false, error: 'Cannot build out of more than 2 major cities per turn' };
         }
 
         // Build owned/other edge sets for validation
@@ -345,13 +348,13 @@ module.exports = function(deps) {
 
         player.cash -= buildCost;
         gs.buildingThisTurn += buildCost;
-        gs.majorCitiesThisTurn += (majorCityCount || 0);
+        gs.majorCitiesThisTurn += computedMajorCityCount;
 
         // Record build for undo
         gs.buildHistory.push({
             segments: newSegments,
             cost: buildCost,
-            majorCities: majorCityCount || 0,
+            majorCities: computedMajorCityCount,
             ferries: ferries ? ferries.filter(fk => gs.ferryOwnership[fk] && gs.ferryOwnership[fk].includes(player.color)) : []
         });
 

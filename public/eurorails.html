@@ -6311,18 +6311,15 @@ document.addEventListener("DOMContentLoaded", function() {
                         addLog(`Partial build: can only afford ${cutoffIdx} of ${buildPath.length - 1} segments`);
                     }
 
-                    // Check major city limit (2 per turn max)
-                    // Skip buildPath[0] — it's the starting milepost already on the player's network
+                    // Check major city limit: max 2 builds initiated FROM a major city per turn
                     let majorCityCount = 0;
-                    for (let pi = 1; pi < buildPath.length; pi++) {
-                        const mp = gameState.mileposts_by_id[buildPath[pi]];
-                        if (mp.city && MAJOR_CITIES.includes(mp.city.name)) {
-                            majorCityCount++;
-                        }
+                    const buildStartMp = gameState.mileposts_by_id[buildPath[0]];
+                    if (buildStartMp && buildStartMp.city && MAJOR_CITIES.includes(buildStartMp.city.name)) {
+                        majorCityCount = 1;
                     }
 
                     if (gameState.majorCitiesThisTurn + majorCityCount > 2) {
-                        addLog("Cannot build more than 2 sections from major cities this turn!");
+                        addLog("Cannot build out of more than 2 major cities per turn!");
                     } else if (typeof socket !== 'undefined' && myPlayerId) {
                         // Multiplayer: compute ferry keys to claim, send to server
                         const newFerries = [];
