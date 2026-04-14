@@ -1,4 +1,5 @@
 [
+  {"message": "Change destination marker and sidebar accent from cyan to magenta", "date": "Apr 13, 2026"},
   {"message": "Add set train destination feature for auto-movement across turns", "date": "Apr 13, 2026"},
   {"message": "Clean up saved games lobby: add timestamps, sorting, delete, and player names", "date": "Apr 13, 2026"},
   {"message": "Persist foreign track selection throughout operate phase and update backlog", "date": "Apr 13, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Fix AI island-lock, premature upgrade, and ferry/scoring improvements", "date": "Mar 26, 2026"},
   {"message": "Fix AI oscillation loop: advance currentStopIndex when skipping already-carried pickup", "date": "Mar 26, 2026"},
   {"message": "Fix AI early-game overextension, abandon-cycle deadlock, and ferry timing", "date": "Mar 26, 2026"},
-  {"message": "Fix AI ferry movement, batch enumeration crash, and cash drain", "date": "Mar 25, 2026"},
-  {"message": "Add Brutal AI network-aware scoring, fix upgrade payout bug and ferry city entry cost", "date": "Mar 22, 2026"}
+  {"message": "Fix AI ferry movement, batch enumeration crash, and cash drain", "date": "Mar 25, 2026"}
 ]

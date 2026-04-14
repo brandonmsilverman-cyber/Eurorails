@@ -932,8 +932,8 @@
         }
 
         @keyframes pulse-dest {
-            0%, 100% { border-color: #2288cc; }
-            50% { border-color: #55bbff; }
+            0%, 100% { border-color: #aa3399; }
+            50% { border-color: #dd55cc; }
         }
 
         .error-banner {
@@ -3234,14 +3234,14 @@ function drawMap() {
                 ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
                 ctx.shadowBlur = 4;
                 // Outer ring
-                ctx.strokeStyle = "#55bbff";
+                ctx.strokeStyle = "#dd55cc";
                 ctx.lineWidth = 3;
                 ctx.beginPath();
                 ctx.arc(dx, dy, r, 0, Math.PI * 2);
                 ctx.stroke();
                 // Crosshair lines
                 ctx.shadowColor = "transparent";
-                ctx.strokeStyle = "rgba(85, 187, 255, 0.7)";
+                ctx.strokeStyle = "rgba(221, 85, 204, 0.7)";
                 ctx.lineWidth = 2;
                 const cr = r + 6;
                 ctx.beginPath();
@@ -3253,7 +3253,7 @@ function drawMap() {
                 // Label
                 ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
                 ctx.shadowBlur = 3;
-                ctx.fillStyle = "#55bbff";
+                ctx.fillStyle = "#dd55cc";
                 ctx.font = `bold ${Math.max(10, 12 * uiScale)}px Arial`;
                 ctx.textAlign = "center";
                 ctx.textBaseline = "bottom";
@@ -3265,7 +3265,7 @@ function drawMap() {
                     const routeResult = findPathOnTrack(localPlayer.trainLocation, destMpId, localPlayer.color, gameState.useTrackageRights);
                     if (routeResult && routeResult.path.length >= 2) {
                         ctx.save();
-                        ctx.strokeStyle = "rgba(85, 187, 255, 0.3)";
+                        ctx.strokeStyle = "rgba(221, 85, 204, 0.3)";
                         ctx.lineWidth = Math.max(2, 3 * uiScale);
                         ctx.setLineDash([6, 4]);
                         ctx.beginPath();
@@ -5436,14 +5436,14 @@ function updateUI() {
             const dest = currentPlayer.trainDestination;
             if (dest) {
                 operateHtml += `
-                    <div style="display:flex; align-items:center; justify-content:space-between; background:#0a2a3d; border:1px solid #2288cc; border-radius:4px; padding:6px 8px; margin-bottom:8px; font-size:11px;">
-                        <div><span style="color:#55bbff; font-weight:bold;">📍 Destination: </span><span style="color:#fff; font-weight:bold;">${dest}</span></div>
+                    <div style="display:flex; align-items:center; justify-content:space-between; background:#2d0a2a; border:1px solid #aa3399; border-radius:4px; padding:6px 8px; margin-bottom:8px; font-size:11px;">
+                        <div><span style="color:#dd55cc; font-weight:bold;">📍 Destination: </span><span style="color:#fff; font-weight:bold;">${dest}</span></div>
                         <button onclick="clearTrainDestination()" style="background:none; border:1px solid #555; color:#999; border-radius:3px; padding:1px 6px; font-size:10px; cursor:pointer; font-weight:bold;" title="Clear destination">✕</button>
                     </div>`;
             } else if (gameState.settingDestination) {
                 operateHtml += `
                     <div style="margin-bottom:8px;">
-                        <button onclick="toggleSetDestination()" style="width:100%; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid #2288cc; background:#0a2a3d; color:#55bbff; cursor:pointer; animation:pulse-dest 1.5s ease-in-out infinite;">
+                        <button onclick="toggleSetDestination()" style="width:100%; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid #aa3399; background:#2d0a2a; color:#dd55cc; cursor:pointer; animation:pulse-dest 1.5s ease-in-out infinite;">
                             📍 Select a city on the map…
                         </button>
                     </div>`;
