@@ -510,6 +510,9 @@ function applyDerailmentToPlayer(gs, player, pIdx, logs, eventLabel, drawingPlay
     if (pIdx === drawingPlayerIndex && gs.phase === "operate") {
         player.movement = 0;
     }
+
+    // Clear train destination on derailment
+    player.trainDestination = null;
 }
 
 // Draw one card for a player, skipping event cards (events handled separately during turns)
@@ -1372,7 +1375,8 @@ function createGameState(playerList, gameSettings) {
             ferryState: null,
             selectedDemands: [null, null, null],
             borrowedAmount: 0,
-            debtRemaining: 0
+            debtRemaining: 0,
+            trainDestination: null
         };
         if (p.isAI) {
             player.isAI = true;
@@ -1508,7 +1512,8 @@ function serializeForSave(gameState, gameName) {
                 difficulty: p.difficulty || null,
                 aiState: p.aiState || null,
                 borrowedAmount: p.borrowedAmount || 0,
-                debtRemaining: p.debtRemaining || 0
+                debtRemaining: p.debtRemaining || 0,
+                trainDestination: p.trainDestination || null
             })),
             currentPlayerIndex: gs.currentPlayerIndex,
             turn: gs.turn,
@@ -1650,7 +1655,8 @@ function loadGameStateFromSave(saveData) {
         difficulty: p.difficulty || null,
         aiState: p.aiState || null,
         borrowedAmount: p.borrowedAmount || 0,
-        debtRemaining: p.debtRemaining || 0
+        debtRemaining: p.debtRemaining || 0,
+        trainDestination: p.trainDestination || null
     }));
 
     return {
@@ -2401,6 +2407,20 @@ io.on('connection', (socket) => {
                 }
                 console.log(`Room ${socket.roomCode}: ${undoMoveResult.logs[0]}`);
                 broadcastStateUpdate(socket.roomCode, room, undoMoveResult.uiEvent);
+                callback && callback({ success: true });
+                break;
+            }
+
+            case 'setDestination': {
+                if (playerIndex !== gs.currentPlayerIndex) {
+                    return callback && callback({ success: false, error: 'Not your turn' });
+                }
+                const destResult = aiActions.applySetDestination(gs, playerIndex, { city: action.city });
+                if (!destResult.success) {
+                    return callback && callback({ success: false, error: destResult.error });
+                }
+                console.log(`Room ${socket.roomCode}: ${destResult.logs[0]}`);
+                broadcastStateUpdate(socket.roomCode, room, destResult.uiEvent);
                 callback && callback({ success: true });
                 break;
             }

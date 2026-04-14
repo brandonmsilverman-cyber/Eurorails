@@ -680,6 +680,17 @@ module.exports = function(deps) {
         logs.push(moveMsg);
         gs.gameLog.push(moveMsg);
 
+        // Check if arrived at destination
+        if (player.trainDestination) {
+            const destCityMpId = gs.cityToMilepost[player.trainDestination];
+            if (destId === destCityMpId) {
+                const arrivalMsg = `Arrived at destination: ${player.trainDestination}`;
+                logs.push(arrivalMsg);
+                gs.gameLog.push(arrivalMsg);
+                player.trainDestination = null;
+            }
+        }
+
         gs.operateHistory.push({
             type: 'move', prevLocation, prevMovement, prevFerryState, prevCash, newlyPaidOwners, prevOwnerCash
         });
@@ -698,6 +709,9 @@ module.exports = function(deps) {
 
         const player = gs.players[playerIndex];
         const last = gs.operateHistory.pop();
+
+        // Clear train destination on undo
+        player.trainDestination = null;
 
         if (last.type === 'move') {
             player.trainLocation = last.prevLocation;
@@ -745,6 +759,42 @@ module.exports = function(deps) {
         return { success: false, error: 'Unknown undo type' };
     }
 
+    function applySetDestination(gs, playerIndex, { city }) {
+        const player = gs.players[playerIndex];
+
+        // Allow clearing destination at any time
+        if (city === null) {
+            player.trainDestination = null;
+            const msg = `${player.name} cleared destination`;
+            gs.gameLog.push(msg);
+            return { success: true, logs: [msg], uiEvent: { type: 'action', logs: [msg] } };
+        }
+
+        if (gs.phase !== 'operate') {
+            return { success: false, error: 'Can only set destination during operate phase' };
+        }
+
+        if (player.trainLocation === null) {
+            return { success: false, error: 'Train not deployed' };
+        }
+
+        // Validate city exists
+        const destMpId = gs.cityToMilepost[city];
+        if (!destMpId) {
+            return { success: false, error: 'City not found' };
+        }
+
+        // Check if already at destination
+        if (player.trainLocation === destMpId) {
+            return { success: false, error: 'Already at that city' };
+        }
+
+        player.trainDestination = city;
+        const msg = `${player.name} set destination: ${city}`;
+        gs.gameLog.push(msg);
+        return { success: true, logs: [msg], uiEvent: { type: 'action', logs: [msg] } };
+    }
+
     function applyBorrow(gs, playerIndex, { amount }) {
         const player = gs.players[playerIndex];
 
@@ -784,6 +834,7 @@ module.exports = function(deps) {
         applyUndoBuild,
         applyCommitMove,
         applyUndoMove,
-        applyBorrow
+        applyBorrow,
+        applySetDestination
     };
 };
