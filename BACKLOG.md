@@ -7,8 +7,15 @@ A running list of planned features, improvements, and known issues.
 ## Gameplay
 
 - [ ] **AI hints system** — "What would an expert do?" suggestion feature for learning players
+- [ ] **Train upgrade announcement modal** — Display a central modal when any player upgrades their train
 ## Reconnection Improvement
 - [ ] **localStorage fallback for tab closure recovery** — Add localStorage as a fallback so reconnection credentials survive tab closure and incognito mode, while preserving multi-tab play. Full plan in [`LOCALSTORAGE_FALLBACK_PLAN.md`](LOCALSTORAGE_FALLBACK_PLAN.md).
+
+---
+
+## Map
+
+- [ ] **Widen København–Göteborg land bridge** — Widen the landmass connecting the København landmass to the Göteborg landmass so that two tracks can be built through the corridor
 
 ---
 

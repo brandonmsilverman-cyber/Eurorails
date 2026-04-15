@@ -1,4 +1,5 @@
 [
+  {"message": "Skip unnecessary pickup stops when AI already carries the good", "date": "Apr 15, 2026"},
   {"message": "Allow any milepost on track as auto-move destination, not just cities", "date": "Apr 14, 2026"},
   {"message": "Add coin arc animation for trackage rights payments", "date": "Apr 14, 2026"},
   {"message": "Enforce major city build-out rule: max 2 builds from major cities per turn", "date": "Apr 14, 2026"},
@@ -17,6 +18,5 @@
   {"message": "Fix AI turn estimate: count positioning distance for cross-corridor plans", "date": "Apr 10, 2026"},
   {"message": "Fix AI triple same-card dedup and add network maturity upgrade gate", "date": "Apr 10, 2026"},
   {"message": "AI scoring improvements: time-budgeted batch pairing, single delivery penalty, dynamic discard thresholds, and timing instrumentation", "date": "Mar 28, 2026"},
-  {"message": "AI tempo improvements: net profit scoring, upgrade gate fix, and delivery density bonus", "date": "Mar 27, 2026"},
-  {"message": "Fix AI plan scoring: negative-ROI penalty, stronger overextension, network bonuses, and same-card batch bug", "date": "Mar 27, 2026"}
+  {"message": "AI tempo improvements: net profit scoring, upgrade gate fix, and delivery density bonus", "date": "Mar 27, 2026"}
 ]

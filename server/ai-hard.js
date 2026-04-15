@@ -1753,11 +1753,12 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
         if (aiState.endgameMode) {
             return buildEndgameCityConnections(gs, playerIndex, ctx);
         }
+        console.log(`[DEBUG computeBuildOrder] AI ${playerIndex}: no plan, returning []`);
         return [];
     }
 
     // §6.2.2: Rail closure (strike 123) — skip building
-    if (isRailClosureActive(gs, playerIndex)) return [];
+    if (isRailClosureActive(gs, playerIndex)) { console.log(`[DEBUG computeBuildOrder] AI ${playerIndex}: rail closure active`); return []; }
 
     const player = gs.players[playerIndex];
     const remainingBudget = 20 - gs.buildingThisTurn;
@@ -1820,10 +1821,13 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
         }
     }
 
+    console.log(`[DEBUG computeBuildOrder] AI ${playerIndex}: segments=${plan.segments.length}, buildSegmentLimit=${buildSegmentLimit}, spendLimit=${spendLimit}, majorCity=${majorCity}, buildPath=${plan.buildPath ? plan.buildPath.length : 'null'}`);
+
     // Walk through segments in visit-sequence order
     for (let segIdx = 0; segIdx < buildSegmentLimit; segIdx++) {
         const seg = plan.segments[segIdx];
-        if (seg.buildCost === 0) continue; // nothing to build
+        console.log(`[DEBUG computeBuildOrder] AI ${playerIndex}: seg[${segIdx}] from=${seg.from} to=${seg.to} buildCost=${seg.buildCost}`);
+        if (seg.buildCost === 0) { console.log(`[DEBUG computeBuildOrder] AI ${playerIndex}: seg[${segIdx}] skipped (buildCost=0)`); continue; }
 
         // Determine the mileposts for this segment from the buildPath.
         // The buildPath is the full route; we need to extract the sub-path
@@ -1832,11 +1836,12 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
         const toCity = seg.to;
         const fromId = fromCity ? ctx.cityToMilepost[fromCity] : null;
         const toId = toCity ? ctx.cityToMilepost[toCity] : null;
-        if (!toId) continue;
+        if (!toId) { console.log(`[DEBUG computeBuildOrder] AI ${playerIndex}: seg[${segIdx}] skipped (no toId for ${toCity})`); continue; }
 
         // Find the sub-path for this segment
         let segmentPath = extractSegmentPath(plan.buildPath, fromId, toId, ctx);
         if (!segmentPath || segmentPath.length < 2) {
+            console.log(`[DEBUG computeBuildOrder] AI ${playerIndex}: seg[${segIdx}] extractSegmentPath returned null/short, trying fallback. fromId=${fromId}, toId=${toId}, buildPath[0]=${plan.buildPath?.[0]}, buildPath[-1]=${plan.buildPath?.[plan.buildPath.length-1]}`);
             // Segment boundaries may be stale after rebuildPlanPath replaced
             // the buildPath (the rebuilt path starts from the train's current
             // location and may no longer contain the original fromCity).
@@ -1845,7 +1850,8 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
             if (plan.buildPath && plan.buildPath.length >= 2) {
                 segmentPath = extractSegmentPath(plan.buildPath, null, toId, ctx);
             }
-            if (!segmentPath || segmentPath.length < 2) continue;
+            if (!segmentPath || segmentPath.length < 2) { console.log(`[DEBUG computeBuildOrder] AI ${playerIndex}: seg[${segIdx}] fallback also failed, skipping`); continue; }
+            console.log(`[DEBUG computeBuildOrder] AI ${playerIndex}: seg[${segIdx}] fallback succeeded, len=${segmentPath.length}`);
         }
 
         // §4.2: Check if target is an unconnected major city — reverse build direction
@@ -1858,7 +1864,6 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
         // Walk the segment path, building unbuilt edges within budget
         let segBuildPath = [];
         let segBuildCost = 0;
-        let segMajorCities = 0;
         let segFerries = [];
         let started = false;
 
@@ -1914,26 +1919,25 @@ function computeBuildOrder(gs, playerIndex, ctx, plan, majorCity) {
             if (!mp1 || !mp2) continue;
             const edgeCost = getMileppostCost(mp1, mp2);
 
-            // Check major city limit
-            let newMajorCities = 0;
-            if (mp2.city && MAJOR_CITIES.includes(mp2.city.name)) {
-                newMajorCities = 1;
-            }
-            if (gs.majorCitiesThisTurn + totalMajorCities + segMajorCities + newMajorCities > 2) break;
-
             if (totalCost + segBuildCost + edgeCost > spendLimit) break;
 
             if (!started) {
                 if (!canStartBuildFrom(from, ownedMileposts, ctx)) continue;
+                // Check major city limit: building out of a major city counts as 1
+                const startMp = ctx.mileposts_by_id[from];
+                const startsFromMajor = startMp && startMp.city && MAJOR_CITIES.includes(startMp.city.name);
+                if (startsFromMajor && gs.majorCitiesThisTurn + totalMajorCities + 1 > 2) break;
                 segBuildPath.push(from);
                 started = true;
             }
             segBuildPath.push(to);
             segBuildCost += edgeCost;
-            segMajorCities += newMajorCities;
         }
 
+        console.log(`[DEBUG computeBuildOrder] AI ${playerIndex}: seg[${segIdx}] after walk: segBuildPath.len=${segBuildPath.length}, segBuildCost=${segBuildCost}, started=${started}`);
         if (segBuildPath.length >= 2 && segBuildCost > 0) {
+            const segStartMp = ctx.mileposts_by_id[segBuildPath[0]];
+            const segMajorCities = (segStartMp && segStartMp.city && MAJOR_CITIES.includes(segStartMp.city.name)) ? 1 : 0;
             allBuildPaths.push({
                 buildPath: segBuildPath,
                 buildCost: segBuildCost,
@@ -2041,7 +2045,6 @@ function buildEndgameCityConnections(gs, playerIndex, ctx, budgetOverride, usedM
 
         let segPath = [];
         let segCost = 0;
-        let segMajorCities = 0;
         let started = false;
 
         for (let i = 0; i < bestPath.path.length - 1; i++) {
@@ -2061,10 +2064,6 @@ function buildEndgameCityConnections(gs, playerIndex, ctx, budgetOverride, usedM
             if (!mp1 || !mp2) continue;
             const edgeCost = getMileppostCost(mp1, mp2);
 
-            let newMajorCities = 0;
-            if (mp2.city && MAJOR_CITIES.includes(mp2.city.name)) newMajorCities = 1;
-            if (gs.majorCitiesThisTurn + majorCityCount + segMajorCities + newMajorCities > 2) break;
-
             if (spent + segCost + edgeCost > spendLimit) break;
 
             if (!started) {
@@ -2073,10 +2072,12 @@ function buildEndgameCityConnections(gs, playerIndex, ctx, budgetOverride, usedM
             }
             segPath.push(to);
             segCost += edgeCost;
-            segMajorCities += newMajorCities;
         }
 
         if (segPath.length >= 2 && segCost > 0) {
+            // Each endgame connection starts from a major city, so always counts as 1
+            const segStartMp = ctx.mileposts_by_id[segPath[0]];
+            const segMajorCities = (segStartMp && segStartMp.city && MAJOR_CITIES.includes(segStartMp.city.name)) ? 1 : 0;
             actions.push({
                 type: 'commitBuild',
                 buildPath: segPath,
@@ -2187,6 +2188,21 @@ function planMovement(gs, playerIndex, ctx, plan) {
 
         const currentLoc = effectiveLocation();
 
+        // Skip pickup stops entirely if we already carry enough of this good
+        // (avoids wasting movement traveling to a pickup city unnecessarily)
+        if (nextStop.action === 'pickup') {
+            const neededForDeliveries = plan.visitSequence
+                .filter((s, idx) => idx >= simStopIndex && s.action === 'deliver' &&
+                        plan.deliveries[s.deliveryIndex].good === nextStop.good)
+                .length;
+            const alreadyCarried = carriedGoods.filter(g => g === nextStop.good).length;
+            if (alreadyCarried >= neededForDeliveries) {
+                plan.currentStopIndex++;
+                simStopIndex++;
+                continue;
+            }
+        }
+
         // §6.2.2: Skip movement toward strike-blocked cities
         if ((nextStop.action === 'pickup' || nextStop.action === 'deliver') &&
             isStrikeBlockingCity(gs, stopId)) {
@@ -2197,20 +2213,6 @@ function planMovement(gs, playerIndex, ctx, plan) {
         // Step 1: Am I at the next stop?
         if (currentLoc === stopId) {
             if (nextStop.action === 'pickup') {
-                // Skip pickup if we already carry enough of this good for remaining
-                // deliveries (prevents duplicate pickups when a plan is abandoned
-                // and re-selected at the same city, while still allowing multiple
-                // pickups of the same good for different deliveries in a batch)
-                const neededForDeliveries = plan.visitSequence
-                    .filter((s, idx) => idx >= simStopIndex && s.action === 'deliver' &&
-                            plan.deliveries[s.deliveryIndex].good === nextStop.good)
-                    .length;
-                const alreadyCarried = carriedGoods.filter(g => g === nextStop.good).length;
-                if (alreadyCarried >= neededForDeliveries) {
-                    plan.currentStopIndex++;
-                    simStopIndex++;
-                    continue;
-                }
                 // §3.4: Check supply before pickup
                 if (!isGoodAvailable(gs, nextStop.good, carriedGoods)) {
                     // Supply exhausted — abandon plan
