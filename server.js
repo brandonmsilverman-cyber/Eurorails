@@ -2415,7 +2415,7 @@ io.on('connection', (socket) => {
                 if (playerIndex !== gs.currentPlayerIndex) {
                     return callback && callback({ success: false, error: 'Not your turn' });
                 }
-                const destResult = aiActions.applySetDestination(gs, playerIndex, { city: action.city });
+                const destResult = aiActions.applySetDestination(gs, playerIndex, { milepostId: action.milepostId });
                 if (!destResult.success) {
                     return callback && callback({ success: false, error: destResult.error });
                 }

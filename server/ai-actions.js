@@ -10,6 +10,7 @@ const MAJOR_CITIES = gl.MAJOR_CITIES;
 const TRAIN_TYPES = gl.TRAIN_TYPES;
 const getFerryKey = gl.getFerryKey;
 const playerOwnsFerry = gl.playerOwnsFerry;
+const getPlayerOwnedMileposts = gl.getPlayerOwnedMileposts;
 
 module.exports = function(deps) {
     const {
@@ -706,9 +707,9 @@ module.exports = function(deps) {
 
         // Check if arrived at destination
         if (player.trainDestination) {
-            const destCityMpId = gs.cityToMilepost[player.trainDestination];
-            if (destId === destCityMpId) {
-                const arrivalMsg = `Arrived at destination: ${player.trainDestination}`;
+            if (destId === player.trainDestination) {
+                const destName = getCityAtMilepost(gs, destId) || "milepost";
+                const arrivalMsg = `Arrived at destination: ${destName}`;
                 logs.push(arrivalMsg);
                 gs.gameLog.push(arrivalMsg);
                 player.trainDestination = null;
@@ -783,11 +784,11 @@ module.exports = function(deps) {
         return { success: false, error: 'Unknown undo type' };
     }
 
-    function applySetDestination(gs, playerIndex, { city }) {
+    function applySetDestination(gs, playerIndex, { milepostId }) {
         const player = gs.players[playerIndex];
 
         // Allow clearing destination at any time
-        if (city === null) {
+        if (milepostId === null || milepostId === undefined) {
             player.trainDestination = null;
             const msg = `${player.name} cleared destination`;
             gs.gameLog.push(msg);
@@ -802,19 +803,38 @@ module.exports = function(deps) {
             return { success: false, error: 'Train not deployed' };
         }
 
-        // Validate city exists
-        const destMpId = gs.cityToMilepost[city];
-        if (!destMpId) {
-            return { success: false, error: 'City not found' };
+        // Validate milepost exists
+        if (!gs.mileposts_by_id[milepostId]) {
+            return { success: false, error: 'Milepost not found' };
         }
 
         // Check if already at destination
-        if (player.trainLocation === destMpId) {
-            return { success: false, error: 'Already at that city' };
+        if (player.trainLocation === milepostId) {
+            return { success: false, error: 'Already here' };
         }
 
-        player.trainDestination = city;
-        const msg = `${player.name} set destination: ${city}`;
+        // Verify milepost is on player's track or connected foreign track
+        const owned = getPlayerOwnedMileposts(gs, player.color);
+        if (!owned.has(milepostId)) {
+            // Check foreign track
+            let onForeignTrack = false;
+            for (const p of gs.players) {
+                if (p.color !== player.color) {
+                    const theirTrack = getPlayerOwnedMileposts(gs, p.color);
+                    if (theirTrack.has(milepostId)) {
+                        onForeignTrack = true;
+                        break;
+                    }
+                }
+            }
+            if (!onForeignTrack) {
+                return { success: false, error: 'Milepost is not on any track' };
+            }
+        }
+
+        player.trainDestination = milepostId;
+        const destName = getCityAtMilepost(gs, milepostId) || "milepost";
+        const msg = `${player.name} set destination: ${destName}`;
         gs.gameLog.push(msg);
         return { success: true, logs: [msg], uiEvent: { type: 'action', logs: [msg] } };
     }
