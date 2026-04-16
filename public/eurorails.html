@@ -5700,15 +5700,6 @@ function updateUI() {
             <div style="font-size: 12px; margin-bottom: 10px;">Click along your track to move train</div>`;
         const opCity = getPlayerCity(currentPlayer);
 
-        // Trackage rights toggle
-        const trActive = gameState.useTrackageRights;
-        operateHtml += `
-            <div style="margin-bottom:8px;">
-                <button onclick="toggleTrackageRights()" style="width:100%; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${trActive ? '#cc6600' : '#555'}; background:${trActive ? '#3d2200' : '#222'}; color:${trActive ? '#ffaa44' : '#888'}; cursor:pointer;">
-                    🚂 Suggest Foreign Track: ${trActive ? 'ON (4M/opponent)' : 'OFF'}${Object.keys(gameState.trackageRightsPaidThisTurn).length > 0 ? ' ✓ PAID' : ''}
-                </button>
-            </div>`;
-
         // Destination toggle / display
         if (currentPlayer.trainLocation !== null) {
             const dest = currentPlayer.trainDestination;
@@ -5737,6 +5728,15 @@ function updateUI() {
                     </div>`;
             }
         }
+
+        // Trackage rights toggle
+        const trActive = gameState.useTrackageRights;
+        operateHtml += `
+            <div style="margin-bottom:8px;">
+                <button onclick="toggleTrackageRights()" style="width:100%; padding:6px 4px; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid ${trActive ? '#cc6600' : '#555'}; background:${trActive ? '#3d2200' : '#222'}; color:${trActive ? '#ffaa44' : '#888'}; cursor:pointer;">
+                    🚂 Suggest Foreign Track: ${trActive ? 'ON (4M/opponent)' : 'OFF'}${Object.keys(gameState.trackageRightsPaidThisTurn).length > 0 ? ' ✓ PAID' : ''}
+                </button>
+            </div>`;
 
         // Carried goods section
         if (currentPlayer.loads.length > 0) {
