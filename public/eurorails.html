@@ -3594,342 +3594,7 @@ function drawMap() {
             }
         }
 
-        // SVG train silhouettes — realistic side profiles, visual progression
-        const trainSvgs = {
-            "Freight": `<svg class="train-bg" width="340" height="70" viewBox="0 0 340 70" fill="${pColor}">
-              <g transform="translate(340,0) scale(-1,1)">
-                <!-- SMALL STEAM LOCOMOTIVE (centered: x=55 to x=285, sum=340) -->
-                <!-- Cowcatcher -->
-                <path d="M55,54 L60,54 L60,46 L57,46 Z" fill-opacity="0.5"/>
-                <!-- Boiler -->
-                <rect x="60" y="32" width="40" height="22" rx="1"/>
-                <!-- Boiler top curvature -->
-                <ellipse cx="80" cy="32" rx="20" ry="4"/>
-                <!-- Smokebox front -->
-                <rect x="58" y="30" width="7" height="24" rx="1" fill-opacity="0.8"/>
-                <!-- Smokestack -->
-                <rect x="63" y="18" width="5" height="14"/>
-                <rect x="61" y="16" width="9" height="3" rx="1"/>
-                <!-- Steam dome -->
-                <ellipse cx="80" cy="28" rx="4" ry="3"/>
-                <!-- Sand dome -->
-                <ellipse cx="92" cy="29" rx="3" ry="2.5" fill-opacity="0.8"/>
-                <!-- Cab -->
-                <rect x="100" y="26" width="18" height="28" rx="1"/>
-                <rect x="103" y="30" width="5" height="7" fill-opacity="0.3"/>
-                <rect x="111" y="30" width="5" height="7" fill-opacity="0.3"/>
-                <!-- Cab roof -->
-                <rect x="98" y="24" width="22" height="3" rx="1" fill-opacity="0.7"/>
-                <!-- Running board -->
-                <rect x="60" y="52" width="40" height="1.5" fill-opacity="0.5"/>
-                <!-- Leading truck wheel (small) -->
-                <circle cx="65" cy="60" r="4"/><circle cx="65" cy="60" r="2.5" fill-opacity="0.3"/>
-                <!-- Driving wheels (large) -->
-                <circle cx="80" cy="60" r="6.5"/><circle cx="80" cy="60" r="4" fill-opacity="0.3"/>
-                <circle cx="94" cy="60" r="6.5"/><circle cx="94" cy="60" r="4" fill-opacity="0.3"/>
-                <!-- Trailing truck wheel (small) -->
-                <circle cx="113" cy="60" r="4"/><circle cx="113" cy="60" r="2.5" fill-opacity="0.3"/>
-                <!-- Coupling rod -->
-                <rect x="76" y="58" width="22" height="1.5" rx="1" fill-opacity="0.4"/>
-                <!-- TENDER -->
-                <rect x="120" y="48" width="4" height="4" rx="1" fill-opacity="0.5"/>
-                <rect x="124" y="32" width="24" height="22" rx="1"/>
-                <path d="M126,32 L146,32 L146,37 L126,37 Z" fill-opacity="0.3"/>
-                <circle cx="132" cy="60" r="4"/><circle cx="132" cy="60" r="2.5" fill-opacity="0.3"/>
-                <circle cx="142" cy="60" r="4"/><circle cx="142" cy="60" r="2.5" fill-opacity="0.3"/>
-                <!-- COUPLER -->
-                <rect x="149" y="48" width="6" height="2.5" rx="1" fill-opacity="0.4"/>
-                <!-- BOX CAR -->
-                <rect x="156" y="30" width="42" height="24" rx="1"/>
-                <rect x="170" y="32" width="14" height="20" fill-opacity="0.25"/>
-                <line x1="177" y1="32" x2="177" y2="52" stroke="${pColor}" stroke-width="0.6" opacity="0.4"/>
-                <line x1="166" y1="30" x2="166" y2="54" stroke="${pColor}" stroke-width="0.4" opacity="0.2"/>
-                <line x1="190" y1="30" x2="190" y2="54" stroke="${pColor}" stroke-width="0.4" opacity="0.2"/>
-                <rect x="157" y="28" width="40" height="2.5" rx="1" fill-opacity="0.6"/>
-                <rect x="156" y="54" width="42" height="2" fill-opacity="0.5"/>
-                <circle cx="167" cy="61" r="3.5"/><circle cx="167" cy="61" r="2" fill-opacity="0.3"/>
-                <circle cx="187" cy="61" r="3.5"/><circle cx="187" cy="61" r="2" fill-opacity="0.3"/>
-                <!-- COUPLER -->
-                <rect x="199" y="48" width="6" height="2.5" rx="1" fill-opacity="0.4"/>
-                <!-- GONDOLA CAR -->
-                <rect x="206" y="38" width="42" height="16" rx="1"/>
-                <path d="M208,38 L208,34 L246,34 L246,38" fill-opacity="0.5"/>
-                <rect x="216" y="34" width="1.5" height="20" fill-opacity="0.2"/>
-                <rect x="227" y="34" width="1.5" height="20" fill-opacity="0.2"/>
-                <rect x="238" y="34" width="1.5" height="20" fill-opacity="0.2"/>
-                <rect x="206" y="54" width="42" height="2" fill-opacity="0.5"/>
-                <circle cx="217" cy="61" r="3.5"/><circle cx="217" cy="61" r="2" fill-opacity="0.3"/>
-                <circle cx="237" cy="61" r="3.5"/><circle cx="237" cy="61" r="2" fill-opacity="0.3"/>
-                <!-- COUPLER -->
-                <rect x="249" y="48" width="6" height="2.5" rx="1" fill-opacity="0.4"/>
-                <!-- CABOOSE -->
-                <rect x="256" y="30" width="30" height="24" rx="1"/>
-                <rect x="254" y="22" width="34" height="10" rx="1" fill-opacity="0.7"/>
-                <rect x="262" y="24" width="5" height="5" fill-opacity="0.3"/>
-                <rect x="275" y="24" width="5" height="5" fill-opacity="0.3"/>
-                <rect x="259" y="36" width="5" height="6" fill-opacity="0.3"/>
-                <rect x="268" y="36" width="5" height="6" fill-opacity="0.3"/>
-                <rect x="277" y="36" width="5" height="6" fill-opacity="0.3"/>
-                <rect x="256" y="54" width="30" height="2" fill-opacity="0.5"/>
-                <rect x="284" y="34" width="3" height="20" fill-opacity="0.4"/>
-                <circle cx="265" cy="61" r="3.5"/><circle cx="265" cy="61" r="2" fill-opacity="0.3"/>
-                <circle cx="279" cy="61" r="3.5"/><circle cx="279" cy="61" r="2" fill-opacity="0.3"/>
-              </g>
-            </svg>`,
-            "Fast Freight": `<svg class="train-bg" width="340" height="70" viewBox="0 0 340 70" fill="${pColor}">
-              <g transform="translate(340,0) scale(-1,1)">
-                <!-- STREAMLINED COWL DIESEL -->
-                <path d="M2,50 L2,36 Q2,24 10,18 L30,14 L96,12 Q102,12 102,16 L102,50 Z"/>
-                <path d="M2,36 Q2,26 10,20 L18,16 L18,32 Q18,38 10,40 Z" fill-opacity="0.25"/>
-                <path d="M6,34 Q8,24 16,20 L20,18 L20,30 Z" fill-opacity="0.2"/>
-                <rect x="28" y="10" width="72" height="4" rx="2" fill-opacity="0.5"/>
-                <rect x="60" y="8" width="8" height="4" rx="2" fill-opacity="0.5"/>
-                <line x1="18" y1="28" x2="102" y2="28" stroke="${pColor}" stroke-width="0.6" opacity="0.15"/>
-                <line x1="10" y1="40" x2="102" y2="40" stroke="${pColor}" stroke-width="0.6" opacity="0.15"/>
-                <rect x="36" y="20" width="12" height="6" rx="1" fill-opacity="0.15"/>
-                <rect x="54" y="20" width="12" height="6" rx="1" fill-opacity="0.15"/>
-                <rect x="72" y="20" width="12" height="6" rx="1" fill-opacity="0.15"/>
-                <rect x="3" y="30" width="3" height="3" rx="1" fill-opacity="0.5"/>
-                <rect x="3" y="42" width="3" height="2" rx="1" fill-opacity="0.35"/>
-                <rect x="2" y="48" width="100" height="3" fill-opacity="0.4"/>
-                <rect x="24" y="51" width="54" height="5" rx="2" fill-opacity="0.4"/>
-                <rect x="10" y="55" width="24" height="4" rx="1" fill-opacity="0.4"/>
-                <circle cx="16" cy="62" r="5"/><circle cx="16" cy="62" r="3" fill-opacity="0.3"/>
-                <circle cx="30" cy="62" r="5"/><circle cx="30" cy="62" r="3" fill-opacity="0.3"/>
-                <rect x="68" y="55" width="24" height="4" rx="1" fill-opacity="0.4"/>
-                <circle cx="74" cy="62" r="5"/><circle cx="74" cy="62" r="3" fill-opacity="0.3"/>
-                <circle cx="88" cy="62" r="5"/><circle cx="88" cy="62" r="3" fill-opacity="0.3"/>
-                <!-- COUPLER -->
-                <rect x="104" y="46" width="6" height="3" rx="1" fill-opacity="0.5"/>
-                <!-- ENCLOSED WAGON 1 -->
-                <rect x="110" y="16" width="58" height="36" rx="2"/>
-                <path d="M112,16 Q139,10 166,16" fill-opacity="0.3"/>
-                <line x1="130" y1="16" x2="130" y2="52" stroke="${pColor}" stroke-width="0.4" opacity="0.15"/>
-                <line x1="148" y1="16" x2="148" y2="52" stroke="${pColor}" stroke-width="0.4" opacity="0.15"/>
-                <line x1="110" y1="40" x2="168" y2="40" stroke="${pColor}" stroke-width="0.7" opacity="0.15"/>
-                <rect x="132" y="22" width="14" height="28" fill-opacity="0.15"/>
-                <rect x="110" y="50" width="58" height="3" fill-opacity="0.4"/>
-                <rect x="114" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
-                <circle cx="120" cy="62" r="4.5"/><circle cx="120" cy="62" r="2.5" fill-opacity="0.3"/>
-                <circle cx="130" cy="62" r="4.5"/><circle cx="130" cy="62" r="2.5" fill-opacity="0.3"/>
-                <rect x="144" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
-                <circle cx="150" cy="62" r="4.5"/><circle cx="150" cy="62" r="2.5" fill-opacity="0.3"/>
-                <circle cx="160" cy="62" r="4.5"/><circle cx="160" cy="62" r="2.5" fill-opacity="0.3"/>
-                <!-- COUPLER -->
-                <rect x="170" y="46" width="6" height="3" rx="1" fill-opacity="0.5"/>
-                <!-- TANK CAR -->
-                <ellipse cx="208" cy="34" rx="28" ry="14"/>
-                <rect x="181" y="44" width="54" height="8" rx="2" fill-opacity="0.45"/>
-                <rect x="192" y="21" width="1.5" height="26" fill-opacity="0.15"/>
-                <rect x="208" y="20" width="1.5" height="28" fill-opacity="0.15"/>
-                <rect x="222" y="21" width="1.5" height="26" fill-opacity="0.15"/>
-                <ellipse cx="208" cy="21" rx="5" ry="2.5" fill-opacity="0.5"/>
-                <rect x="188" y="19" width="40" height="1" fill-opacity="0.2"/>
-                <rect x="181" y="52" width="54" height="2" fill-opacity="0.35"/>
-                <rect x="186" y="54" width="18" height="4" rx="1" fill-opacity="0.35"/>
-                <circle cx="192" cy="62" r="4.5"/><circle cx="192" cy="62" r="2.5" fill-opacity="0.3"/>
-                <circle cx="200" cy="62" r="4.5"/><circle cx="200" cy="62" r="2.5" fill-opacity="0.3"/>
-                <rect x="214" y="54" width="18" height="4" rx="1" fill-opacity="0.35"/>
-                <circle cx="220" cy="62" r="4.5"/><circle cx="220" cy="62" r="2.5" fill-opacity="0.3"/>
-                <circle cx="228" cy="62" r="4.5"/><circle cx="228" cy="62" r="2.5" fill-opacity="0.3"/>
-                <!-- COUPLER -->
-                <rect x="236" y="46" width="6" height="3" rx="1" fill-opacity="0.5"/>
-                <!-- ENCLOSED WAGON 2 -->
-                <rect x="242" y="16" width="58" height="36" rx="2"/>
-                <path d="M244,16 Q271,10 298,16" fill-opacity="0.3"/>
-                <line x1="262" y1="16" x2="262" y2="52" stroke="${pColor}" stroke-width="0.4" opacity="0.15"/>
-                <line x1="280" y1="16" x2="280" y2="52" stroke="${pColor}" stroke-width="0.4" opacity="0.15"/>
-                <line x1="242" y1="40" x2="300" y2="40" stroke="${pColor}" stroke-width="0.7" opacity="0.15"/>
-                <rect x="264" y="22" width="14" height="28" fill-opacity="0.15"/>
-                <rect x="242" y="50" width="58" height="3" fill-opacity="0.4"/>
-                <rect x="246" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
-                <circle cx="252" cy="62" r="4.5"/><circle cx="252" cy="62" r="2.5" fill-opacity="0.3"/>
-                <circle cx="262" cy="62" r="4.5"/><circle cx="262" cy="62" r="2.5" fill-opacity="0.3"/>
-                <rect x="276" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
-                <circle cx="282" cy="62" r="4.5"/><circle cx="282" cy="62" r="2.5" fill-opacity="0.3"/>
-                <circle cx="292" cy="62" r="4.5"/><circle cx="292" cy="62" r="2.5" fill-opacity="0.3"/>
-              </g>
-            </svg>`,
-            "Heavy Freight": `<svg class="train-bg" width="340" height="70" viewBox="0 0 340 70" fill="${pColor}">
-              <g transform="translate(340,0) scale(-1,1)">
-                <!-- MODERN DIESEL-ELECTRIC (GE AC6000 style) -->
-                <path d="M4,52 L4,30 Q4,18 12,16 L98,14 Q104,14 104,18 L104,52 Z"/>
-                <path d="M4,30 Q4,20 12,18 L20,16 L20,30 Z" fill-opacity="0.3"/>
-                <rect x="8" y="22" width="10" height="8" rx="1" fill-opacity="0.25"/>
-                <rect x="22" y="12" width="80" height="4" rx="1" fill-opacity="0.6"/>
-                <rect x="26" y="20" width="16" height="16" fill-opacity="0.2"/>
-                <rect x="26" y="22" width="16" height="1" fill-opacity="0.15"/>
-                <rect x="26" y="25" width="16" height="1" fill-opacity="0.15"/>
-                <rect x="26" y="28" width="16" height="1" fill-opacity="0.15"/>
-                <rect x="26" y="31" width="16" height="1" fill-opacity="0.15"/>
-                <rect x="46" y="20" width="14" height="14" fill-opacity="0.2"/>
-                <circle cx="53" cy="27" r="5" fill-opacity="0.15"/>
-                <rect x="64" y="8" width="6" height="6" rx="1" fill-opacity="0.6"/>
-                <rect x="64" y="20" width="34" height="18" fill-opacity="0.15"/>
-                <line x1="76" y1="20" x2="76" y2="38" stroke="${pColor}" stroke-width="0.5" opacity="0.2"/>
-                <line x1="88" y1="20" x2="88" y2="38" stroke="${pColor}" stroke-width="0.5" opacity="0.2"/>
-                <rect x="5" y="24" width="3" height="3" rx="1" fill-opacity="0.5"/>
-                <rect x="5" y="34" width="3" height="2" rx="1" fill-opacity="0.4"/>
-                <rect x="4" y="50" width="100" height="2" fill-opacity="0.35"/>
-                <rect x="22" y="52" width="60" height="7" rx="2" fill-opacity="0.45"/>
-                <rect x="8" y="57" width="30" height="4" rx="1" fill-opacity="0.4"/>
-                <circle cx="14" cy="63" r="5"/><circle cx="14" cy="63" r="3" fill-opacity="0.3"/>
-                <circle cx="24" cy="63" r="5"/><circle cx="24" cy="63" r="3" fill-opacity="0.3"/>
-                <circle cx="34" cy="63" r="5"/><circle cx="34" cy="63" r="3" fill-opacity="0.3"/>
-                <rect x="66" y="57" width="30" height="4" rx="1" fill-opacity="0.4"/>
-                <circle cx="72" cy="63" r="5"/><circle cx="72" cy="63" r="3" fill-opacity="0.3"/>
-                <circle cx="82" cy="63" r="5"/><circle cx="82" cy="63" r="3" fill-opacity="0.3"/>
-                <circle cx="92" cy="63" r="5"/><circle cx="92" cy="63" r="3" fill-opacity="0.3"/>
-                <!-- COUPLER -->
-                <rect x="106" y="48" width="6" height="3" rx="1" fill-opacity="0.5"/>
-                <!-- INTERMODAL WELL CAR -->
-                <rect x="112" y="50" width="60" height="4" rx="1" fill-opacity="0.6"/>
-                <path d="M116,36 L116,50 L168,50 L168,36 Z" fill-opacity="0.3"/>
-                <rect x="114" y="16" width="56" height="34" rx="1"/>
-                <rect x="114" y="16" width="56" height="3" fill-opacity="0.5"/>
-                <line x1="124" y1="19" x2="124" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
-                <line x1="134" y1="19" x2="134" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
-                <line x1="144" y1="19" x2="144" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
-                <line x1="154" y1="19" x2="154" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
-                <line x1="164" y1="19" x2="164" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
-                <rect x="138" y="28" width="14" height="22" fill-opacity="0.2"/>
-                <rect x="116" y="53" width="18" height="4" rx="1" fill-opacity="0.35"/>
-                <circle cx="122" cy="62" r="4.5"/><circle cx="122" cy="62" r="2.5" fill-opacity="0.3"/>
-                <circle cx="130" cy="62" r="4.5"/><circle cx="130" cy="62" r="2.5" fill-opacity="0.3"/>
-                <rect x="150" y="53" width="18" height="4" rx="1" fill-opacity="0.35"/>
-                <circle cx="156" cy="62" r="4.5"/><circle cx="156" cy="62" r="2.5" fill-opacity="0.3"/>
-                <circle cx="164" cy="62" r="4.5"/><circle cx="164" cy="62" r="2.5" fill-opacity="0.3"/>
-                <!-- COUPLER -->
-                <rect x="174" y="48" width="6" height="3" rx="1" fill-opacity="0.5"/>
-                <!-- SPINE CAR -->
-                <rect x="180" y="50" width="60" height="4" rx="1" fill-opacity="0.6"/>
-                <rect x="182" y="24" width="28" height="26" rx="1"/>
-                <line x1="190" y1="24" x2="190" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
-                <line x1="198" y1="24" x2="198" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
-                <rect x="182" y="24" width="28" height="2.5" fill-opacity="0.4"/>
-                <rect x="212" y="24" width="28" height="26" rx="1"/>
-                <line x1="220" y1="24" x2="220" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
-                <line x1="228" y1="24" x2="228" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
-                <rect x="212" y="24" width="28" height="2.5" fill-opacity="0.4"/>
-                <rect x="184" y="53" width="18" height="4" rx="1" fill-opacity="0.35"/>
-                <circle cx="190" cy="62" r="4.5"/><circle cx="190" cy="62" r="2.5" fill-opacity="0.3"/>
-                <circle cx="198" cy="62" r="4.5"/><circle cx="198" cy="62" r="2.5" fill-opacity="0.3"/>
-                <rect x="218" y="53" width="18" height="4" rx="1" fill-opacity="0.35"/>
-                <circle cx="224" cy="62" r="4.5"/><circle cx="224" cy="62" r="2.5" fill-opacity="0.3"/>
-                <circle cx="232" cy="62" r="4.5"/><circle cx="232" cy="62" r="2.5" fill-opacity="0.3"/>
-                <!-- COUPLER -->
-                <rect x="242" y="48" width="6" height="3" rx="1" fill-opacity="0.5"/>
-                <!-- AUTORACK -->
-                <rect x="248" y="16" width="60" height="38" rx="1"/>
-                <rect x="248" y="16" width="60" height="3" rx="1" fill-opacity="0.5"/>
-                <rect x="254" y="22" width="8" height="14" fill-opacity="0.15"/>
-                <rect x="266" y="22" width="8" height="14" fill-opacity="0.15"/>
-                <rect x="278" y="22" width="8" height="14" fill-opacity="0.15"/>
-                <rect x="290" y="22" width="8" height="14" fill-opacity="0.15"/>
-                <rect x="254" y="38" width="8" height="10" fill-opacity="0.15"/>
-                <rect x="266" y="38" width="8" height="10" fill-opacity="0.15"/>
-                <rect x="278" y="38" width="8" height="10" fill-opacity="0.15"/>
-                <rect x="290" y="38" width="8" height="10" fill-opacity="0.15"/>
-                <rect x="248" y="52" width="60" height="3" fill-opacity="0.5"/>
-                <rect x="252" y="55" width="20" height="4" rx="1" fill-opacity="0.35"/>
-                <circle cx="258" cy="62" r="4.5"/><circle cx="258" cy="62" r="2.5" fill-opacity="0.3"/>
-                <circle cx="268" cy="62" r="4.5"/><circle cx="268" cy="62" r="2.5" fill-opacity="0.3"/>
-                <rect x="282" y="55" width="20" height="4" rx="1" fill-opacity="0.35"/>
-                <circle cx="288" cy="62" r="4.5"/><circle cx="288" cy="62" r="2.5" fill-opacity="0.3"/>
-                <circle cx="298" cy="62" r="4.5"/><circle cx="298" cy="62" r="2.5" fill-opacity="0.3"/>
-              </g>
-            </svg>`,
-            "Superfreight": `<svg class="train-bg" width="345" height="70" viewBox="-4 -6 354 76" fill="${pColor}">
-              <g transform="translate(346,0) scale(-1,1)">
-                <!-- HIGH-SPEED ELECTRIC (TGV/ICE style) -->
-                <path d="M0,48 Q0,40 4,34 Q10,22 22,16 L40,12 L108,10 Q114,10 116,14 L116,52 L6,52 Q0,52 0,48 Z"/>
-                <path d="M6,40 Q10,26 22,20 L28,18 L28,36 Q28,40 24,42 Z" fill-opacity="0.25"/>
-                <rect x="32" y="16" width="10" height="8" rx="1" fill-opacity="0.2"/>
-                <rect x="46" y="14" width="10" height="8" rx="1" fill-opacity="0.2"/>
-                <rect x="60" y="12" width="50" height="6" rx="2" fill-opacity="0.5"/>
-                <rect x="66" y="22" width="40" height="1.2" fill-opacity="0.12"/>
-                <rect x="66" y="26" width="40" height="1.2" fill-opacity="0.12"/>
-                <rect x="66" y="30" width="40" height="1.2" fill-opacity="0.12"/>
-                <line x1="78" y1="10" x2="84" y2="0" stroke="${pColor}" stroke-width="1.5"/>
-                <line x1="84" y1="0" x2="96" y2="-3" stroke="${pColor}" stroke-width="2"/>
-                <line x1="90" y1="10" x2="84" y2="0" stroke="${pColor}" stroke-width="1.2"/>
-                <rect x="2" y="38" width="4" height="3" rx="1" fill-opacity="0.5"/>
-                <line x1="6" y1="42" x2="116" y2="42" stroke="${pColor}" stroke-width="0.8" opacity="0.15"/>
-                <rect x="2" y="50" width="114" height="3" fill-opacity="0.4"/>
-                <rect x="14" y="52" width="24" height="4" rx="1" fill-opacity="0.4"/>
-                <circle cx="20" cy="60" r="5"/><circle cx="20" cy="60" r="3" fill-opacity="0.3"/>
-                <circle cx="34" cy="60" r="5"/><circle cx="34" cy="60" r="3" fill-opacity="0.3"/>
-                <rect x="80" y="52" width="24" height="4" rx="1" fill-opacity="0.4"/>
-                <circle cx="86" cy="60" r="5"/><circle cx="86" cy="60" r="3" fill-opacity="0.3"/>
-                <circle cx="100" cy="60" r="5"/><circle cx="100" cy="60" r="3" fill-opacity="0.3"/>
-                <!-- ARTICULATED JOINT -->
-                <rect x="116" y="12" width="5" height="42" fill-opacity="0.3"/>
-                <line x1="118.5" y1="12" x2="118.5" y2="54" stroke="${pColor}" stroke-width="0.5" opacity="0.3"/>
-                <!-- CAR 1 -->
-                <rect x="121" y="10" width="54" height="44" rx="2"/>
-                <rect x="121" y="10" width="54" height="4" rx="1" fill-opacity="0.4"/>
-                <rect x="127" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
-                <rect x="139" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
-                <rect x="151" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
-                <rect x="163" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
-                <line x1="121" y1="42" x2="175" y2="42" stroke="${pColor}" stroke-width="0.8" opacity="0.15"/>
-                <rect x="121" y="52" width="54" height="2" fill-opacity="0.35"/>
-                <rect x="134" y="53" width="20" height="4" rx="1" fill-opacity="0.4"/>
-                <circle cx="140" cy="60" r="4.5"/><circle cx="140" cy="60" r="2.5" fill-opacity="0.3"/>
-                <circle cx="150" cy="60" r="4.5"/><circle cx="150" cy="60" r="2.5" fill-opacity="0.3"/>
-                <!-- ARTICULATED JOINT -->
-                <rect x="175" y="12" width="5" height="42" fill-opacity="0.3"/>
-                <line x1="177.5" y1="12" x2="177.5" y2="54" stroke="${pColor}" stroke-width="0.5" opacity="0.3"/>
-                <!-- CAR 2 -->
-                <rect x="180" y="10" width="54" height="44" rx="2"/>
-                <rect x="180" y="10" width="54" height="4" rx="1" fill-opacity="0.4"/>
-                <rect x="186" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
-                <rect x="198" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
-                <rect x="210" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
-                <rect x="222" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
-                <line x1="180" y1="42" x2="234" y2="42" stroke="${pColor}" stroke-width="0.8" opacity="0.15"/>
-                <rect x="180" y="52" width="54" height="2" fill-opacity="0.35"/>
-                <rect x="193" y="53" width="20" height="4" rx="1" fill-opacity="0.4"/>
-                <circle cx="199" cy="60" r="4.5"/><circle cx="199" cy="60" r="2.5" fill-opacity="0.3"/>
-                <circle cx="209" cy="60" r="4.5"/><circle cx="209" cy="60" r="2.5" fill-opacity="0.3"/>
-                <!-- ARTICULATED JOINT -->
-                <rect x="234" y="12" width="5" height="42" fill-opacity="0.3"/>
-                <line x1="236.5" y1="12" x2="236.5" y2="54" stroke="${pColor}" stroke-width="0.5" opacity="0.3"/>
-                <!-- CAR 3 -->
-                <rect x="239" y="10" width="54" height="44" rx="2"/>
-                <rect x="239" y="10" width="54" height="4" rx="1" fill-opacity="0.4"/>
-                <rect x="245" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
-                <rect x="257" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
-                <rect x="269" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
-                <rect x="281" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
-                <line x1="239" y1="42" x2="293" y2="42" stroke="${pColor}" stroke-width="0.8" opacity="0.15"/>
-                <rect x="239" y="52" width="54" height="2" fill-opacity="0.35"/>
-                <rect x="252" y="53" width="20" height="4" rx="1" fill-opacity="0.4"/>
-                <circle cx="258" cy="60" r="4.5"/><circle cx="258" cy="60" r="2.5" fill-opacity="0.3"/>
-                <circle cx="268" cy="60" r="4.5"/><circle cx="268" cy="60" r="2.5" fill-opacity="0.3"/>
-                <!-- ARTICULATED JOINT -->
-                <rect x="293" y="12" width="5" height="42" fill-opacity="0.3"/>
-                <line x1="295.5" y1="12" x2="295.5" y2="54" stroke="${pColor}" stroke-width="0.5" opacity="0.3"/>
-                <!-- REAR POWER CAR -->
-                <path d="M298,10 L336,10 Q342,10 344,18 L346,30 L346,44 Q346,52 340,52 L298,52 Z"/>
-                <rect x="298" y="10" width="42" height="4" rx="1" fill-opacity="0.4"/>
-                <rect x="302" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
-                <rect x="314" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
-                <rect x="326" y="14" width="12" height="6" rx="2" fill-opacity="0.4"/>
-                <line x1="330" y1="10" x2="336" y2="0" stroke="${pColor}" stroke-width="1.5"/>
-                <line x1="336" y1="0" x2="344" y2="-2" stroke="${pColor}" stroke-width="2"/>
-                <line x1="340" y1="10" x2="336" y2="0" stroke="${pColor}" stroke-width="1.2"/>
-                <line x1="298" y1="42" x2="344" y2="42" stroke="${pColor}" stroke-width="0.8" opacity="0.15"/>
-                <rect x="343" y="36" width="3" height="3" rx="1" fill-opacity="0.4"/>
-                <rect x="298" y="50" width="46" height="3" fill-opacity="0.4"/>
-                <rect x="304" y="52" width="24" height="4" rx="1" fill-opacity="0.4"/>
-                <circle cx="310" cy="60" r="5"/><circle cx="310" cy="60" r="3" fill-opacity="0.3"/>
-                <circle cx="324" cy="60" r="5"/><circle cx="324" cy="60" r="3" fill-opacity="0.3"/>
-              </g>
-            </svg>`
-        };
-
-        const trainSvg = trainSvgs[myPlayer.trainType] || trainSvgs["Freight"];
+        const trainSvg = getTrainSvg(myPlayer.trainType, pColor);
 
         // Build status row: ECU + phase/waiting indicator
         const myPlayerIndex = gameState.players.indexOf(myPlayer);
@@ -4738,6 +4403,459 @@ function chargeTrackageRightsIfNeeded(currentPlayer, path, foreignSegments, actu
         gameState.trackageRightsPaidThisTurn[ownerColor] = true;
     }
     return { ok: true, newlyPaidOwners: unpaid };
+}
+
+// SVG train silhouettes — realistic side profiles, visual progression.
+// Returns the SVG markup string for the given train type, filled with pColor.
+function getTrainSvg(trainType, pColor) {
+    const trainSvgs = {
+        "Freight": `<svg class="train-bg" width="340" height="70" viewBox="0 0 340 70" fill="${pColor}">
+          <g transform="translate(340,0) scale(-1,1)">
+            <!-- SMALL STEAM LOCOMOTIVE (centered: x=55 to x=285, sum=340) -->
+            <!-- Cowcatcher -->
+            <path d="M55,54 L60,54 L60,46 L57,46 Z" fill-opacity="0.5"/>
+            <!-- Boiler -->
+            <rect x="60" y="32" width="40" height="22" rx="1"/>
+            <!-- Boiler top curvature -->
+            <ellipse cx="80" cy="32" rx="20" ry="4"/>
+            <!-- Smokebox front -->
+            <rect x="58" y="30" width="7" height="24" rx="1" fill-opacity="0.8"/>
+            <!-- Smokestack -->
+            <rect x="63" y="18" width="5" height="14"/>
+            <rect x="61" y="16" width="9" height="3" rx="1"/>
+            <!-- Steam dome -->
+            <ellipse cx="80" cy="28" rx="4" ry="3"/>
+            <!-- Sand dome -->
+            <ellipse cx="92" cy="29" rx="3" ry="2.5" fill-opacity="0.8"/>
+            <!-- Cab -->
+            <rect x="100" y="26" width="18" height="28" rx="1"/>
+            <rect x="103" y="30" width="5" height="7" fill-opacity="0.3"/>
+            <rect x="111" y="30" width="5" height="7" fill-opacity="0.3"/>
+            <!-- Cab roof -->
+            <rect x="98" y="24" width="22" height="3" rx="1" fill-opacity="0.7"/>
+            <!-- Running board -->
+            <rect x="60" y="52" width="40" height="1.5" fill-opacity="0.5"/>
+            <!-- Leading truck wheel (small) -->
+            <circle cx="65" cy="60" r="4"/><circle cx="65" cy="60" r="2.5" fill-opacity="0.3"/>
+            <!-- Driving wheels (large) -->
+            <circle cx="80" cy="60" r="6.5"/><circle cx="80" cy="60" r="4" fill-opacity="0.3"/>
+            <circle cx="94" cy="60" r="6.5"/><circle cx="94" cy="60" r="4" fill-opacity="0.3"/>
+            <!-- Trailing truck wheel (small) -->
+            <circle cx="113" cy="60" r="4"/><circle cx="113" cy="60" r="2.5" fill-opacity="0.3"/>
+            <!-- Coupling rod -->
+            <rect x="76" y="58" width="22" height="1.5" rx="1" fill-opacity="0.4"/>
+            <!-- TENDER -->
+            <rect x="120" y="48" width="4" height="4" rx="1" fill-opacity="0.5"/>
+            <rect x="124" y="32" width="24" height="22" rx="1"/>
+            <path d="M126,32 L146,32 L146,37 L126,37 Z" fill-opacity="0.3"/>
+            <circle cx="132" cy="60" r="4"/><circle cx="132" cy="60" r="2.5" fill-opacity="0.3"/>
+            <circle cx="142" cy="60" r="4"/><circle cx="142" cy="60" r="2.5" fill-opacity="0.3"/>
+            <!-- COUPLER -->
+            <rect x="149" y="48" width="6" height="2.5" rx="1" fill-opacity="0.4"/>
+            <!-- BOX CAR -->
+            <rect x="156" y="30" width="42" height="24" rx="1"/>
+            <rect x="170" y="32" width="14" height="20" fill-opacity="0.25"/>
+            <line x1="177" y1="32" x2="177" y2="52" stroke="${pColor}" stroke-width="0.6" opacity="0.4"/>
+            <line x1="166" y1="30" x2="166" y2="54" stroke="${pColor}" stroke-width="0.4" opacity="0.2"/>
+            <line x1="190" y1="30" x2="190" y2="54" stroke="${pColor}" stroke-width="0.4" opacity="0.2"/>
+            <rect x="157" y="28" width="40" height="2.5" rx="1" fill-opacity="0.6"/>
+            <rect x="156" y="54" width="42" height="2" fill-opacity="0.5"/>
+            <circle cx="167" cy="61" r="3.5"/><circle cx="167" cy="61" r="2" fill-opacity="0.3"/>
+            <circle cx="187" cy="61" r="3.5"/><circle cx="187" cy="61" r="2" fill-opacity="0.3"/>
+            <!-- COUPLER -->
+            <rect x="199" y="48" width="6" height="2.5" rx="1" fill-opacity="0.4"/>
+            <!-- GONDOLA CAR -->
+            <rect x="206" y="38" width="42" height="16" rx="1"/>
+            <path d="M208,38 L208,34 L246,34 L246,38" fill-opacity="0.5"/>
+            <rect x="216" y="34" width="1.5" height="20" fill-opacity="0.2"/>
+            <rect x="227" y="34" width="1.5" height="20" fill-opacity="0.2"/>
+            <rect x="238" y="34" width="1.5" height="20" fill-opacity="0.2"/>
+            <rect x="206" y="54" width="42" height="2" fill-opacity="0.5"/>
+            <circle cx="217" cy="61" r="3.5"/><circle cx="217" cy="61" r="2" fill-opacity="0.3"/>
+            <circle cx="237" cy="61" r="3.5"/><circle cx="237" cy="61" r="2" fill-opacity="0.3"/>
+            <!-- COUPLER -->
+            <rect x="249" y="48" width="6" height="2.5" rx="1" fill-opacity="0.4"/>
+            <!-- CABOOSE -->
+            <rect x="256" y="30" width="30" height="24" rx="1"/>
+            <rect x="254" y="22" width="34" height="10" rx="1" fill-opacity="0.7"/>
+            <rect x="262" y="24" width="5" height="5" fill-opacity="0.3"/>
+            <rect x="275" y="24" width="5" height="5" fill-opacity="0.3"/>
+            <rect x="259" y="36" width="5" height="6" fill-opacity="0.3"/>
+            <rect x="268" y="36" width="5" height="6" fill-opacity="0.3"/>
+            <rect x="277" y="36" width="5" height="6" fill-opacity="0.3"/>
+            <rect x="256" y="54" width="30" height="2" fill-opacity="0.5"/>
+            <rect x="284" y="34" width="3" height="20" fill-opacity="0.4"/>
+            <circle cx="265" cy="61" r="3.5"/><circle cx="265" cy="61" r="2" fill-opacity="0.3"/>
+            <circle cx="279" cy="61" r="3.5"/><circle cx="279" cy="61" r="2" fill-opacity="0.3"/>
+          </g>
+        </svg>`,
+        "Fast Freight": `<svg class="train-bg" width="340" height="70" viewBox="0 0 340 70" fill="${pColor}">
+          <g transform="translate(340,0) scale(-1,1)">
+            <!-- STREAMLINED COWL DIESEL -->
+            <path d="M2,50 L2,36 Q2,24 10,18 L30,14 L96,12 Q102,12 102,16 L102,50 Z"/>
+            <path d="M2,36 Q2,26 10,20 L18,16 L18,32 Q18,38 10,40 Z" fill-opacity="0.25"/>
+            <path d="M6,34 Q8,24 16,20 L20,18 L20,30 Z" fill-opacity="0.2"/>
+            <rect x="28" y="10" width="72" height="4" rx="2" fill-opacity="0.5"/>
+            <rect x="60" y="8" width="8" height="4" rx="2" fill-opacity="0.5"/>
+            <line x1="18" y1="28" x2="102" y2="28" stroke="${pColor}" stroke-width="0.6" opacity="0.15"/>
+            <line x1="10" y1="40" x2="102" y2="40" stroke="${pColor}" stroke-width="0.6" opacity="0.15"/>
+            <rect x="36" y="20" width="12" height="6" rx="1" fill-opacity="0.15"/>
+            <rect x="54" y="20" width="12" height="6" rx="1" fill-opacity="0.15"/>
+            <rect x="72" y="20" width="12" height="6" rx="1" fill-opacity="0.15"/>
+            <rect x="3" y="30" width="3" height="3" rx="1" fill-opacity="0.5"/>
+            <rect x="3" y="42" width="3" height="2" rx="1" fill-opacity="0.35"/>
+            <rect x="2" y="48" width="100" height="3" fill-opacity="0.4"/>
+            <rect x="24" y="51" width="54" height="5" rx="2" fill-opacity="0.4"/>
+            <rect x="10" y="55" width="24" height="4" rx="1" fill-opacity="0.4"/>
+            <circle cx="16" cy="62" r="5"/><circle cx="16" cy="62" r="3" fill-opacity="0.3"/>
+            <circle cx="30" cy="62" r="5"/><circle cx="30" cy="62" r="3" fill-opacity="0.3"/>
+            <rect x="68" y="55" width="24" height="4" rx="1" fill-opacity="0.4"/>
+            <circle cx="74" cy="62" r="5"/><circle cx="74" cy="62" r="3" fill-opacity="0.3"/>
+            <circle cx="88" cy="62" r="5"/><circle cx="88" cy="62" r="3" fill-opacity="0.3"/>
+            <!-- COUPLER -->
+            <rect x="104" y="46" width="6" height="3" rx="1" fill-opacity="0.5"/>
+            <!-- ENCLOSED WAGON 1 -->
+            <rect x="110" y="16" width="58" height="36" rx="2"/>
+            <path d="M112,16 Q139,10 166,16" fill-opacity="0.3"/>
+            <line x1="130" y1="16" x2="130" y2="52" stroke="${pColor}" stroke-width="0.4" opacity="0.15"/>
+            <line x1="148" y1="16" x2="148" y2="52" stroke="${pColor}" stroke-width="0.4" opacity="0.15"/>
+            <line x1="110" y1="40" x2="168" y2="40" stroke="${pColor}" stroke-width="0.7" opacity="0.15"/>
+            <rect x="132" y="22" width="14" height="28" fill-opacity="0.15"/>
+            <rect x="110" y="50" width="58" height="3" fill-opacity="0.4"/>
+            <rect x="114" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
+            <circle cx="120" cy="62" r="4.5"/><circle cx="120" cy="62" r="2.5" fill-opacity="0.3"/>
+            <circle cx="130" cy="62" r="4.5"/><circle cx="130" cy="62" r="2.5" fill-opacity="0.3"/>
+            <rect x="144" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
+            <circle cx="150" cy="62" r="4.5"/><circle cx="150" cy="62" r="2.5" fill-opacity="0.3"/>
+            <circle cx="160" cy="62" r="4.5"/><circle cx="160" cy="62" r="2.5" fill-opacity="0.3"/>
+            <!-- COUPLER -->
+            <rect x="170" y="46" width="6" height="3" rx="1" fill-opacity="0.5"/>
+            <!-- TANK CAR -->
+            <ellipse cx="208" cy="34" rx="28" ry="14"/>
+            <rect x="181" y="44" width="54" height="8" rx="2" fill-opacity="0.45"/>
+            <rect x="192" y="21" width="1.5" height="26" fill-opacity="0.15"/>
+            <rect x="208" y="20" width="1.5" height="28" fill-opacity="0.15"/>
+            <rect x="222" y="21" width="1.5" height="26" fill-opacity="0.15"/>
+            <ellipse cx="208" cy="21" rx="5" ry="2.5" fill-opacity="0.5"/>
+            <rect x="188" y="19" width="40" height="1" fill-opacity="0.2"/>
+            <rect x="181" y="52" width="54" height="2" fill-opacity="0.35"/>
+            <rect x="186" y="54" width="18" height="4" rx="1" fill-opacity="0.35"/>
+            <circle cx="192" cy="62" r="4.5"/><circle cx="192" cy="62" r="2.5" fill-opacity="0.3"/>
+            <circle cx="200" cy="62" r="4.5"/><circle cx="200" cy="62" r="2.5" fill-opacity="0.3"/>
+            <rect x="214" y="54" width="18" height="4" rx="1" fill-opacity="0.35"/>
+            <circle cx="220" cy="62" r="4.5"/><circle cx="220" cy="62" r="2.5" fill-opacity="0.3"/>
+            <circle cx="228" cy="62" r="4.5"/><circle cx="228" cy="62" r="2.5" fill-opacity="0.3"/>
+            <!-- COUPLER -->
+            <rect x="236" y="46" width="6" height="3" rx="1" fill-opacity="0.5"/>
+            <!-- ENCLOSED WAGON 2 -->
+            <rect x="242" y="16" width="58" height="36" rx="2"/>
+            <path d="M244,16 Q271,10 298,16" fill-opacity="0.3"/>
+            <line x1="262" y1="16" x2="262" y2="52" stroke="${pColor}" stroke-width="0.4" opacity="0.15"/>
+            <line x1="280" y1="16" x2="280" y2="52" stroke="${pColor}" stroke-width="0.4" opacity="0.15"/>
+            <line x1="242" y1="40" x2="300" y2="40" stroke="${pColor}" stroke-width="0.7" opacity="0.15"/>
+            <rect x="264" y="22" width="14" height="28" fill-opacity="0.15"/>
+            <rect x="242" y="50" width="58" height="3" fill-opacity="0.4"/>
+            <rect x="246" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
+            <circle cx="252" cy="62" r="4.5"/><circle cx="252" cy="62" r="2.5" fill-opacity="0.3"/>
+            <circle cx="262" cy="62" r="4.5"/><circle cx="262" cy="62" r="2.5" fill-opacity="0.3"/>
+            <rect x="276" y="53" width="20" height="4" rx="1" fill-opacity="0.35"/>
+            <circle cx="282" cy="62" r="4.5"/><circle cx="282" cy="62" r="2.5" fill-opacity="0.3"/>
+            <circle cx="292" cy="62" r="4.5"/><circle cx="292" cy="62" r="2.5" fill-opacity="0.3"/>
+          </g>
+        </svg>`,
+        "Heavy Freight": `<svg class="train-bg" width="340" height="70" viewBox="0 0 340 70" fill="${pColor}">
+          <g transform="translate(340,0) scale(-1,1)">
+            <!-- MODERN DIESEL-ELECTRIC (GE AC6000 style) -->
+            <path d="M4,52 L4,30 Q4,18 12,16 L98,14 Q104,14 104,18 L104,52 Z"/>
+            <path d="M4,30 Q4,20 12,18 L20,16 L20,30 Z" fill-opacity="0.3"/>
+            <rect x="8" y="22" width="10" height="8" rx="1" fill-opacity="0.25"/>
+            <rect x="22" y="12" width="80" height="4" rx="1" fill-opacity="0.6"/>
+            <rect x="26" y="20" width="16" height="16" fill-opacity="0.2"/>
+            <rect x="26" y="22" width="16" height="1" fill-opacity="0.15"/>
+            <rect x="26" y="25" width="16" height="1" fill-opacity="0.15"/>
+            <rect x="26" y="28" width="16" height="1" fill-opacity="0.15"/>
+            <rect x="26" y="31" width="16" height="1" fill-opacity="0.15"/>
+            <rect x="46" y="20" width="14" height="14" fill-opacity="0.2"/>
+            <circle cx="53" cy="27" r="5" fill-opacity="0.15"/>
+            <rect x="64" y="8" width="6" height="6" rx="1" fill-opacity="0.6"/>
+            <rect x="64" y="20" width="34" height="18" fill-opacity="0.15"/>
+            <line x1="76" y1="20" x2="76" y2="38" stroke="${pColor}" stroke-width="0.5" opacity="0.2"/>
+            <line x1="88" y1="20" x2="88" y2="38" stroke="${pColor}" stroke-width="0.5" opacity="0.2"/>
+            <rect x="5" y="24" width="3" height="3" rx="1" fill-opacity="0.5"/>
+            <rect x="5" y="34" width="3" height="2" rx="1" fill-opacity="0.4"/>
+            <rect x="4" y="50" width="100" height="2" fill-opacity="0.35"/>
+            <rect x="22" y="52" width="60" height="7" rx="2" fill-opacity="0.45"/>
+            <rect x="8" y="57" width="30" height="4" rx="1" fill-opacity="0.4"/>
+            <circle cx="14" cy="63" r="5"/><circle cx="14" cy="63" r="3" fill-opacity="0.3"/>
+            <circle cx="24" cy="63" r="5"/><circle cx="24" cy="63" r="3" fill-opacity="0.3"/>
+            <circle cx="34" cy="63" r="5"/><circle cx="34" cy="63" r="3" fill-opacity="0.3"/>
+            <rect x="66" y="57" width="30" height="4" rx="1" fill-opacity="0.4"/>
+            <circle cx="72" cy="63" r="5"/><circle cx="72" cy="63" r="3" fill-opacity="0.3"/>
+            <circle cx="82" cy="63" r="5"/><circle cx="82" cy="63" r="3" fill-opacity="0.3"/>
+            <circle cx="92" cy="63" r="5"/><circle cx="92" cy="63" r="3" fill-opacity="0.3"/>
+            <!-- COUPLER -->
+            <rect x="106" y="48" width="6" height="3" rx="1" fill-opacity="0.5"/>
+            <!-- INTERMODAL WELL CAR -->
+            <rect x="112" y="50" width="60" height="4" rx="1" fill-opacity="0.6"/>
+            <path d="M116,36 L116,50 L168,50 L168,36 Z" fill-opacity="0.3"/>
+            <rect x="114" y="16" width="56" height="34" rx="1"/>
+            <rect x="114" y="16" width="56" height="3" fill-opacity="0.5"/>
+            <line x1="124" y1="19" x2="124" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
+            <line x1="134" y1="19" x2="134" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
+            <line x1="144" y1="19" x2="144" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
+            <line x1="154" y1="19" x2="154" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
+            <line x1="164" y1="19" x2="164" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
+            <rect x="138" y="28" width="14" height="22" fill-opacity="0.2"/>
+            <rect x="116" y="53" width="18" height="4" rx="1" fill-opacity="0.35"/>
+            <circle cx="122" cy="62" r="4.5"/><circle cx="122" cy="62" r="2.5" fill-opacity="0.3"/>
+            <circle cx="130" cy="62" r="4.5"/><circle cx="130" cy="62" r="2.5" fill-opacity="0.3"/>
+            <rect x="150" y="53" width="18" height="4" rx="1" fill-opacity="0.35"/>
+            <circle cx="156" cy="62" r="4.5"/><circle cx="156" cy="62" r="2.5" fill-opacity="0.3"/>
+            <circle cx="164" cy="62" r="4.5"/><circle cx="164" cy="62" r="2.5" fill-opacity="0.3"/>
+            <!-- COUPLER -->
+            <rect x="174" y="48" width="6" height="3" rx="1" fill-opacity="0.5"/>
+            <!-- SPINE CAR -->
+            <rect x="180" y="50" width="60" height="4" rx="1" fill-opacity="0.6"/>
+            <rect x="182" y="24" width="28" height="26" rx="1"/>
+            <line x1="190" y1="24" x2="190" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
+            <line x1="198" y1="24" x2="198" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
+            <rect x="182" y="24" width="28" height="2.5" fill-opacity="0.4"/>
+            <rect x="212" y="24" width="28" height="26" rx="1"/>
+            <line x1="220" y1="24" x2="220" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
+            <line x1="228" y1="24" x2="228" y2="50" stroke="${pColor}" stroke-width="0.5" opacity="0.15"/>
+            <rect x="212" y="24" width="28" height="2.5" fill-opacity="0.4"/>
+            <rect x="184" y="53" width="18" height="4" rx="1" fill-opacity="0.35"/>
+            <circle cx="190" cy="62" r="4.5"/><circle cx="190" cy="62" r="2.5" fill-opacity="0.3"/>
+            <circle cx="198" cy="62" r="4.5"/><circle cx="198" cy="62" r="2.5" fill-opacity="0.3"/>
+            <rect x="218" y="53" width="18" height="4" rx="1" fill-opacity="0.35"/>
+            <circle cx="224" cy="62" r="4.5"/><circle cx="224" cy="62" r="2.5" fill-opacity="0.3"/>
+            <circle cx="232" cy="62" r="4.5"/><circle cx="232" cy="62" r="2.5" fill-opacity="0.3"/>
+            <!-- COUPLER -->
+            <rect x="242" y="48" width="6" height="3" rx="1" fill-opacity="0.5"/>
+            <!-- AUTORACK -->
+            <rect x="248" y="16" width="60" height="38" rx="1"/>
+            <rect x="248" y="16" width="60" height="3" rx="1" fill-opacity="0.5"/>
+            <rect x="254" y="22" width="8" height="14" fill-opacity="0.15"/>
+            <rect x="266" y="22" width="8" height="14" fill-opacity="0.15"/>
+            <rect x="278" y="22" width="8" height="14" fill-opacity="0.15"/>
+            <rect x="290" y="22" width="8" height="14" fill-opacity="0.15"/>
+            <rect x="254" y="38" width="8" height="10" fill-opacity="0.15"/>
+            <rect x="266" y="38" width="8" height="10" fill-opacity="0.15"/>
+            <rect x="278" y="38" width="8" height="10" fill-opacity="0.15"/>
+            <rect x="290" y="38" width="8" height="10" fill-opacity="0.15"/>
+            <rect x="248" y="52" width="60" height="3" fill-opacity="0.5"/>
+            <rect x="252" y="55" width="20" height="4" rx="1" fill-opacity="0.35"/>
+            <circle cx="258" cy="62" r="4.5"/><circle cx="258" cy="62" r="2.5" fill-opacity="0.3"/>
+            <circle cx="268" cy="62" r="4.5"/><circle cx="268" cy="62" r="2.5" fill-opacity="0.3"/>
+            <rect x="282" y="55" width="20" height="4" rx="1" fill-opacity="0.35"/>
+            <circle cx="288" cy="62" r="4.5"/><circle cx="288" cy="62" r="2.5" fill-opacity="0.3"/>
+            <circle cx="298" cy="62" r="4.5"/><circle cx="298" cy="62" r="2.5" fill-opacity="0.3"/>
+          </g>
+        </svg>`,
+        "Superfreight": `<svg class="train-bg" width="345" height="70" viewBox="-4 -6 354 76" fill="${pColor}">
+          <g transform="translate(346,0) scale(-1,1)">
+            <!-- HIGH-SPEED ELECTRIC (TGV/ICE style) -->
+            <path d="M0,48 Q0,40 4,34 Q10,22 22,16 L40,12 L108,10 Q114,10 116,14 L116,52 L6,52 Q0,52 0,48 Z"/>
+            <path d="M6,40 Q10,26 22,20 L28,18 L28,36 Q28,40 24,42 Z" fill-opacity="0.25"/>
+            <rect x="32" y="16" width="10" height="8" rx="1" fill-opacity="0.2"/>
+            <rect x="46" y="14" width="10" height="8" rx="1" fill-opacity="0.2"/>
+            <rect x="60" y="12" width="50" height="6" rx="2" fill-opacity="0.5"/>
+            <rect x="66" y="22" width="40" height="1.2" fill-opacity="0.12"/>
+            <rect x="66" y="26" width="40" height="1.2" fill-opacity="0.12"/>
+            <rect x="66" y="30" width="40" height="1.2" fill-opacity="0.12"/>
+            <line x1="78" y1="10" x2="84" y2="0" stroke="${pColor}" stroke-width="1.5"/>
+            <line x1="84" y1="0" x2="96" y2="-3" stroke="${pColor}" stroke-width="2"/>
+            <line x1="90" y1="10" x2="84" y2="0" stroke="${pColor}" stroke-width="1.2"/>
+            <rect x="2" y="38" width="4" height="3" rx="1" fill-opacity="0.5"/>
+            <line x1="6" y1="42" x2="116" y2="42" stroke="${pColor}" stroke-width="0.8" opacity="0.15"/>
+            <rect x="2" y="50" width="114" height="3" fill-opacity="0.4"/>
+            <rect x="14" y="52" width="24" height="4" rx="1" fill-opacity="0.4"/>
+            <circle cx="20" cy="60" r="5"/><circle cx="20" cy="60" r="3" fill-opacity="0.3"/>
+            <circle cx="34" cy="60" r="5"/><circle cx="34" cy="60" r="3" fill-opacity="0.3"/>
+            <rect x="80" y="52" width="24" height="4" rx="1" fill-opacity="0.4"/>
+            <circle cx="86" cy="60" r="5"/><circle cx="86" cy="60" r="3" fill-opacity="0.3"/>
+            <circle cx="100" cy="60" r="5"/><circle cx="100" cy="60" r="3" fill-opacity="0.3"/>
+            <!-- ARTICULATED JOINT -->
+            <rect x="116" y="12" width="5" height="42" fill-opacity="0.3"/>
+            <line x1="118.5" y1="12" x2="118.5" y2="54" stroke="${pColor}" stroke-width="0.5" opacity="0.3"/>
+            <!-- CAR 1 -->
+            <rect x="121" y="10" width="54" height="44" rx="2"/>
+            <rect x="121" y="10" width="54" height="4" rx="1" fill-opacity="0.4"/>
+            <rect x="127" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
+            <rect x="139" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
+            <rect x="151" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
+            <rect x="163" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
+            <line x1="121" y1="42" x2="175" y2="42" stroke="${pColor}" stroke-width="0.8" opacity="0.15"/>
+            <rect x="121" y="52" width="54" height="2" fill-opacity="0.35"/>
+            <rect x="134" y="53" width="20" height="4" rx="1" fill-opacity="0.4"/>
+            <circle cx="140" cy="60" r="4.5"/><circle cx="140" cy="60" r="2.5" fill-opacity="0.3"/>
+            <circle cx="150" cy="60" r="4.5"/><circle cx="150" cy="60" r="2.5" fill-opacity="0.3"/>
+            <!-- ARTICULATED JOINT -->
+            <rect x="175" y="12" width="5" height="42" fill-opacity="0.3"/>
+            <line x1="177.5" y1="12" x2="177.5" y2="54" stroke="${pColor}" stroke-width="0.5" opacity="0.3"/>
+            <!-- CAR 2 -->
+            <rect x="180" y="10" width="54" height="44" rx="2"/>
+            <rect x="180" y="10" width="54" height="4" rx="1" fill-opacity="0.4"/>
+            <rect x="186" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
+            <rect x="198" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
+            <rect x="210" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
+            <rect x="222" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
+            <line x1="180" y1="42" x2="234" y2="42" stroke="${pColor}" stroke-width="0.8" opacity="0.15"/>
+            <rect x="180" y="52" width="54" height="2" fill-opacity="0.35"/>
+            <rect x="193" y="53" width="20" height="4" rx="1" fill-opacity="0.4"/>
+            <circle cx="199" cy="60" r="4.5"/><circle cx="199" cy="60" r="2.5" fill-opacity="0.3"/>
+            <circle cx="209" cy="60" r="4.5"/><circle cx="209" cy="60" r="2.5" fill-opacity="0.3"/>
+            <!-- ARTICULATED JOINT -->
+            <rect x="234" y="12" width="5" height="42" fill-opacity="0.3"/>
+            <line x1="236.5" y1="12" x2="236.5" y2="54" stroke="${pColor}" stroke-width="0.5" opacity="0.3"/>
+            <!-- CAR 3 -->
+            <rect x="239" y="10" width="54" height="44" rx="2"/>
+            <rect x="239" y="10" width="54" height="4" rx="1" fill-opacity="0.4"/>
+            <rect x="245" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
+            <rect x="257" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
+            <rect x="269" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
+            <rect x="281" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
+            <line x1="239" y1="42" x2="293" y2="42" stroke="${pColor}" stroke-width="0.8" opacity="0.15"/>
+            <rect x="239" y="52" width="54" height="2" fill-opacity="0.35"/>
+            <rect x="252" y="53" width="20" height="4" rx="1" fill-opacity="0.4"/>
+            <circle cx="258" cy="60" r="4.5"/><circle cx="258" cy="60" r="2.5" fill-opacity="0.3"/>
+            <circle cx="268" cy="60" r="4.5"/><circle cx="268" cy="60" r="2.5" fill-opacity="0.3"/>
+            <!-- ARTICULATED JOINT -->
+            <rect x="293" y="12" width="5" height="42" fill-opacity="0.3"/>
+            <line x1="295.5" y1="12" x2="295.5" y2="54" stroke="${pColor}" stroke-width="0.5" opacity="0.3"/>
+            <!-- REAR POWER CAR -->
+            <path d="M298,10 L336,10 Q342,10 344,18 L346,30 L346,44 Q346,52 340,52 L298,52 Z"/>
+            <rect x="298" y="10" width="42" height="4" rx="1" fill-opacity="0.4"/>
+            <rect x="302" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
+            <rect x="314" y="16" width="8" height="6" rx="1" fill-opacity="0.18"/>
+            <rect x="326" y="14" width="12" height="6" rx="2" fill-opacity="0.4"/>
+            <line x1="330" y1="10" x2="336" y2="0" stroke="${pColor}" stroke-width="1.5"/>
+            <line x1="336" y1="0" x2="344" y2="-2" stroke="${pColor}" stroke-width="2"/>
+            <line x1="340" y1="10" x2="336" y2="0" stroke="${pColor}" stroke-width="1.2"/>
+            <line x1="298" y1="42" x2="344" y2="42" stroke="${pColor}" stroke-width="0.8" opacity="0.15"/>
+            <rect x="343" y="36" width="3" height="3" rx="1" fill-opacity="0.4"/>
+            <rect x="298" y="50" width="46" height="3" fill-opacity="0.4"/>
+            <rect x="304" y="52" width="24" height="4" rx="1" fill-opacity="0.4"/>
+            <circle cx="310" cy="60" r="5"/><circle cx="310" cy="60" r="3" fill-opacity="0.3"/>
+            <circle cx="324" cy="60" r="5"/><circle cx="324" cy="60" r="3" fill-opacity="0.3"/>
+          </g>
+        </svg>`
+    };
+    return trainSvgs[trainType] || trainSvgs["Freight"];
+}
+
+// Show a centered modal when any player upgrades their train.
+// upgrade: { playerName, playerColor, fromTrainType, toTrainType }
+function showTrainUpgradeModal(upgrade) {
+    if (!upgrade) return;
+
+    // If an upgrade modal is already showing (rapid consecutive upgrades), dismiss it first
+    dismissTrainUpgradeModal();
+
+    const colorHex = COLOR_MAP[upgrade.playerColor] || upgrade.playerColor || "#4a9eff";
+
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 2000; pointer-events: auto; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+    `;
+    gameState._upgradeModalOverlay = overlay;
+
+    const modal = document.createElement("div");
+    modal.style.cssText = `
+        background: linear-gradient(135deg, #1a1a2a, #2d2d3d);
+        padding: 24px 36px;
+        border-radius: 10px;
+        text-align: center;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+        border: 2px solid ${colorHex};
+        min-width: 440px;
+        opacity: 0; transition: opacity 0.25s ease;
+    `;
+
+    const title = document.createElement("div");
+    title.style.cssText = `font-size: 20px; font-weight: bold; color: ${colorHex}; margin-bottom: 14px;`;
+    title.textContent = `${upgrade.playerName} upgraded!`;
+    modal.appendChild(title);
+
+    // Train graphic stage: two SVGs stacked, crossfade + slide
+    const stage = document.createElement("div");
+    stage.style.cssText = "position: relative; width: 360px; height: 80px; margin: 0 auto;";
+
+    const oldTrain = document.createElement("div");
+    oldTrain.style.cssText = `
+        position: absolute; left: 0; top: 5px; right: 0;
+        opacity: 1; transform: translateX(0);
+        transition: opacity 0.5s ease, transform 0.5s ease;
+    `;
+    oldTrain.innerHTML = getTrainSvg(upgrade.fromTrainType, colorHex);
+
+    const newTrain = document.createElement("div");
+    newTrain.style.cssText = `
+        position: absolute; left: 0; top: 5px; right: 0;
+        opacity: 0; transform: translateX(40px);
+        transition: opacity 0.5s ease, transform 0.5s ease;
+    `;
+    newTrain.innerHTML = getTrainSvg(upgrade.toTrainType, colorHex);
+
+    stage.appendChild(oldTrain);
+    stage.appendChild(newTrain);
+    modal.appendChild(stage);
+
+    const subtitle = document.createElement("div");
+    subtitle.style.cssText = "font-size: 14px; color: #cccccc; margin-top: 10px;";
+    subtitle.innerHTML = `<span style="opacity:0.7;">${upgrade.fromTrainType}</span> <span style="color:${colorHex};">→</span> <strong style="color:${colorHex};">${upgrade.toTrainType}</strong>`;
+    modal.appendChild(subtitle);
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // Fade modal in, then trigger the train crossfade
+    requestAnimationFrame(() => {
+        modal.style.opacity = "1";
+        requestAnimationFrame(() => {
+            oldTrain.style.opacity = "0";
+            oldTrain.style.transform = "translateX(-40px)";
+            newTrain.style.opacity = "1";
+            newTrain.style.transform = "translateX(0)";
+        });
+    });
+
+    let dismissed = false;
+    function dismiss() {
+        if (dismissed) return;
+        dismissed = true;
+        dismissTrainUpgradeModal();
+    }
+    overlay.addEventListener("click", dismiss);
+    function onKeyDown(e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            dismiss();
+        }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    gameState._upgradeModalKeyHandler = onKeyDown;
+    gameState._upgradeModalTimer = setTimeout(dismiss, 2000);
+}
+
+function dismissTrainUpgradeModal() {
+    if (gameState._upgradeModalOverlay && document.body.contains(gameState._upgradeModalOverlay)) {
+        gameState._upgradeModalOverlay.remove();
+    }
+    gameState._upgradeModalOverlay = null;
+    if (gameState._upgradeModalTimer) {
+        clearTimeout(gameState._upgradeModalTimer);
+        gameState._upgradeModalTimer = null;
+    }
+    if (gameState._upgradeModalKeyHandler) {
+        document.removeEventListener("keydown", gameState._upgradeModalKeyHandler);
+        gameState._upgradeModalKeyHandler = null;
+    }
 }
 
 // Show animated trackage rights transfer overlay with coin arcs
@@ -6978,6 +7096,7 @@ window.addEventListener("keydown", function(e) {
     // Don't progress turns while a modal overlay is open (trackage rights, event cards, etc.)
     // Those modals consume their own Enter keystrokes separately.
     if (gameState._trackageOverlay) return;
+    if (gameState._upgradeModalOverlay) return;
     if (document.querySelector(".card-draw-overlay.show")) return;
 
     // 1. Turn overlay "Ready" button
@@ -8249,6 +8368,11 @@ socket.on('stateUpdate', ({ state, uiEvent }) => {
     // Animate trackage rights transfers (visible to all players)
     if (uiEvent?.trackageTransfers && uiEvent.trackageTransfers.length > 0) {
         showTrackageModal(uiEvent.trackageTransfers);
+    }
+
+    // Announce train upgrades (visible to all players)
+    if (uiEvent?.type === 'trainUpgrade' && uiEvent.upgrade) {
+        showTrainUpgradeModal(uiEvent.upgrade);
     }
 
     if (uiEvent?.type === 'turnChanged' && uiEvent.endgameTriggered) {

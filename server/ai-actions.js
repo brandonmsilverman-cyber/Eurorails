@@ -58,6 +58,7 @@ module.exports = function(deps) {
             return { success: false, error: 'Already built track this turn' };
         }
 
+        const fromTrainType = player.trainType;
         player.cash -= upgradeCost;
         player.trainType = trainType;
         gs.buildingThisTurn = 20;
@@ -68,7 +69,16 @@ module.exports = function(deps) {
         return {
             success: true,
             logs: [msg],
-            uiEvent: { type: 'action', logs: [msg] }
+            uiEvent: {
+                type: 'trainUpgrade',
+                logs: [msg],
+                upgrade: {
+                    playerName: player.name,
+                    playerColor: player.color,
+                    fromTrainType,
+                    toTrainType: trainType
+                }
+            }
         };
     }
 

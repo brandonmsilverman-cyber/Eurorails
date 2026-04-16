@@ -7,15 +7,9 @@ A running list of planned features, improvements, and known issues.
 ## Gameplay
 
 - [ ] **AI hints system** — "What would an expert do?" suggestion feature for learning players
-- [ ] **Train upgrade announcement modal** — Display a central modal when any player upgrades their train
 ## Reconnection Improvement
 - [ ] **localStorage fallback for tab closure recovery** — Add localStorage as a fallback so reconnection credentials survive tab closure and incognito mode, while preserving multi-tab play. Full plan in [`LOCALSTORAGE_FALLBACK_PLAN.md`](LOCALSTORAGE_FALLBACK_PLAN.md).
 
----
-
-## Map
-
-- [ ] **Widen København–Göteborg land bridge** — Widen the landmass connecting the København landmass to the Göteborg landmass so that two tracks can be built through the corridor
 
 ---
 
@@ -82,3 +76,5 @@ A running list of planned features, improvements, and known issues.
 - [x] Persist suggested foreign track selection throughout a single operate phase
 - [x] Set train destination (auto-move toward selected city each operate phase)
 - [x] Improved trackage rights payment animation (coin arc transfer with fanned 4-coin stagger)
+- [x] Widen København–Göteborg land bridge (zealand polygon adjusted for two-track corridor)
+- [x] Train upgrade announcement modal (centered modal with crossfade between old/new train SVGs, 2s auto-dismiss, click/Enter to skip, Enter swallowed so turn doesn't advance)
